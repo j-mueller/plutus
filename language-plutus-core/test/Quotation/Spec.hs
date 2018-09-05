@@ -18,8 +18,12 @@ tests = testGroup "quasiquoter" [
   asGolden (runQuote bool) "test/Quotation/bool.plc",
   asGolden (runQuote true) "test/Quotation/true.plc",
   asGolden (runQuote false) "test/Quotation/false.plc",
-  asGolden (runQuote free) "test/Quotation/free.plc"
- ]
+  asGolden (runQuote free) "test/Quotation/free.plc",
+  asGolden (runQuote eitherIUnit) "test/Quotation/eitherI.plc",
+  asGolden (runQuote eitherEUnit) "test/Quotation/eitherE.plc",
+  asGolden (runQuote $ unit >>= maybeI) "test/Quotation/maybeI.plc",
+  asGolden (runQuote $ unit >>= contract) "test/Quotation/contract.plc"
+  ]
 
 asGolden :: PrettyCfg a => a -> TestName -> TestTree
 asGolden a file = goldenVsString file (file ++ ".golden") (pure $ showTest a)
@@ -55,3 +59,36 @@ free = do
   -- both occurences should be the same variable
   f <- TyVar () <$> freshTyName () "free"
   [plcTerm|[(lam x f x) (lam x f x)]|]
+
+-- `forall u . (a -> u) -> (b -> u) -> u`
+eitherI :: Type TyName () -> Type TyName () -> Quote (Type TyName ())
+eitherI a b = [plcType| (all u (type) (fun (fun a u) (fun (fun b u) u))) |]
+
+eitherIUnit :: Quote (Type TyName ())
+eitherIUnit = unit >>= \u1 -> unit >>= \u2 -> eitherI u1 u2
+
+-- `(a -> c) -> (b -> c) -> eitherI a b -> c`
+eitherE :: Type TyName () -> Type TyName () -> Type TyName () -> Quote (Type TyName ())
+eitherE f g e = [plcType| [e f g] |]
+
+eitherEUnit :: Quote (Type TyName ())
+eitherEUnit = do
+    u1 <- unit
+    u2 <- unit
+    e <- eitherI u1 u2
+    b <- bool
+    f <- [plcType| (fun u1 b) |]
+    g <- [plcType| (fun u2 b) |]
+    eitherE f g e
+
+-- `forall u . (a -> u) -> u -> u`
+maybeI :: Type TyName () -> Quote (Type TyName ())
+maybeI a = [plcType| (all u (type) (fun (fun a u) (fun u u))) |]
+
+-- (type of) a contract that expects inputs of the given type and produces 
+-- either unit (when it is finished) or a new contract.
+-- newtype σ = δ -> (Either ()  σ)
+contract :: Type TyName () -> Quote (Type TyName ())
+contract delta = do
+    un <- unit
+    [plcType| (fix sigma (fun delta (all u (type) (fun (fun un u) (fun (fun sigma u) u))))) |]

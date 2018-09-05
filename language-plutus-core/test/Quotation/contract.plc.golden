@@ -1,0 +1,1 @@
+(fix sigma_2 (fun (all a_0 (type) (fun a_0 a_0)) (all u_4 (type) (fun (fun (all a_1 (type) (fun a_1 a_1)) u_4) (fun (fun sigma_2 u_4) u_4)))))
