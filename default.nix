@@ -56,6 +56,7 @@ let
       language-plutus-core = doBenchmark (doHaddockHydra (addRealTimeTestLogs (filterSource super.language-plutus-core)));
       core-to-plc = addRealTimeTestLogs (filterSource super.core-to-plc);
       plutus-th = addRealTimeTestLogs (filterSource super.plutus-th);
+      plutus-use-cases = addRealTimeTestLogs (filterSource super.plutus-use-cases);
     };
   };
   other = rec {

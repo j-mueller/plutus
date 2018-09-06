@@ -5,6 +5,7 @@ packages:
 - language-plutus-core
 - core-to-plc
 - plutus-th
+- plutus-use-cases
 
 - location:
     git: https://github.com/input-output-hk/cardano-crypto
