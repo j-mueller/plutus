@@ -16,6 +16,7 @@ module Plutus (-- * Transactions and related types
               -- * API operations
               , TxM
               , Witness
+              , Validator
               , PlutusTx
               , submitTransaction
               , assert
@@ -23,11 +24,13 @@ module Plutus (-- * Transactions and related types
               , lookupMyPubKey
               , createPayment
               , txInSign
+              , Range(..)
+              , EventTrigger(..)
               ) where
 
 import           Control.Monad.State        (State)
-import           Language.Haskell.TH
-import           Language.Haskell.TH.Syntax
+import           Language.Haskell.TH hiding (Range)
+import           Language.Haskell.TH.Syntax hiding (Range)
 
 -- | Cardano address
 --
@@ -45,7 +48,7 @@ data PubKey
 instance Lift PubKey where
   lift = undefined
 
--- | Public key pair (no lift instance, because we never ought to put it into a
+-- | Public key pair (no lift instance, because we never ought to put it into a 
 --   transaction)
 --
 data KeyPair
@@ -129,3 +132,19 @@ type PlutusTx = ExpQ
 --
 standardTxFee :: Value
 standardTxFee = undefined
+
+data Range a =
+    Interval a a -- inclusive-exclusive
+    | GEQ a
+    | LT a
+
+-- | Event triggers the Plutus client can register with the wallet.
+data EventTrigger =
+    BlockHeight (Range Int) -- ^ True when the block height is within the range
+    | FundsAtAddress Address (Range Value) -- ^ True when the funds at an address are within the range; TODO: [Address] to add up funds from multiple addresses
+    | And EventTrigger EventTrigger -- ^ True when both triggers are true
+    | Or EventTrigger EventTrigger -- ^ True when at least one trigger is true
+    | PAlways -- ^ Always true
+    | PNever -- ^ Never true
+
+type Validator = PlutusTx

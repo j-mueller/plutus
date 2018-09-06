@@ -2,7 +2,7 @@
 - functions:
   - {name: unsafePerformIO, within: [PlutusPrelude, Language.PlutusCore.Generators.Internal.Entity]}
   - {name: error, within: [Main, Evaluation.CkMachine, Evaluation.Constant.Success, Language.PlutusCore.Constant.Apply, Language.PlutusCore.CkMachine, Language.PlutusCore.Generators.Internal.Entity, Language.PlutusCore.Constant.Make, Language.PlutusCore.Generators.Internal.TypedBuiltinGen, Language.PlutusCore.TH]}
-  - {name: undefined, within: [Language.PlutusCore.Constant.Apply, Plutus]}
+  - {name: undefined, within: [Language.PlutusCore.Constant.Apply, Plutus, Contracts.CrowdFunding]}
   - {name: fromJust, within: []}
   - {name: foldl, within: []}
 

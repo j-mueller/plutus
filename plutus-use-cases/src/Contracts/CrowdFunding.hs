@@ -6,8 +6,12 @@
 module Contracts.CrowdFunding (-- * Functionality for campaign contributors
                                 contribute
                               , refund
+                              , refundTrigger
                               -- * Functionality for campaign owners
                               , collect
+                              , collectFundsTrigger
+                              -- * Etc.
+                              , await
                               ) where
 
 import           Plutus
@@ -36,6 +40,11 @@ contributionScript ownerPubKey =
     [| \redeemer contributorPubKey ->
       let payToOwner = currentBlockHeight > paymentDeadline &&
                        currentBlockHeight < collectionDeadline &&
+                       -- TODO: is there only a single address where the funds
+                       -- go (which is what this line seems to imply)
+                       -- or are the multiple addresses, one for each
+                       -- contributor (which is what the signature of `collect`
+                       -- seems to imply)
                        fundsAtAddress ownScriptAddress > fundingGoal &&
                        checkSig witness ownerPubKey
           refundable = currentBlockHeight > collectionDeadline &&
@@ -43,6 +52,32 @@ contributionScript ownerPubKey =
       in
         payToOwner || refundable
     |]
+
+-- | We can turn a validation script (belonging to an address) into an event
+-- trigger (specific to a wallet) by partially evaluating the script.
+--
+-- For example, as a contributor, the `payToOwner` branch of the script above
+-- is never true because we don't have the owner's private key and
+-- `checkSig redeemer ownerPubKey` will always be false. On the other hand,
+-- `checkSig redeemer contributorPubKey` can be made true (because we know the
+-- private key) so we are left with `currentBlockHeight > collectionDeadline`
+-- which can be expressed in terms of an `EventTrigger`.
+--
+-- Applying the same procedure on the owner's side, we get an event trigger
+-- that looks at block height and funds at address.
+--
+await :: Validator -> TxM EventTrigger
+await = undefined
+
+-- Given the public key of the campaign owner, generate an event trigger that
+-- fires when a refund is possible.
+refundTrigger :: PubKey -> TxM EventTrigger
+refundTrigger = await . contributionScript
+
+-- Given the public key of the campaign owner, generate an event trigger that
+-- fires when the funds can be collected.
+collectFundsTrigger :: PubKey -> TxM EventTrigger
+collectFundsTrigger = await . contributionScript
 
 refund :: TxOutRef -> TxM [TxOutRef]
 refund ref = do
