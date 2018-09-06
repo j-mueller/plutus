@@ -5,6 +5,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Contract (-- * Functionality for campaign contributors
                   contribute
+                , refund
                 -- * Functionality for campaign owners
                 , collect
                 ) where
@@ -13,7 +14,7 @@ import           Plutus
 
 -- | Contribute funds to the campaign (contributor)
 --
-contribute :: PubKey -> Value -> Address -> TxM ()
+contribute :: PubKey -> Value -> Address -> TxM [TxOutRef]
 contribute ownerPubKey value refundAddress = do
     assert (value > 0)
     contributorPubKey <- lookupMyPubKey
@@ -37,15 +38,23 @@ contributionScript ownerPubKey =
                        currentBlockHeight < collectionDeadline &&
                        fundsAtAddress ownScriptAddress > fundingGoal &&
                        checkSig witness ownerPubKey
-          refund     = currentBlockHeight > collectionDeadline &&
+          refundable = currentBlockHeight > collectionDeadline &&
                        checkSig witness contributorPubKey
       in
-        payToOwner || refund
+        payToOwner || refundable
     |]
 
+refund :: TxOutRef -> TxM [TxOutRef]
+refund ref = do
+    kp <- lookupMyKeyPair
+    submitTransaction $ Tx {
+      txInputs = [txInSign ref kp],
+      txOutputs = [TxOutPubKey value (pubKeyAddress kp)]
+    } where
+      value = txOutRefValue ref + standardTxFee
+
 -- TODO
--- refund: using contributor’s private key to sign the refund transaction
---         (can be automatically triggered by an event)
+-- refund: automatically triggered by an event
 -- triggering collection: register for event that signals successful funding
 
 -- | Collect all campaign funds (campaign owner)
@@ -54,7 +63,7 @@ contributionScript ownerPubKey =
 --     exceed the number of inputs that we can put into a single
 --     transaction.
 --
-collect :: [TxOutRef] -> TxM ()
+collect :: [TxOutRef] -> TxM [TxOutRef]
 collect outRefs = do
     assert (not $ null outRefs)
     ownerKeyPair <- lookupMyKeyPair

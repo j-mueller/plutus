@@ -61,7 +61,7 @@ data TxState
 type TxM a = State TxState a
 
 -- | Submit the given transaction to the blockchain
-submitTransaction :: Tx -> TxM ()
+submitTransaction :: Tx -> TxM [TxOutRef]
 submitTransaction = undefined
 
 -- | Verify that a condition is true.
