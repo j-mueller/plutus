@@ -3,12 +3,12 @@
 -- in a single transaction. This is, of course, limited by the maximum
 -- number of inputs a transaction can have.
 {-# LANGUAGE TemplateHaskell #-}
-module Contract (-- * Functionality for campaign contributors
-                  contribute
-                , refund
-                -- * Functionality for campaign owners
-                , collect
-                ) where
+module Contracts.CrowdFunding (-- * Functionality for campaign contributors
+                                contribute
+                              , refund
+                              -- * Functionality for campaign owners
+                              , collect
+                              ) where
 
 import           Plutus
 

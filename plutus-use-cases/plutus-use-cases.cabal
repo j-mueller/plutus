@@ -33,7 +33,7 @@ library
                       DeriveTraversable
   exposed-modules:
     Plutus
-    Contract
+    Contracts.CrowdFunding
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
