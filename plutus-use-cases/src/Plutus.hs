@@ -29,7 +29,7 @@ module Plutus (-- * Transactions and related types
               ) where
 
 import           Control.Monad.State        (State)
-import           Language.Haskell.TH hiding (Range)
+import           Language.Haskell.TH        hiding (Range)
 import           Language.Haskell.TH.Syntax hiding (Range)
 
 -- | Cardano address
@@ -48,7 +48,7 @@ data PubKey
 instance Lift PubKey where
   lift = undefined
 
--- | Public key pair (no lift instance, because we never ought to put it into a 
+-- | Public key pair (no lift instance, because we never ought to put it into a
 --   transaction)
 --
 data KeyPair

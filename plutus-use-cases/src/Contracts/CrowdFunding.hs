@@ -19,7 +19,7 @@ import           Plutus
 -- | Contribute funds to the campaign (contributor)
 --
 contribute :: PubKey -> Value -> Address -> TxM [TxOutRef]
-contribute ownerPubKey value refundAddress = do
+contribute ownerPubKey value _ = do
     assert (value > 0)
     contributorPubKey <- lookupMyPubKey
     myPayment         <- createPayment (value + standardTxFee)
@@ -35,8 +35,19 @@ contribute ownerPubKey value refundAddress = do
     -- added by the Wallet API Plutus library on the basis of the size and other costs of the transaction
 
 contributionScript :: PubKey -> PlutusTx
-contributionScript ownerPubKey = 
+contributionScript ownerPubKey =
     -- needs a splice adding the function triggering the Plutus Tx compiler plugin (compiled at coordination compile time)
+    --
+    -- What data is available inside the validator script?
+    --
+    -- The transaction references its input via their hashes, so we need to
+    -- de-reference them to be able to look at the coin values of their
+    -- outpus. De-referencing of a hash should probably also cost money
+    -- (otherwise we could jam the validator by asking for data all the way
+    -- back to the beginning of the chain)
+    --
+    -- (see https://github.com/input-output-hk/cardano-sl/blob/develop/docs/block-processing/types.md for a description of the data types that exist in a block)
+    --
     [| \redeemer contributorPubKey ->
       let payToOwner = currentBlockHeight > paymentDeadline &&
                        currentBlockHeight < collectionDeadline &&
@@ -46,9 +57,9 @@ contributionScript ownerPubKey =
                        -- contributor (which is what the signature of `collect`
                        -- seems to imply)
                        fundsAtAddress ownScriptAddress > fundingGoal &&
-                       checkSig witness ownerPubKey
+                       checkSig redeemer ownerPubKey
           refundable = currentBlockHeight > collectionDeadline &&
-                       checkSig witness contributorPubKey
+                       checkSig redeemer contributorPubKey
       in
         payToOwner || refundable
     |]
@@ -69,12 +80,12 @@ contributionScript ownerPubKey =
 await :: Validator -> TxM EventTrigger
 await = undefined
 
--- Given the public key of the campaign owner, generate an event trigger that
+-- | Given the public key of the campaign owner, generate an event trigger that
 -- fires when a refund is possible.
 refundTrigger :: PubKey -> TxM EventTrigger
 refundTrigger = await . contributionScript
 
--- Given the public key of the campaign owner, generate an event trigger that
+-- | Given the public key of the campaign owner, generate an event trigger that
 -- fires when the funds can be collected.
 collectFundsTrigger :: PubKey -> TxM EventTrigger
 collectFundsTrigger = await . contributionScript
@@ -86,7 +97,7 @@ refund ref = do
       txInputs = [txInSign ref kp],
       txOutputs = [TxOutPubKey value (pubKeyAddress kp)]
     } where
-      value = txOutRefValue ref + standardTxFee
+      value = txOutRefValue ref + standardTxFee -- TODO: Should the fee be subtracted? I thought the fee was (Sum of all input values) - (Sum of all output values)
 
 -- TODO
 -- refund: automatically triggered by an event
