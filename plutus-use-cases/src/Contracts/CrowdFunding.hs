@@ -2,6 +2,7 @@
 -- This is the fully parallel version that collects all contributions
 -- in a single transaction. This is, of course, limited by the maximum
 -- number of inputs a transaction can have.
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Contracts.CrowdFunding (-- * Functionality for campaign contributors
                                 contribute
@@ -10,16 +11,23 @@ module Contracts.CrowdFunding (-- * Functionality for campaign contributors
                               -- * Functionality for campaign owners
                               , collect
                               , collectFundsTrigger
-                              -- * Etc.
-                              , await
                               ) where
 
+import           Control.Applicative (Alternative (..))
+import           Control.Monad       (unless)
 import           Plutus
+
+data Campaign = Campaign
+    { campaignDeadline           :: !BlockHeight
+    , campaignTarget             :: !Value
+    , campaignCollectionDeadline :: !BlockHeight
+    , campaignOwner              :: !PubKey
+    }
 
 -- | Contribute funds to the campaign (contributor)
 --
-contribute :: PubKey -> Value -> Address -> TxM [TxOutRef]
-contribute ownerPubKey value _ = do
+contribute :: Campaign -> Value -> TxM [TxOutRef]
+contribute c value = do
     assert (value > 0)
     contributorPubKey <- lookupMyPubKey
     myPayment         <- createPayment (value + standardTxFee)
@@ -27,15 +35,42 @@ contribute ownerPubKey value _ = do
       { txInputs  = [myPayment]
       , txOutputs = [TxOutScript
                        value
-                       (contributionScript ownerPubKey)
-                       [| contributorPubKey |] -- data script: ought to be lifted into PLC at coordination runtime
+                       (contributionScript c (Just contributorPubKey))
+                       (PlutusTx [| contributorPubKey |]) -- data script: ought to be lifted into PLC at coordination runtime
                     ]
       }
     -- the transaction above really ought to be merely a transaction *template* and the transaction fee ought to be
     -- added by the Wallet API Plutus library on the basis of the size and other costs of the transaction
 
-contributionScript :: PubKey -> PlutusTx
-contributionScript ownerPubKey =
+contributionScript ::
+       Campaign
+    -> Maybe PubKey
+    -> PlutusTx (Validator ())
+contributionScript Campaign{..} contribPubKey =
+    mkValidator $ Validator $ \rd _ PendingTx{..} ->
+        let pledgedFunds = sum
+                            $ txOutRefValue . txInOutRef
+                            <$> txInputs pendingTxTransaction
+            -- Check that a refund transaction only spends the amount that was
+            -- pledged by the contributor identified by `contribPubKey`
+            contributorOnly = flip (maybe False) contribPubKey $ \k ->
+                                all (flip signedBy k  . txInRedeemer)
+                                $ txInputs pendingTxTransaction
+            signedBy :: Hash -> PubKey -> Bool
+            signedBy _ _ = undefined
+            redHash :: Redeemer -> Hash
+            redHash = undefined
+            payToOwner   = pendingTxBlockHeight > campaignDeadline &&
+                           pendingTxBlockHeight <= campaignCollectionDeadline &&
+                           pledgedFunds >= campaignTarget &&
+                           signedBy (redHash rd) campaignOwner
+            -- In case of a refund, we can only collect the funds that
+            -- were committed by this contributor
+            refundable   = pendingTxBlockHeight > campaignCollectionDeadline &&
+                           contributorOnly &&
+                           maybe False (signedBy (redHash rd)) contribPubKey
+        in
+        unless (payToOwner || refundable) empty
     -- needs a splice adding the function triggering the Plutus Tx compiler plugin (compiled at coordination compile time)
     --
     -- What data is available inside the validator script?
@@ -48,47 +83,31 @@ contributionScript ownerPubKey =
     --
     -- (see https://github.com/input-output-hk/cardano-sl/blob/develop/docs/block-processing/types.md for a description of the data types that exist in a block)
     --
-    [| \redeemer contributorPubKey ->
-      let payToOwner = currentBlockHeight > paymentDeadline &&
-                       currentBlockHeight < collectionDeadline &&
-                       -- TODO: is there only a single address where the funds
-                       -- go (which is what this line seems to imply)
-                       -- or are the multiple addresses, one for each
-                       -- contributor (which is what the signature of `collect`
-                       -- seems to imply)
-                       fundsAtAddress ownScriptAddress > fundingGoal &&
-                       checkSig redeemer ownerPubKey
-          refundable = currentBlockHeight > collectionDeadline &&
-                       checkSig redeemer contributorPubKey
-      in
-        payToOwner || refundable
-    |]
+    -- [| \redeemer contributorPubKey ->
+    --   let payToOwner = currentBlockHeight > paymentDeadline &&
+    --                    currentBlockHeight < collectionDeadline &&
+    --                    -- TODO: is there only a single address where the funds
+    --                    -- go (which is what this line seems to imply)
+    --                    -- or are the multiple addresses, one for each
+    --                    -- contributor (which is what the signature of `collect`
+    --                    -- seems to imply)
+    --                    fundsAtAddress ownScriptAddress > fundingGoal &&
+    --                    checkSig redeemer ownerPubKey
+    --       refundable = currentBlockHeight > collectionDeadline &&
+    --                    checkSig redeemer contributorPubKey
+    --   in
+    --     payToOwner || refundable
+    -- |]
 
--- | We can turn a validation script (belonging to an address) into an event
--- trigger (specific to a wallet) by partially evaluating the script.
---
--- For example, as a contributor, the `payToOwner` branch of the script above
--- is never true because we don't have the owner's private key and
--- `checkSig redeemer ownerPubKey` will always be false. On the other hand,
--- `checkSig redeemer contributorPubKey` can be made true (because we know the
--- private key) so we are left with `currentBlockHeight > collectionDeadline`
--- which can be expressed in terms of an `EventTrigger`.
---
--- Applying the same procedure on the owner's side, we get an event trigger
--- that looks at block height and funds at address.
---
-await :: Validator -> TxM EventTrigger
-await = undefined
 
--- | Given the public key of the campaign owner, generate an event trigger that
--- fires when a refund is possible.
-refundTrigger :: PubKey -> TxM EventTrigger
-refundTrigger = await . contributionScript
+-- | Given the campaign data
+refundTrigger :: Campaign -> [TxOutRef] -> TxM EventTrigger
+refundTrigger c = undefined
 
 -- | Given the public key of the campaign owner, generate an event trigger that
 -- fires when the funds can be collected.
-collectFundsTrigger :: PubKey -> TxM EventTrigger
-collectFundsTrigger = await . contributionScript
+collectFundsTrigger :: Campaign -> TxM EventTrigger
+collectFundsTrigger c = undefined
 
 refund :: TxOutRef -> TxM [TxOutRef]
 refund ref = do

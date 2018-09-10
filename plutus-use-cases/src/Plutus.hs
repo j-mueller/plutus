@@ -1,6 +1,8 @@
 -- | This is a mock of (parts of) the Plutus API
 {-# LANGUAGE EmptyDataDecls             #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE TemplateHaskell            #-}
 module Plutus (-- * Transactions and related types
                 Address
               , PubKey
@@ -13,11 +15,17 @@ module Plutus (-- * Transactions and related types
               , TxOutRef(..)
               , standardTxFee
               , pubKeyAddress
+              , txOutValue
+              , txOutRedeemer
               -- * API operations
               , TxM
-              , Witness
-              , Validator
-              , PlutusTx
+              , Hash
+              , Redeemer
+              , Validator(..)
+              , PlutusTx(..)
+              , BlockHeight(..)
+              , mkValidator
+              , PendingTx(..)
               , submitTransaction
               , assert
               , lookupMyKeyPair
@@ -34,12 +42,16 @@ import           Language.Haskell.TH.Syntax hiding (Range)
 
 -- | Cardano address
 --
-type Address = String
+newtype Address = Address String
+    deriving (Eq, Ord, Show, Read)
 
 -- | Ada value
 --
 newtype Value = Value Integer
     deriving (Eq, Ord, Num, Show, Read)
+
+newtype Hash = Hash String -- bytestring type in plutus core
+    deriving (Eq, Ord, Show, Read)
 
 -- | Public key
 --
@@ -99,8 +111,8 @@ data Tx = Tx
 -- | UTxO input
 --
 data TxIn = TxIn
-            { txInOutRef  :: TxOutRef
-            , txInWitness :: Witness
+            { txInOutRef   :: !TxOutRef
+            , txInRedeemer :: !Hash
             }
 
 -- | Construct an input that can spend the given output (assuming it was payed
@@ -110,23 +122,50 @@ txInSign :: TxOutRef -> KeyPair -> TxIn
 txInSign = undefined
 
 -- | Reference to an unspent output
+--   See https://github.com/input-output-hk/plutus-prototype/tree/master/docs/extended-utxo#extension-to-transaction-outputs
 --
-newtype TxOutRef =
+data TxOutRef =
   TxOutRef
-  { -- FIXME: missing is the actual reference
-   txOutRefValue :: Value  -- we assume, this is added by the library
+  {
+     txOutRefValue          :: !Value -- We assume this is added by the library. TODO: In cardano-sl this is a "ValueDistribution" (map of keys to values)
+   , txOutRefValidatorHash  :: !Hash -- Hash of validator script. The validator script has to be submitted by the consumer of the outputs referenced by this TxOutRef.
+   , txOutRefDataScriptHash :: !Hash -- Hash of data script used by the creator of the transaction.
   }
 
-data Witness
+type  Redeemer = String
+
+type DataScript = PlutusTx ()
+
+newtype BlockHeight = BlockHeight Integer
+    deriving (Eq, Ord)
+
+-- | Information about a pending transaction used by validator scripts.
+--   See https://github.com/input-output-hk/plutus-prototype/tree/master/docs/extended-utxo#blockchain-state-available-to-validator-scripts
+data PendingTx = PendingTx {
+      pendingTxBlockHeight :: !BlockHeight -- ^ Block height exl. current transaction
+    , pendingTxHash        :: !Hash -- ^ Hash of the transaction that is being validated
+    , pendingTxTransaction :: !Tx
+    }
 
 -- | UTxO output
 --
-data TxOut = TxOutPubKey Value Address
-           | TxOutScript  Value PlutusTx PlutusTx     -- FIXME: it is a shame this is weakly typed
+data TxOut = TxOutPubKey !Value !Address
+           | TxOutScript  !Value !(PlutusTx (Validator ())) !(PlutusTx ())     -- FIXME: it is a shame this is weakly typed
+
+txOutValue :: TxOut -> Value
+txOutValue = \case
+    TxOutPubKey v _ -> v
+    TxOutScript v _ _ -> v
+
+
+txOutRedeemer :: TxOut -> Maybe (PlutusTx ())
+txOutRedeemer = \case
+    TxOutScript _ _ r -> Just r
+    _ -> Nothing
 
 -- | PlutusTx code (for now just a plain Template Haskell expression AST)
 --
-type PlutusTx = ExpQ
+newtype PlutusTx a = PlutusTx ExpQ
 
 -- | Some sort of transaction fee (we need to determine that more dynamically)
 --
@@ -140,11 +179,45 @@ data Range a =
 
 -- | Event triggers the Plutus client can register with the wallet.
 data EventTrigger =
-    BlockHeight (Range Int) -- ^ True when the block height is within the range
-    | FundsAtAddress Address (Range Value) -- ^ True when the funds at an address are within the range; TODO: [Address] to add up funds from multiple addresses
+    BlockHeightRange !(Range Int) -- ^ True when the block height is within the range
+    | FundsAtAddress !Address !(Range Value) -- ^ True when the funds at an address are within the range; TODO: [Address] to add up funds from multiple addresses
     | And EventTrigger EventTrigger -- ^ True when both triggers are true
     | Or EventTrigger EventTrigger -- ^ True when at least one trigger is true
     | PAlways -- ^ Always true
     | PNever -- ^ Never true
 
-type Validator = PlutusTx
+-- | Validator scripts expect two scripts and information about the current
+--   txn. In the future this will be written in Plutus (with the help of TH)
+--   and its return type will be `a` instead of `Maybe a`.
+--   See https://github.com/input-output-hk/plutus-prototype/tree/master/docs/extended-utxo#extension-to-validator-scripts
+--
+--  TODO: What happens to the output if it is `Just a` ?
+newtype Validator a = Validator { runValidator :: Redeemer -> DataScript -> PendingTx -> Maybe a }
+
+instance Lift a => Lift (Validator a) where
+    lift = undefined
+
+mkValidator :: Lift a => Validator a -> PlutusTx (Validator a)
+mkValidator f = PlutusTx [| f |]
+
+{- Note [Transaction Templates]
+
+Transaction templates are currently missing from this mock API and will be
+added in the future.
+
+Transaction templates differ from transactions in at least two ways:
+
+1) They do not include a transaction fee (that is, the sum of their input
+   values equals the sum of their output values)
+2) Part of their input value is not attributed to an address
+
+To turn a template into a transaction, the wallet
+1) Adjusts either the input values or the output value to ensure that the
+   difference between inputs and outputs matches the transaction fee.
+2) Expands the inputs to account for the missing funds (via coin selection).
+
+These two steps depend on each other because the transaction fee is a
+function of the size of the transaction including its
+inputs.
+
+-}
