@@ -2,7 +2,6 @@
 {-# LANGUAGE EmptyDataDecls             #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE TemplateHaskell            #-}
 module Plutus (-- * Transactions and related types
                 Address
               , PubKey
@@ -21,10 +20,9 @@ module Plutus (-- * Transactions and related types
               , TxM
               , Hash
               , Redeemer
-              , Validator(..)
+              , Validator
               , PlutusTx(..)
               , BlockHeight(..)
-              , mkValidator
               , PendingTx(..)
               , submitTransaction
               , assert
@@ -37,8 +35,8 @@ module Plutus (-- * Transactions and related types
               ) where
 
 import           Control.Monad.State        (State)
-import           Language.Haskell.TH        hiding (Range)
 import           Language.Haskell.TH.Syntax hiding (Range)
+import           Language.Plutus.CoreToPLC.Plugin        (PlcCode)
 
 -- | Cardano address
 --
@@ -132,10 +130,6 @@ data TxOutRef =
    , txOutRefDataScriptHash :: !Hash -- Hash of data script used by the creator of the transaction.
   }
 
-type  Redeemer = String
-
-type DataScript = PlutusTx ()
-
 newtype BlockHeight = BlockHeight Integer
     deriving (Eq, Ord)
 
@@ -150,22 +144,21 @@ data PendingTx = PendingTx {
 -- | UTxO output
 --
 data TxOut = TxOutPubKey !Value !Address
-           | TxOutScript  !Value !(PlutusTx (Validator ())) !(PlutusTx ())     -- FIXME: it is a shame this is weakly typed
+           | TxOutScript  !Value !PlutusTx !PlutusTx
 
 txOutValue :: TxOut -> Value
 txOutValue = \case
     TxOutPubKey v _ -> v
     TxOutScript v _ _ -> v
 
-
-txOutRedeemer :: TxOut -> Maybe (PlutusTx ())
+txOutRedeemer :: TxOut -> Maybe PlutusTx
 txOutRedeemer = \case
     TxOutScript _ _ r -> Just r
     _ -> Nothing
 
--- | PlutusTx code (for now just a plain Template Haskell expression AST)
+-- | PlutusTx code 
 --
-newtype PlutusTx a = PlutusTx ExpQ
+newtype PlutusTx = PlutusTx PlcCode
 
 -- | Some sort of transaction fee (we need to determine that more dynamically)
 --
@@ -191,14 +184,11 @@ data EventTrigger =
 --   and its return type will be `a` instead of `Maybe a`.
 --   See https://github.com/input-output-hk/plutus-prototype/tree/master/docs/extended-utxo#extension-to-validator-scripts
 --
---  TODO: What happens to the output if it is `Just a` ?
-newtype Validator a = Validator { runValidator :: Redeemer -> DataScript -> PendingTx -> Maybe a }
+type Validator = PlutusTx
 
-instance Lift a => Lift (Validator a) where
-    lift = undefined
+type  Redeemer = PlutusTx
 
-mkValidator :: Lift a => Validator a -> PlutusTx (Validator a)
-mkValidator f = PlutusTx [| f |]
+type DataScript = PlutusTx 
 
 {- Note [Transaction Templates]
 

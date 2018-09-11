@@ -3,7 +3,9 @@
 -- in a single transaction. This is, of course, limited by the maximum
 -- number of inputs a transaction can have.
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE QuasiQuotes         #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS -fplugin=Language.Plutus.CoreToPLC.Plugin #-}
 module Contracts.CrowdFunding (-- * Functionality for campaign contributors
                                 contribute
                               , refund
@@ -13,8 +15,11 @@ module Contracts.CrowdFunding (-- * Functionality for campaign contributors
                               , collectFundsTrigger
                               ) where
 
-import           Control.Applicative (Alternative (..))
 import           Control.Monad       (unless)
+
+import           Language.Plutus.TH
+import           Language.PlutusCore.TH (plcType)
+import qualified Language.PlutusCore                      as PC
 import           Plutus
 
 data Campaign = Campaign
@@ -36,7 +41,7 @@ contribute c value = do
       , txOutputs = [TxOutScript
                        value
                        (contributionScript c (Just contributorPubKey))
-                       (PlutusTx [| contributorPubKey |]) -- data script: ought to be lifted into PLC at coordination runtime
+                       (PlutusTx $$(plutusT [|| contributorPubKey ||])) -- data script: ought to be lifted into PLC at coordination runtime
                     ]
       }
     -- the transaction above really ought to be merely a transaction *template* and the transaction fee ought to be
@@ -45,9 +50,24 @@ contribute c value = do
 contributionScript ::
        Campaign
     -> Maybe PubKey
-    -> PlutusTx (Validator ())
-contributionScript Campaign{..} contribPubKey =
-    mkValidator $ Validator $ \rd _ PendingTx{..} ->
+    -> PlutusTx
+contributionScript cp pk  = result where
+
+    -- PLC types for the arguments that are provided by the coordination code
+    campaignTp :: PC.Type PC.TyName () -- Campaign
+    campaignTp = undefined
+    keyTp :: PC.Type PC.TyName () -- Maybe PubKey
+    keyTp = undefined
+
+    -- Here we need to convert `cp` and `pk` to their PLC representations and
+    -- apply them to the `inner` lambda.
+    result = undefined
+
+    -- A PLC validator function with 5 arguments. The coordination code is 
+    -- expected to supply two arguments when a transaction is created. The
+    -- remaining 3 arguments are supplied by the Cardano node that validates the
+    -- transaction.
+    inner = $$(plutusT [||  (\rd _ PendingTx{..} Campaign{..} contribPubKey ->
         let pledgedFunds = sum
                             $ txOutRefValue . txInOutRef
                             <$> txInputs pendingTxTransaction
@@ -70,34 +90,7 @@ contributionScript Campaign{..} contribPubKey =
                            contributorOnly &&
                            maybe False (signedBy (redHash rd)) contribPubKey
         in
-        unless (payToOwner || refundable) empty
-    -- needs a splice adding the function triggering the Plutus Tx compiler plugin (compiled at coordination compile time)
-    --
-    -- What data is available inside the validator script?
-    --
-    -- The transaction references its input via their hashes, so we need to
-    -- de-reference them to be able to look at the coin values of their
-    -- outpus. De-referencing of a hash should probably also cost money
-    -- (otherwise we could jam the validator by asking for data all the way
-    -- back to the beginning of the chain)
-    --
-    -- (see https://github.com/input-output-hk/cardano-sl/blob/develop/docs/block-processing/types.md for a description of the data types that exist in a block)
-    --
-    -- [| \redeemer contributorPubKey ->
-    --   let payToOwner = currentBlockHeight > paymentDeadline &&
-    --                    currentBlockHeight < collectionDeadline &&
-    --                    -- TODO: is there only a single address where the funds
-    --                    -- go (which is what this line seems to imply)
-    --                    -- or are the multiple addresses, one for each
-    --                    -- contributor (which is what the signature of `collect`
-    --                    -- seems to imply)
-    --                    fundsAtAddress ownScriptAddress > fundingGoal &&
-    --                    checkSig redeemer ownerPubKey
-    --       refundable = currentBlockHeight > collectionDeadline &&
-    --                    checkSig redeemer contributorPubKey
-    --   in
-    --     payToOwner || refundable
-    -- |]
+        unless (payToOwner || refundable) Nothing) ||])
 
 
 -- | Given the campaign data
