@@ -49,7 +49,7 @@ txnValid = property $ do
 
 -- | Submit a transaction to the blockchain and assert that it has been
 --   validated
-simpleTrace :: Tx -> Trace ()
+simpleTrace :: Tx Value -> Trace ()
 simpleTrace txn = do
     [txn'] <- walletAction (Wallet 1) $ submitTxn txn
     block <- blockchainActions

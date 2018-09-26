@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections   #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -212,56 +214,56 @@ encodeHeight :: Height -> Encoding
 encodeHeight = Enc.encodeInteger . getHeight
 
 -- | The height of a blockchain
-height :: Blockchain -> Height
+height :: Blockchain v -> Height
 height = Height . fromIntegral . length . join
 
 -- | Transaction including witnesses for its inputs
-data Tx = Tx {
+data Tx v = Tx {
     txInputs  :: Set TxIn,
-    txOutputs :: [TxOut],
-    txForge   :: !Value,
-    txFee     :: !Value
+    txOutputs :: [TxOut v],
+    txForge   :: !v,
+    txFee     :: !v
     } deriving (Show, Eq, Ord)
 
-encodeTx :: Tx -> Encoding
+encodeTx :: Tx Value -> Encoding
 encodeTx Tx{..} =
     foldMap encodeTxIn txInputs
     <> foldMap encodeTxOut txOutputs
     <> encodeValue txForge
     <> encodeValue txFee
 
-instance BA.ByteArrayAccess Tx where
+instance BA.ByteArrayAccess (Tx Value) where
     length        = BA.length . Write.toStrictByteString . encodeTx
     withByteArray = BA.withByteArray . Write.toStrictByteString . encodeTx
 
--- | Check that all values in a transaction are no.
+-- | Check that all values in a transaction are non-negative
 --
-validValuesTx :: Tx -> Bool
+validValuesTx :: Tx Value -> Bool
 validValuesTx Tx{..}
   = all ((>= 0) . txOutValue) txOutputs && txForge >= 0 && txFee >= 0
 
 -- | Transaction without witnesses for its inputs
-data TxStripped = TxStripped {
+data TxStripped v = TxStripped {
     txStrippedInputs  :: Set TxOutRef,
-    txStrippedOutputs :: [TxOut],
-    txStrippedForge   :: !Value,
-    txStrippedFee     :: !Value
+    txStrippedOutputs :: [TxOut v],
+    txStrippedForge   :: !v,
+    txStrippedFee     :: !v
     } deriving (Show, Eq, Ord)
 
-instance BA.ByteArrayAccess TxStripped where
+instance BA.ByteArrayAccess (TxStripped Value) where
     length = BA.length . BS.pack . show
     withByteArray = BA.withByteArray . BS.pack . show
 
-strip :: Tx -> TxStripped
+strip :: Tx v -> TxStripped v
 strip Tx{..} = TxStripped i txOutputs txForge txFee where
     i = Set.map txInRef txInputs
 
 -- | Hash a stripped transaction once
-preHash :: TxStripped -> Digest SHA256
+preHash :: BA.ByteArrayAccess (TxStripped v) => TxStripped v -> Digest SHA256
 preHash = hash
 
 -- | Double hash of a transaction, excluding its witnesses
-hashTx :: Tx -> TxId
+hashTx :: BA.ByteArrayAccess (TxStripped v) => Tx v -> TxId
 hashTx = TxId . hash . preHash . strip
 
 -- | Reference to a transaction output
@@ -293,32 +295,38 @@ instance BA.ByteArrayAccess TxIn where
     withByteArray = BA.withByteArray . Write.toStrictByteString . encodeTxIn
 
 -- Transaction output
-data TxOut = TxOut {
+data TxOut v = TxOut {
     txOutAddress :: !Address,
-    txOutValue   :: !Value,
+    txOutValue   :: !v,
     txOutData    :: !DataScript
     } deriving (Show, Eq, Ord)
 
-encodeTxOut :: TxOut -> Encoding
+encodeTxOut :: TxOut Value -> Encoding
 encodeTxOut TxOut{..} =
     encodeAddress txOutAddress
     <> encodeValue txOutValue
     <> encodeDataScript txOutData
 
-instance BA.ByteArrayAccess TxOut where
+instance BA.ByteArrayAccess (TxOut Value) where
     length        = BA.length . Write.toStrictByteString . encodeTxOut
     withByteArray = BA.withByteArray . Write.toStrictByteString . encodeTxOut
 
-type Block = [Tx]
-type Blockchain = [Block]
+type Block v = [Tx v]
+type Blockchain v = [Block v]
 
 -- | Lookup a transaction by its hash
-transaction :: Blockchain -> TxOutRef -> Maybe Tx
+transaction :: BA.ByteArrayAccess (TxStripped v) 
+    => Blockchain v 
+    -> TxOutRef 
+    -> Maybe (Tx v)
 transaction bc o = listToMaybe $ filter p  $ join bc where
     p = (txOutRefId o ==) . hashTx
 
 -- | Determine the unspent output that an input refers to
-out :: Blockchain -> TxOutRef -> Maybe TxOut
+out :: BA.ByteArrayAccess (TxStripped v) 
+    => Blockchain v 
+    -> TxOutRef 
+    -> Maybe (TxOut v)
 out bc o = do
     t <- transaction bc o
     let i = txOutRefIdx o
@@ -327,24 +335,24 @@ out bc o = do
         else Just $ txOutputs t !! i
 
 -- | Determine the unspent value that an input refers to
-value :: Blockchain -> TxOutRef -> Maybe Value
+value :: BA.ByteArrayAccess (TxStripped v) => Blockchain v -> TxOutRef -> Maybe v
 value bc o = txOutValue <$> out bc o
 
 -- | Determine the data script that an input refers to
-dataTxo :: Blockchain -> TxOutRef -> Maybe DataScript
+dataTxo :: BA.ByteArrayAccess (TxStripped v) => Blockchain v -> TxOutRef -> Maybe DataScript
 dataTxo bc o = txOutData <$> out bc o
 
 -- | The unspent outputs of a transaction
-unspentOutputsTx :: Tx -> Map TxOutRef TxOut
+unspentOutputsTx :: BA.ByteArrayAccess (TxStripped v) => Tx v -> Map TxOutRef (TxOut v)
 unspentOutputsTx t = Map.fromList $ fmap f $ zip [0..] $ txOutputs t where
     f (idx, o) = (TxOutRef (hashTx t) idx, o)
 
 -- | The outputs consumed by a transaction
-spentOutputs :: Tx -> Set TxOutRef
+spentOutputs :: Tx v -> Set TxOutRef
 spentOutputs = Set.map txInRef . txInputs
 
 -- | Unspent outputs of a ledger.
-unspentOutputs :: Blockchain -> Map TxOutRef TxOut
+unspentOutputs :: BA.ByteArrayAccess (TxStripped v) => Blockchain v -> Map TxOutRef (TxOut v)
 unspentOutputs = foldr ins Map.empty . join where
     ins t unspent = (unspent `Map.difference` lift (spentOutputs t)) `Map.union` unspentOutputsTx t
     lift = Map.fromSet (const ())
@@ -358,7 +366,7 @@ data BlockchainState = BlockchainState {
     }
 
 -- | Get blockchain state for a transaction
-state :: Tx -> Blockchain -> BlockchainState
+state :: BA.ByteArrayAccess (TxStripped v) => Tx v -> Blockchain v -> BlockchainState
 state tx bc = BlockchainState (height bc) (hashTx tx)
 
 -- | Determine whether a transaction is valid in a given ledger
@@ -369,7 +377,7 @@ state tx bc = BlockchainState (height bc) (hashTx tx)
 --
 -- * All values in the transaction are non-negative.
 --
-validTx :: Tx -> Blockchain -> Bool
+validTx :: Tx Value -> Blockchain Value -> Bool
 validTx t bc = inputsAreValid && valueIsPreserved && validValuesTx t where
     inputsAreValid = all (`validatesIn` unspentOutputs bc) (txInputs t)
     valueIsPreserved = inVal == outVal
@@ -387,7 +395,7 @@ validTx t bc = inputsAreValid && valueIsPreserved && validValuesTx t where
 --   * Verifying the hash of the validator script
 --   * Evaluating the validator script with the redeemer and data script
 --
-validate :: BlockchainState -> TxIn -> TxOut -> Bool
+validate :: BlockchainState -> TxIn -> TxOut v -> Bool
 validate bs (TxIn _ v r) (TxOut h _ d)
     | h /= hashValidator v = False
     | otherwise            = runScript bs v r d
@@ -409,7 +417,7 @@ unitRedeemer :: Redeemer
 unitRedeemer = Redeemer $$(plutusT [|| () ||])
 
 -- | Transaction output locked by the empty validator and unit data scripts.
-simpleOutput :: Value -> TxOut
+simpleOutput :: v -> TxOut v
 simpleOutput vl = TxOut (hashValidator emptyValidator) vl unitData
 
 -- | Transaction input that spends an output using the empty validator and

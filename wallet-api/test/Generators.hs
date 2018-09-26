@@ -60,8 +60,8 @@ constantFee = FeeEstimator . const . const
 --   wallet-api (in particular, `Wallet.UTXO.unspentOutputs`) we note the
 --   unspent outputs of the chain when it is first created.
 data Mockchain = Mockchain {
-    mockchainBlockchain :: Blockchain,
-    mockchainUtxo       :: Map TxOutRef TxOut
+    mockchainBlockchain :: Blockchain Value,
+    mockchainUtxo       :: Map TxOutRef (TxOut Value)
     } deriving Show
 
 -- | The empty mockchain
@@ -91,7 +91,7 @@ genMockchain = genMockchain' generatorModel
 --   beginning of a blockchain)
 genInitialTransaction :: MonadGen m
     => GeneratorModel
-    -> m (Tx, [TxOut])
+    -> m (Tx Value, [TxOut Value])
 genInitialTransaction GeneratorModel{..} = do
     vls <- splitVal gmNumOutputs gmInitialBalance
     let o = simpleOutput <$> vls
@@ -107,7 +107,7 @@ genInitialTransaction GeneratorModel{..} = do
 --   of the unspent outputs is smaller than the minimum fee (1)
 genValidTransaction :: MonadGen m
     => Mockchain
-    -> m Tx
+    -> m (Tx Value)
 genValidTransaction = genValidTransaction' (constantFee 1)
 
 -- | Generate a valid transaction, using the unspent outputs provided.
@@ -116,7 +116,7 @@ genValidTransaction = genValidTransaction' (constantFee 1)
 genValidTransaction' :: MonadGen m
     => FeeEstimator
     -> Mockchain
-    -> m Tx
+    -> m (Tx Value)
 genValidTransaction' f (Mockchain bc ops) = do
     -- Take a random number of UTXO from the input
     nUtxo <- if Map.null ops
@@ -137,7 +137,7 @@ genValidTransaction' f (Mockchain bc ops) = do
 
 -- | Assert that a transaction is valid in a chain
 assertValid :: (MonadTest m, HasCallStack)
-    => Tx
+    => Tx Value
     -> Mockchain
     -> m ()
 assertValid tx (Mockchain chain _) = Hedgehog.assert (validTx tx chain)
