@@ -66,17 +66,20 @@ import qualified Codec.CBOR.Encoding              as Enc
 import qualified Codec.CBOR.Write                 as Write
 import           Control.Monad                    (join)
 import           Crypto.Hash                      (Digest, SHA256, hash)
+import           Data.Bifunctor                   (Bifunctor(..))
 import qualified Data.ByteArray                   as BA
 import qualified Data.ByteString.Char8            as BS
 import qualified Data.ByteString.Lazy             as BSL
 import           Data.Foldable                    (foldMap)
 import           Data.Map                         (Map)
 import qualified Data.Map                         as Map
-import           Data.Maybe                       (fromMaybe, listToMaybe)
+import           Data.Maybe                       (listToMaybe, catMaybes)
 import           Data.Monoid                      (Sum(..))
 import           Data.Semigroup                   (Semigroup (..))
 import           Data.Set                         (Set)
 import qualified Data.Set as Set
+import           Data.Text                        (Text)
+import           Numeric.Natural                  (Natural)
 
 import           Language.Plutus.CoreToPLC.Plugin (PlcCode, getSerializedCode)
 import           Language.Plutus.TH               (plutusT)
@@ -104,13 +107,29 @@ especially because we only need one direction (to binary).
 
 -}
 
--- | Cryptocurrency value
+-- | Non-negative cryptocurrency value
 --
-newtype Value = Value { getValue :: Integer }
+newtype Value = Value { getValue :: Natural }
     deriving (Eq, Ord, Show, Num, Integral, Real, Enum)
 
 encodeValue :: Value -> Encoding
-encodeValue = Enc.encodeInteger . getValue
+encodeValue = Enc.encodeInteger . fromIntegral . getValue
+
+newtype Currency = Currency { getCurrency :: Text }
+    deriving (Eq, Ord, Show)
+
+encodeCurrency :: Currency -> Encoding
+encodeCurrency = Enc.encodeString . getCurrency
+
+-- | Non-negative, multi-currency crypto value
+--
+newtype MultiCurrency = MultiCurrency { getMultiCurrency :: Map Currency Value }
+    deriving (Eq, Ord, Show)
+
+encodeMultiCurrency :: MultiCurrency -> Encoding
+encodeMultiCurrency = foldMap (uncurry (<>) . bimap encodeCurrency encodeValue) 
+    . Map.toList 
+    . getMultiCurrency
 
 -- | Transaction ID (double SHA256 hash of the transaction)
 newtype TxId = TxId { getTxId :: Digest SHA256 }
@@ -210,7 +229,7 @@ hashRedeemer = Address . hash . Write.toStrictByteString . encodeRedeemer
 newtype Height = Height { getHeight :: Integer }
     deriving (Eq, Ord, Show)
 
-encodeHeight :: Height -> Encoding
+encodeHeight :: Height -> Encoding 
 encodeHeight = Enc.encodeInteger . getHeight
 
 -- | The height of a blockchain
@@ -236,12 +255,17 @@ instance BA.ByteArrayAccess (Tx Value) where
     length        = BA.length . Write.toStrictByteString . encodeTx
     withByteArray = BA.withByteArray . Write.toStrictByteString . encodeTx
 
--- | Check that all values in a transaction are non-negative
---
-validValuesTx :: Tx Value -> Bool
-validValuesTx Tx{..}
-  = all ((>= 0) . txOutValue) txOutputs && txForge >= 0 && txFee >= 0
+encodeMultiTx :: Tx MultiCurrency -> Encoding
+encodeMultiTx Tx{..} =
+    foldMap encodeTxIn txInputs
+    <> foldMap encodeMultiTxOut txOutputs
+    <> encodeMultiCurrency txForge
+    <> encodeMultiCurrency txFee
 
+instance BA.ByteArrayAccess (Tx MultiCurrency) where
+    length        = BA.length . Write.toStrictByteString . encodeMultiTx
+    withByteArray = BA.withByteArray . Write.toStrictByteString . encodeMultiTx
+    
 -- | Transaction without witnesses for its inputs
 data TxStripped v = TxStripped {
     txStrippedInputs  :: Set TxOutRef,
@@ -311,6 +335,18 @@ instance BA.ByteArrayAccess (TxOut Value) where
     length        = BA.length . Write.toStrictByteString . encodeTxOut
     withByteArray = BA.withByteArray . Write.toStrictByteString . encodeTxOut
 
+encodeMultiTxOut :: TxOut MultiCurrency -> Encoding
+encodeMultiTxOut TxOut{..} =
+    encodeAddress txOutAddress
+    <> encodeMultiCurrency txOutValue
+    <> encodeDataScript txOutData
+
+instance BA.ByteArrayAccess (TxOut MultiCurrency) where
+    length        = 
+        BA.length . Write.toStrictByteString . encodeMultiTxOut
+    withByteArray = 
+        BA.withByteArray . Write.toStrictByteString . encodeMultiTxOut
+    
 type Block v = [Tx v]
 type Blockchain v = [Block v]
 
@@ -375,16 +411,24 @@ state tx bc = BlockchainState (height bc) (hashTx tx)
 --
 -- * The transaction preserves value (value preservation).
 --
--- * All values in the transaction are non-negative.
+-- * All values in the transaction are non-negative (by virtue of using 
+--   `Natural` for values)
 --
-validTx :: Tx Value -> Blockchain Value -> Bool
-validTx t bc = inputsAreValid && valueIsPreserved && validValuesTx t where
+validTx :: (
+    Eq v, 
+    Num v,
+    BA.ByteArrayAccess (TxStripped v))
+    => Tx v 
+    -> Blockchain v 
+    -> Bool
+validTx t bc = inputsAreValid && valueIsPreserved where
+    sum' = getSum . foldMap Sum
     inputsAreValid = all (`validatesIn` unspentOutputs bc) (txInputs t)
     valueIsPreserved = inVal == outVal
     inVal =
-        txForge t + getSum (foldMap (Sum . fromMaybe 0 . value bc . txInRef) (txInputs t))
+        txForge t + sum' (catMaybes $ fmap (value bc . txInRef) (Set.toList $ txInputs t))
     outVal =
-        txFee t + sum (map txOutValue (txOutputs t))
+        txFee t + sum' (map txOutValue (txOutputs t))
     txIn `validatesIn` allOutputs =
         maybe False (validate (state t bc) txIn)
         $ txInRef txIn `Map.lookup` allOutputs
