@@ -57,10 +57,6 @@ newTyName k = do
     u <- nameUnique . unTyName <$> liftQuote (freshTyName () "a")
     pure $ TyNameWithKind (TyName (Name ((), k) "a" u))
 
-unit :: MonadQuote m => m (Type TyNameWithKind ())
-unit =
-    [ TyForall () nam (Type ()) (TyFun () (TyVar () nam) (TyVar () nam)) | nam <- newTyName (Type ()) ]
-
 boolean :: MonadQuote m => m (Type TyNameWithKind ())
 boolean = do
     nam <- newTyName (Type ())
