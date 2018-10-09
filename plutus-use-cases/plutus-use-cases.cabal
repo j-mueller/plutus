@@ -40,8 +40,9 @@ library
   exposed-modules:
     Language.Plutus.Coordination.Contracts
     Language.Plutus.Coordination.Contracts.CrowdFunding
-    Language.Plutus.Coordination.Contracts.Vesting
+    Language.Plutus.Coordination.Contracts.Pyramid
     Language.Plutus.Coordination.Contracts.Swap
+    Language.Plutus.Coordination.Contracts.Vesting
     Language.Plutus.Runtime
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
