@@ -57,9 +57,12 @@ type ControlAPI
                     :<|> "wallets" :> Capture "walletid" Wallet :> "notifications" :> "block-validation" :> ReqBody '[ JSON] Block :> Post '[ JSON] ()
                     :<|> "wallets" :> Capture "walletid" Wallet :> "notifications" :> "block-height" :> ReqBody '[ JSON] Height :> Post '[ JSON] ())
 
+type AssertionsAPI = "assertions" :> "own-funds-eq" :> Capture "walletid" Wallet :> ReqBody '[JSON] Value :> Post '[JSON] Bool
+
 type API
    = WalletAPI
      :<|> ControlAPI
+     :<|> AssertionsAPI
 
 newtype State = State
   { getState :: TVar EmulatorState
@@ -182,7 +185,7 @@ runM state r = do
   liftEither res
 
 walletHandlers :: State -> Server API
-walletHandlers state = hoistServer api (runM state) $ walletApi :<|> controlApi
+walletHandlers state = hoistServer api (runM state) $ walletApi :<|> controlApi :<|> assertionsApi
   where
     walletApi =
       wallets :<|> fetchWallet :<|> createWallet :<|> createPaymentWithChange :<|>
@@ -192,6 +195,10 @@ walletHandlers state = hoistServer api (runM state) $ walletApi :<|> controlApi
     controlApi =
       blockchainActions :<|> setValidationData :<|> blockValidated :<|>
       blockHeight
+    assertionsApi = assertOwnFundsEq
+
+assertOwnFundsEq :: a
+assertOwnFundsEq = undefined
 
 handleNotifications ::
      (MonadReader State m, MonadIO m, MonadError ServantErr m)
