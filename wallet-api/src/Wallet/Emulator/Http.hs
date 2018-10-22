@@ -17,7 +17,7 @@ import           Control.Monad.Error.Class  (MonadError)
 import           Control.Monad.Except       (ExceptT, liftEither, runExceptT)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
 import           Control.Monad.Reader       (MonadReader, ReaderT, asks, runReaderT)
-import           Control.Monad.State        (runStateT)
+import           Control.Monad.State        (runState, runStateT)
 import           Control.Monad.Writer       (runWriter)
 import           Control.Natural            (type (~>))
 import qualified Data.ByteString.Lazy.Char8 as BSL
@@ -34,10 +34,10 @@ import           Servant                    (Application, Handler, ServantErr (e
 import           Servant.API                ((:<|>) ((:<|>)), (:>), Capture, Get, JSON, NoContent (NoContent), Post,
                                              Put, ReqBody)
 import qualified Wallet.API                 as WAPI
-import           Wallet.Emulator.Types      (EmulatedWalletApi, EmulatorState (emWalletState),
-                                             Notification (BlockHeight, BlockValidated), Wallet, WalletState, chain,
-                                             emTxPool, emptyEmulatorState, emptyWalletState, runEmulatedWalletApi,
-                                             txPool, validateEm, validationData, walletStates)
+import           Wallet.Emulator.Types      (AssertionError, EmulatedWalletApi, EmulatorState (emWalletState),
+                                             Notification (BlockHeight, BlockValidated), Trace, Wallet, WalletState,
+                                             chain, emTxPool, emptyEmulatorState, emptyWalletState, process,
+                                             runEmulatedWalletApi, txPool, validateEm, validationData, walletStates)
 import qualified Wallet.Emulator.Types      as Types
 import           Wallet.UTXO                (Block, Height, Tx, TxIn', TxOut', ValidationData, Value)
 
@@ -57,7 +57,8 @@ type ControlAPI
                     :<|> "wallets" :> Capture "walletid" Wallet :> "notifications" :> "block-validation" :> ReqBody '[ JSON] Block :> Post '[ JSON] ()
                     :<|> "wallets" :> Capture "walletid" Wallet :> "notifications" :> "block-height" :> ReqBody '[ JSON] Height :> Post '[ JSON] ())
 
-type AssertionsAPI = "assertions" :> "own-funds-eq" :> Capture "walletid" Wallet :> ReqBody '[JSON] Value :> Post '[JSON] Bool
+type AssertionsAPI = "assertions" :> "own-funds-eq" :> Capture "walletid" Wallet :> ReqBody '[JSON] Value :> Post '[JSON] NoContent
+                   :<|> "assertions" :> "is-validated-txn" :> ReqBody '[JSON] Tx :> Post '[JSON] NoContent
 
 type API
    = WalletAPI
@@ -195,10 +196,28 @@ walletHandlers state = hoistServer api (runM state) $ walletApi :<|> controlApi 
     controlApi =
       blockchainActions :<|> setValidationData :<|> blockValidated :<|>
       blockHeight
-    assertionsApi = assertOwnFundsEq
+    assertionsApi = assertOwnFundsEq :<|> assertIsValidated
 
-assertOwnFundsEq :: a
-assertOwnFundsEq = undefined
+assertOwnFundsEq :: (MonadError ServantErr m, MonadReader State m, MonadIO m) => Wallet -> Value -> m NoContent
+assertOwnFundsEq wallet value = fmap (const NoContent) $ runTrace $ Types.assertOwnFundsEq wallet value
+
+assertIsValidated :: (MonadError ServantErr m, MonadReader State m, MonadIO m) => Tx -> m NoContent
+assertIsValidated tx = fmap (const NoContent) $ runTrace $ Types.assertIsValidated tx
+
+runTrace :: (MonadError ServantErr m, MonadReader State m, MonadIO m) => Trace a -> m a
+runTrace trace = do
+  var <- asks getState
+  res <- liftIO . atomically . runTraceSTM var $ trace
+  case res of
+    Left e  -> throwError $ err500 {errBody = BSL.pack . show $ e}
+    Right a -> pure a
+
+runTraceSTM :: TVar EmulatorState -> Trace a -> STM (Either AssertionError a)
+runTraceSTM var trace = do
+  es <- readTVar var
+  let (res, newState) = runState (runExceptT $ process trace) es
+  writeTVar var newState
+  pure res
 
 handleNotifications ::
      (MonadReader State m, MonadIO m, MonadError ServantErr m)
