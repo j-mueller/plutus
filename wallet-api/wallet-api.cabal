@@ -43,6 +43,7 @@ library
     exposed-modules:
         Wallet.API
         Wallet.Emulator
+        Wallet.Emulator.Client
         Wallet.Emulator.Http
         Wallet.Emulator.Types
         Wallet.Generators
@@ -90,6 +91,7 @@ library
         prettyprinter -any,
         serialise -any,
         servant -any,
+        servant-client -any,
         servant-server -any,
         stm -any,
         template-haskell -any,

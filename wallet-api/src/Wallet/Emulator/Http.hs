@@ -9,6 +9,7 @@
 module Wallet.Emulator.Http
   ( app
   , initialState
+  , API
   ) where
 
 import           Control.Concurrent.STM     (STM, TVar, atomically, modifyTVar, newTVar, readTVar, readTVarIO,
@@ -58,8 +59,8 @@ type ControlAPI
                     :<|> "wallets" :> Capture "walletid" Wallet :> "notifications" :> "block-height" :> ReqBody '[ JSON] Height :> Post '[ JSON] ())
 
 type AssertionsAPI
-   = "assertions" :> "own-funds-eq" :> Capture "walletid" Wallet :> ReqBody '[ JSON] Value :> Post '[ JSON] NoContent
-     :<|> "assertions" :> "is-validated-txn" :> ReqBody '[ JSON] Tx :> Post '[ JSON] NoContent
+   = "assertions" :> ("own-funds-eq" :> Capture "walletid" Wallet :> ReqBody '[ JSON] Value :> Post '[ JSON] NoContent
+                      :<|> "is-validated-txn" :> ReqBody '[ JSON] Tx :> Post '[ JSON] NoContent)
 
 type API
    = WalletAPI

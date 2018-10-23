@@ -66,7 +66,7 @@ import qualified Data.Text                 as T
 import           GHC.Generics              (Generic)
 import           Lens.Micro
 import           Prelude                   as P
-import           Servant.API               (FromHttpApiData)
+import           Servant.API               (FromHttpApiData, ToHttpApiData)
 
 import           Data.Hashable             (Hashable)
 import           Wallet.API                (KeyPair (..), WalletAPI (..), WalletAPIError (..), keyPair, pubKey,
@@ -79,7 +79,7 @@ import qualified Wallet.UTXO.Index         as Index
 -- agents/wallets
 newtype Wallet = Wallet { getWallet :: Int }
     deriving (Show, Eq, Ord, Generic)
-    deriving newtype (FromHttpApiData, Hashable, ToJSON, FromJSON)
+    deriving newtype (ToHttpApiData, FromHttpApiData, Hashable, ToJSON, FromJSON)
 
 type TxPool = [Tx]
 
