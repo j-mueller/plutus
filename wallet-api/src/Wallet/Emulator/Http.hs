@@ -13,17 +13,16 @@ module Wallet.Emulator.Http
 
 import           Control.Concurrent.STM     (STM, TVar, atomically, modifyTVar, newTVar, readTVar, readTVarIO,
                                              writeTVar)
+import           Control.Monad              (void)
 import           Control.Monad.Error.Class  (MonadError)
 import           Control.Monad.Except       (ExceptT, liftEither, runExceptT)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
 import           Control.Monad.Reader       (MonadReader, ReaderT, asks, runReaderT)
-import           Control.Monad.State        (runState, runStateT)
-import           Control.Monad.Writer       (runWriter)
+import           Control.Monad.State        (runState)
 import           Control.Natural            (type (~>))
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import qualified Data.Map                   as Map
 import           Data.Maybe                 (catMaybes)
-import           Data.Monoid                ((<>))
 import           Data.Proxy                 (Proxy (Proxy))
 import           Data.Set                   (Set)
 import qualified Data.Set                   as Set
@@ -36,8 +35,9 @@ import           Servant.API                ((:<|>) ((:<|>)), (:>), Capture, Get
 import qualified Wallet.API                 as WAPI
 import           Wallet.Emulator.Types      (AssertionError, EmulatedWalletApi, EmulatorState (emWalletState),
                                              Notification (BlockHeight, BlockValidated), Trace, Wallet, WalletState,
-                                             chain, emTxPool, emptyEmulatorState, emptyWalletState, process,
-                                             runEmulatedWalletApi, txPool, validateEm, validationData, walletStates)
+                                             chain, emTxPool, emptyEmulatorState, emptyWalletState, process, txPool,
+                                             validateEm, validationData, walletAction, walletStates)
+
 import qualified Wallet.Emulator.Types      as Types
 import           Wallet.UTXO                (Block, Height, Tx, TxIn', TxOut', ValidationData, Value)
 
@@ -57,8 +57,9 @@ type ControlAPI
                     :<|> "wallets" :> Capture "walletid" Wallet :> "notifications" :> "block-validation" :> ReqBody '[ JSON] Block :> Post '[ JSON] ()
                     :<|> "wallets" :> Capture "walletid" Wallet :> "notifications" :> "block-height" :> ReqBody '[ JSON] Height :> Post '[ JSON] ())
 
-type AssertionsAPI = "assertions" :> "own-funds-eq" :> Capture "walletid" Wallet :> ReqBody '[JSON] Value :> Post '[JSON] NoContent
-                   :<|> "assertions" :> "is-validated-txn" :> ReqBody '[JSON] Tx :> Post '[JSON] NoContent
+type AssertionsAPI
+   = "assertions" :> "own-funds-eq" :> Capture "walletid" Wallet :> ReqBody '[ JSON] Value :> Post '[ JSON] NoContent
+     :<|> "assertions" :> "is-validated-txn" :> ReqBody '[ JSON] Tx :> Post '[ JSON] NoContent
 
 type API
    = WalletAPI
@@ -68,10 +69,6 @@ type API
 newtype State = State
   { getState :: TVar EmulatorState
   }
-
-data AppError
-  = WalletAPIError WAPI.WalletAPIError
-  | HttpError ServantErr
 
 wallets ::
      (MonadError ServantErr m, MonadReader State m, MonadIO m) => m [Wallet]
@@ -103,65 +100,37 @@ createPaymentWithChange ::
   => Wallet
   -> Value
   -> m (Set.Set TxIn', TxOut')
-createPaymentWithChange = runWalletApiAction WAPI.createPaymentWithChange
+createPaymentWithChange wallet =
+  runWalletAction wallet . WAPI.createPaymentWithChange
 
 payToPublicKey ::
      (MonadReader State m, MonadIO m, MonadError ServantErr m)
   => Wallet
   -> Value
   -> m TxOut'
-payToPublicKey = runWalletApiAction WAPI.payToPublicKey
+payToPublicKey wallet = runWalletAction wallet . WAPI.payToPublicKey
 
 submitTxn ::
      (MonadReader State m, MonadIO m, MonadError ServantErr m)
   => Wallet
   -> Tx
   -> m ()
-submitTxn = runWalletApiAction WAPI.submitTxn
+submitTxn wallet = void . runWalletAction wallet . WAPI.submitTxn
 
-runWalletApiAction ::
+runWalletAction ::
      (MonadReader State m, MonadIO m, MonadError ServantErr m)
-  => (a -> EmulatedWalletApi b)
-  -> Wallet
-  -> a
-  -> m b
-runWalletApiAction action wallet a = do
-  var <- asks getState
-  result <- liftIO . atomically $ runWalletApiActionSTM var wallet action a
-  case result of
-    Left (HttpError e) -> throwError e
-    Left (WalletAPIError e) ->
-      throwError $ err500 {errBody = BSL.pack . show $ e}
-    Right res -> pure res
-
-runWalletApiActionSTM ::
-     TVar EmulatorState
-  -> Wallet
-  -> (a -> EmulatedWalletApi b)
-  -> a
-  -> STM (Either AppError b)
-runWalletApiActionSTM var wallet action a = do
-  states <- readTVar var
-  let mState = Map.lookup wallet . emWalletState $ states
-  case mState of
-    Nothing -> pure . Left . HttpError $ err404
-    Just oldState -> do
-      let (res, txs) =
-            runWriter .
-            flip runStateT oldState . runExceptT . runEmulatedWalletApi $
-            action a
-      modifyTVar var (addTransactions txs)
-      case res of
-        (Left e, _) -> pure . Left . WalletAPIError $ e
-        (Right v, newState) -> do
-          modifyTVar var (insertWallet wallet newState)
-          pure $ Right v
+  => Wallet
+  -> EmulatedWalletApi a
+  -> m a
+runWalletAction wallet action = do
+  (_, eRes) <- runTrace . walletAction wallet $ action
+  case eRes of
+    Left walletAPIError ->
+      throwError $ err500 {errBody = BSL.pack . show $ walletAPIError}
+    Right v -> pure v
 
 insertWallet :: Wallet -> WalletState -> EmulatorState -> EmulatorState
 insertWallet w ws = over walletStates (Map.insert w ws)
-
-addTransactions :: [Tx] -> EmulatorState -> EmulatorState
-addTransactions txs = over txPool (<> txs)
 
 getTransactions :: (MonadReader State m, MonadIO m) => m [Tx]
 getTransactions = do
@@ -186,7 +155,8 @@ runM state r = do
   liftEither res
 
 walletHandlers :: State -> Server API
-walletHandlers state = hoistServer api (runM state) $ walletApi :<|> controlApi :<|> assertionsApi
+walletHandlers state =
+  hoistServer api (runM state) $ walletApi :<|> controlApi :<|> assertionsApi
   where
     walletApi =
       wallets :<|> fetchWallet :<|> createWallet :<|> createPaymentWithChange :<|>
@@ -198,13 +168,23 @@ walletHandlers state = hoistServer api (runM state) $ walletApi :<|> controlApi 
       blockHeight
     assertionsApi = assertOwnFundsEq :<|> assertIsValidated
 
-assertOwnFundsEq :: (MonadError ServantErr m, MonadReader State m, MonadIO m) => Wallet -> Value -> m NoContent
-assertOwnFundsEq wallet value = fmap (const NoContent) $ runTrace $ Types.assertOwnFundsEq wallet value
+assertOwnFundsEq ::
+     (MonadError ServantErr m, MonadReader State m, MonadIO m)
+  => Wallet
+  -> Value
+  -> m NoContent
+assertOwnFundsEq wallet value =
+  fmap (const NoContent) $ runTrace $ Types.assertOwnFundsEq wallet value
 
-assertIsValidated :: (MonadError ServantErr m, MonadReader State m, MonadIO m) => Tx -> m NoContent
-assertIsValidated tx = fmap (const NoContent) $ runTrace $ Types.assertIsValidated tx
+assertIsValidated ::
+     (MonadError ServantErr m, MonadReader State m, MonadIO m)
+  => Tx
+  -> m NoContent
+assertIsValidated tx =
+  fmap (const NoContent) $ runTrace $ Types.assertIsValidated tx
 
-runTrace :: (MonadError ServantErr m, MonadReader State m, MonadIO m) => Trace a -> m a
+runTrace ::
+     (MonadError ServantErr m, MonadReader State m, MonadIO m) => Trace a -> m a
 runTrace trace = do
   var <- asks getState
   res <- liftIO . atomically . runTraceSTM var $ trace
@@ -224,7 +204,8 @@ handleNotifications ::
   => Wallet
   -> [Notification]
   -> m ()
-handleNotifications = runWalletApiAction Types.handleNotifications
+handleNotifications wallet =
+  void . runTrace . Types.walletRecvNotifications wallet
 
 blockValidated ::
      (MonadReader State m, MonadIO m, MonadError ServantErr m)

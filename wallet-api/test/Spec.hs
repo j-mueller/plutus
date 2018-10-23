@@ -74,7 +74,7 @@ txnIndexValid = property $ do
 --   validated
 simpleTrace :: Tx -> Trace ()
 simpleTrace txn = do
-    [txn'] <- walletAction (Wallet 1) $ submitTxn txn
+    ([txn'], _) <- walletAction (Wallet 1) $ submitTxn txn
     block <- blockchainActions
     assertIsValidated txn'
 
