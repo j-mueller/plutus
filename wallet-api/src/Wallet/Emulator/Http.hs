@@ -54,9 +54,11 @@ type WalletAPI
 
 type ControlAPI
    = "emulator" :> ("blockchain-actions" :> Get '[ JSON] [Tx]
-                    :<|> "validation-data" :> ReqBody '[ JSON] ValidationData :> Put '[ JSON] ()
-                    :<|> "wallets" :> Capture "walletid" Wallet :> "notifications" :> "block-validation" :> ReqBody '[ JSON] Block :> Post '[ JSON] ()
-                    :<|> "wallets" :> Capture "walletid" Wallet :> "notifications" :> "block-height" :> ReqBody '[ JSON] Height :> Post '[ JSON] ())
+                    :<|> "validation-data" :> ReqBody '[ JSON] ValidationData :> Put '[ JSON] ())
+
+type WalletControlAPI
+   = "wallets" :> (Capture "walletid" Wallet :> "notifications" :> "block-validation" :> ReqBody '[ JSON] Block :> Post '[ JSON] ()
+                   :<|> Capture "walletid" Wallet :> "notifications" :> "block-height" :> ReqBody '[ JSON] Height :> Post '[ JSON] ())
 
 type AssertionsAPI
    = "assertions" :> ("own-funds-eq" :> Capture "walletid" Wallet :> ReqBody '[ JSON] Value :> Post '[ JSON] NoContent
@@ -65,7 +67,9 @@ type AssertionsAPI
 type API
    = WalletAPI
      :<|> ControlAPI
+     :<|> WalletControlAPI
      :<|> AssertionsAPI
+
 newtype ServerState = ServerState
   { getState :: TVar EmulatorState
   }
@@ -145,16 +149,16 @@ runM state r = do
 
 walletHandlers :: ServerState -> Server API
 walletHandlers state =
-  hoistServer api (runM state) $ walletApi :<|> controlApi :<|> assertionsApi
+  hoistServer api (runM state) $
+  walletApi :<|> controlApi :<|> walletControlApi :<|> assertionsApi
   where
     walletApi =
       wallets :<|> fetchWallet :<|> createWallet :<|> createPaymentWithChange :<|>
       payToPublicKey :<|>
       submitTxn :<|>
       getTransactions
-    controlApi =
-      blockchainActions :<|> setValidationData :<|> blockValidated :<|>
-      blockHeight
+    controlApi = blockchainActions :<|> setValidationData
+    walletControlApi = blockValidated :<|> blockHeight
     assertionsApi = assertOwnFundsEq :<|> assertIsValidated
 
 assertOwnFundsEq ::
@@ -169,8 +173,7 @@ assertIsValidated ::
      (MonadError ServantErr m, MonadReader ServerState m, MonadIO m)
   => Tx
   -> m NoContent
-assertIsValidated tx =
-  NoContent <$ (runTrace $ Types.assertIsValidated tx)
+assertIsValidated tx = NoContent <$ (runTrace $ Types.assertIsValidated tx)
 
 runWalletAction ::
      (MonadReader ServerState m, MonadIO m, MonadError ServantErr m)

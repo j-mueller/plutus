@@ -73,7 +73,7 @@ library
         cborg -any,
         containers -any,
         core-to-plc -any,
-        cryptonite -any,
+        cryptonite >=0.25,
         errors -any,
         free -any,
         ghc -any,
