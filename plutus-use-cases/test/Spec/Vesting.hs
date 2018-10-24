@@ -40,7 +40,7 @@ tests = testGroup "vesting" [
 --   to the transaction output that is locked by the schemes's validator
 --   script (and can be collected by the scheme's owner)
 commit :: Wallet -> Vesting -> VestingPLC -> Runtime.Value -> Trace TxOutRef'
-commit w vv vplc vl = exScriptOut <$> fst <$> walletAction w (void $ vestFunds vplc vv vl) where
+commit w vv vplc vl = exScriptOut <$> walletAction w (void $ vestFunds vplc vv vl) where
     exScriptOut = snd . head . filter (isPayToScriptOut . fst) . txOutRefs . head
 
 secureFunds :: Property

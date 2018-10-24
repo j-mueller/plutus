@@ -45,7 +45,7 @@ tests = testGroup "crowdfunding" [
 --   to the transaction output that is locked by the campaign's validator
 --   script (and can be collected by the campaign owner)
 contrib :: DataScript -> Wallet -> CampaignPLC -> Runtime.Value -> Trace TxOutRef'
-contrib ds w c v = exContrib <$> fst <$> walletAction w (contribute c ds v) where
+contrib ds w c v = exContrib <$> walletAction w (contribute c ds v) where
     exContrib = snd . head . filter (isPayToScriptOut . fst) . txOutRefs . head
 
 -- | Make a contribution from wallet 2
@@ -59,9 +59,7 @@ contrib3 = contrib ds (Wallet 3) where
 
 -- | Collect the contributions of a crowdfunding campaign
 collect :: Wallet -> CampaignPLC -> [(TxOutRef', Wallet, UTXO.Value)] -> Trace [Tx]
-collect w c contributions =
-  fmap fst . walletAction w $ CF.collect c ins
-  where
+collect w c contributions = walletAction w $ CF.collect c ins where
     ins = first (PubKey . getWallet) <$> contributions
 
 -- | Generate a transaction that contributes some funds to a campaign.

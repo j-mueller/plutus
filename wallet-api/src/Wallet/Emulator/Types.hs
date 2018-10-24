@@ -10,7 +10,8 @@ module Wallet.Emulator.Types(
     Wallet(..),
     TxPool,
     -- * Emulator
-    Assertion,
+    Assertion(OwnFundsEqual),
+    assert,
     assertIsValidated,
     AssertionError,
     Event(..),
@@ -200,7 +201,7 @@ isValidated txn = do
 data Event n a where
     -- | An direct action performed by a wallet. Usually represents a "user action", as it is
     -- triggered externally.
-    WalletAction :: Wallet -> n b -> Event n ([Tx], Either WalletAPIError b)
+    WalletAction :: Wallet -> n () -> Event n [Tx]
     -- | A wallet receiving some notifications, and reacting to them.
     WalletRecvNotification :: Wallet -> [Notification] -> Event n [Tx]
     -- | The blockchain performing actions, resulting in a validated block.
@@ -272,7 +273,7 @@ validateEm EmulatorState{emIndex=idx, emValidationData = vd} txn =
     let result = Index.runLookup (Index.validTxIndexed vd txn) idx in
     either (const Nothing) (\r -> if r then Just txn else Nothing) result
 
-liftEmulatedWallet :: (MonadEmulator m) => Wallet -> EmulatedWalletApi a -> m ([Tx], Either WalletAPIError a)
+liftEmulatedWallet :: (MonadState EmulatorState m) => Wallet -> EmulatedWalletApi a -> m ([Tx], Either WalletAPIError a)
 liftEmulatedWallet wallet act = do
     emState <- get
     let walletState = fromMaybe (emptyWalletState wallet) $ Map.lookup wallet $ emWalletState emState
@@ -285,7 +286,7 @@ liftEmulatedWallet wallet act = do
 
 eval :: (MonadEmulator m) => Event EmulatedWalletApi a -> m a
 eval = \case
-    WalletAction wallet action -> liftEmulatedWallet wallet action
+    WalletAction wallet action -> fst <$> liftEmulatedWallet wallet action
     WalletRecvNotification wallet trigger -> fst <$> liftEmulatedWallet wallet (handleNotifications trigger)
     BlockchainActions -> do
         emState <- get
@@ -301,11 +302,11 @@ eval = \case
     Assertion a -> assert a
     SetValidationData d -> modify (set validationData d)
 
-process :: (MonadState EmulatorState m, MonadError AssertionError m) => Trace a -> m a
+process :: (MonadEmulator m) => Trace a -> m a
 process = interpretWithMonad eval
 
 -- | Interact with a wallet
-walletAction :: Wallet -> EmulatedWalletApi a -> Trace ([Tx], Either WalletAPIError a)
+walletAction :: Wallet -> EmulatedWalletApi () -> Trace [Tx]
 walletAction w = Op.singleton . WalletAction w
 
 -- | Notify a wallet of blockchain events
