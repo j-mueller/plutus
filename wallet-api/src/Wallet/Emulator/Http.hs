@@ -14,7 +14,6 @@ module Wallet.Emulator.Http
 
 import           Control.Concurrent.STM     (STM, TVar, atomically, modifyTVar, newTVar, readTVar, readTVarIO,
                                              writeTVar)
-import           Control.Monad              (void)
 import           Control.Monad.Error.Class  (MonadError)
 import           Control.Monad.Except       (ExceptT, liftEither, runExceptT)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
@@ -34,10 +33,11 @@ import           Servant                    (Application, Handler, ServantErr (e
 import           Servant.API                ((:<|>) ((:<|>)), (:>), Capture, Get, JSON, NoContent (NoContent), Post,
                                              Put, ReqBody)
 import qualified Wallet.API                 as WAPI
-import           Wallet.Emulator.Types      (EmulatedWalletApi, EmulatorState (emWalletState),
-                                             Notification (BlockHeight, BlockValidated), Trace, Wallet, WalletState,
-                                             chain, emTxPool, emptyEmulatorState, emptyWalletState, liftEmulatedWallet,
-                                             process, txPool, validateEm, validationData, walletStates)
+import           Wallet.Emulator.Types      (Assertion (IsValidated, OwnFundsEqual), EmulatedWalletApi,
+                                             EmulatorState (emWalletState), Notification (BlockHeight, BlockValidated),
+                                             Wallet, WalletState, assert, chain, emTxPool, emptyEmulatorState,
+                                             emptyWalletState, liftEmulatedWallet, txPool, validateEm, validationData,
+                                             walletStates)
 
 import qualified Wallet.Emulator.Types      as Types
 import           Wallet.UTXO                (Block, Height, Tx, TxIn', TxOut', ValidationData, Value)
@@ -120,7 +120,7 @@ submitTxn ::
   => Wallet
   -> Tx
   -> m ()
-submitTxn wallet = void . runWalletAction wallet . WAPI.submitTxn
+submitTxn wallet = runWalletAction wallet . WAPI.submitTxn
 
 insertWallet :: Wallet -> WalletState -> EmulatorState -> EmulatorState
 insertWallet w ws = over walletStates (Map.insert w ws)
@@ -167,13 +167,27 @@ assertOwnFundsEq ::
   -> Value
   -> m NoContent
 assertOwnFundsEq wallet value =
-  NoContent <$ (runTrace $ Types.assertOwnFundsEq wallet value)
+  NoContent <$ (runAssertion $ OwnFundsEqual wallet value)
 
 assertIsValidated ::
      (MonadError ServantErr m, MonadReader ServerState m, MonadIO m)
   => Tx
   -> m NoContent
-assertIsValidated tx = NoContent <$ (runTrace $ Types.assertIsValidated tx)
+assertIsValidated tx = NoContent <$ (runAssertion $ IsValidated tx)
+
+blockValidated ::
+     (MonadReader ServerState m, MonadIO m, MonadError ServantErr m)
+  => Wallet
+  -> Block
+  -> m ()
+blockValidated wallet block = handleNotifications wallet [BlockValidated block]
+
+blockHeight ::
+     (MonadReader ServerState m, MonadIO m, MonadError ServantErr m)
+  => Wallet
+  -> Height
+  -> m ()
+blockHeight wallet height = handleNotifications wallet [BlockHeight height]
 
 runWalletAction ::
      (MonadReader ServerState m, MonadIO m, MonadError ServantErr m)
@@ -182,11 +196,19 @@ runWalletAction ::
   -> m a
 runWalletAction wallet = runServerState . fmap snd . liftEmulatedWallet wallet
 
-runTrace ::
+runAssertion ::
      (MonadError ServantErr m, MonadReader ServerState m, MonadIO m)
-  => Trace a
-  -> m a
-runTrace = runServerState . runExceptT . process
+  => Assertion
+  -> m ()
+runAssertion = runServerState . runExceptT . assert
+
+handleNotifications ::
+     (MonadReader ServerState m, MonadIO m, MonadError ServantErr m)
+  => Wallet
+  -> [Notification]
+  -> m ()
+handleNotifications wallet =
+  runWalletAction wallet . Types.handleNotifications
 
 runServerState ::
      (Show e, MonadError ServantErr m, MonadIO m, MonadReader ServerState m)
@@ -205,28 +227,6 @@ runStateSTM var action = do
   let (res, newState) = runState action es
   writeTVar var newState
   pure res
-
-handleNotifications ::
-     (MonadReader ServerState m, MonadIO m, MonadError ServantErr m)
-  => Wallet
-  -> [Notification]
-  -> m ()
-handleNotifications wallet =
-  void . runTrace . Types.walletRecvNotifications wallet
-
-blockValidated ::
-     (MonadReader ServerState m, MonadIO m, MonadError ServantErr m)
-  => Wallet
-  -> Block
-  -> m ()
-blockValidated wallet block = handleNotifications wallet [BlockValidated block]
-
-blockHeight ::
-     (MonadReader ServerState m, MonadIO m, MonadError ServantErr m)
-  => Wallet
-  -> Height
-  -> m ()
-blockHeight wallet height = handleNotifications wallet [BlockHeight height]
 
 setValidationData ::
      (MonadReader ServerState m, MonadIO m) => ValidationData -> m ()

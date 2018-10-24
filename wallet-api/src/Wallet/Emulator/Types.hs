@@ -10,7 +10,7 @@ module Wallet.Emulator.Types(
     Wallet(..),
     TxPool,
     -- * Emulator
-    Assertion(OwnFundsEqual),
+    Assertion(OwnFundsEqual, IsValidated),
     assert,
     assertIsValidated,
     AssertionError,
