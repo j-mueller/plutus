@@ -52,10 +52,6 @@ type WalletAPI
      :<|> "wallets" :> Capture "walletid" Wallet :> "transactions" :> ReqBody '[ JSON] Tx :> Post '[ JSON] ()
      :<|> "wallets" :> "transactions" :> Get '[ JSON] [Tx]
 
-type ControlAPI
-   = "emulator" :> ("blockchain-actions" :> Get '[ JSON] [Tx]
-                    :<|> "validation-data" :> ReqBody '[ JSON] ValidationData :> Put '[ JSON] ())
-
 type WalletControlAPI
    = "wallets" :> (Capture "walletid" Wallet :> "notifications" :> "block-validation" :> ReqBody '[ JSON] Block :> Post '[ JSON] ()
                    :<|> Capture "walletid" Wallet :> "notifications" :> "block-height" :> ReqBody '[ JSON] Height :> Post '[ JSON] ())
@@ -64,10 +60,14 @@ type AssertionsAPI
    = "assertions" :> ("own-funds-eq" :> Capture "walletid" Wallet :> ReqBody '[ JSON] Value :> Post '[ JSON] NoContent
                       :<|> "is-validated-txn" :> ReqBody '[ JSON] Tx :> Post '[ JSON] NoContent)
 
+type ControlAPI
+   = "emulator" :> ("blockchain-actions" :> Get '[ JSON] [Tx]
+                    :<|> "validation-data" :> ReqBody '[ JSON] ValidationData :> Put '[ JSON] ())
+
 type API
    = WalletAPI
-     :<|> ControlAPI
      :<|> WalletControlAPI
+     :<|> ControlAPI
      :<|> AssertionsAPI
 
 newtype ServerState = ServerState
@@ -150,7 +150,7 @@ runM state r = do
 walletHandlers :: ServerState -> Server API
 walletHandlers state =
   hoistServer api (runM state) $
-  walletApi :<|> controlApi :<|> walletControlApi :<|> assertionsApi
+  walletApi :<|> walletControlApi :<|> controlApi :<|> assertionsApi
   where
     walletApi =
       wallets :<|> fetchWallet :<|> createWallet :<|> createPaymentWithChange :<|>

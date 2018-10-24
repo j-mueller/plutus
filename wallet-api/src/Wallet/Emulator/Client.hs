@@ -27,5 +27,5 @@ blockValidated :: Wallet -> Block -> ClientM ()
 blockHeight :: Wallet -> Height -> ClientM ()
 assertOwnFundsEq :: Wallet -> Value -> ClientM NoContent
 assertIsValidated :: Tx -> ClientM NoContent
-(wallets :<|> fetchWallet :<|> createWallet :<|> createPaymentWithChange :<|> payToPublicKey :<|> submitTxn :<|> getTransactions) :<|> (blockchainActions :<|> setValidationData) :<|> (blockValidated :<|> blockHeight) :<|> (assertOwnFundsEq :<|> assertIsValidated) =
+(wallets :<|> fetchWallet :<|> createWallet :<|> createPaymentWithChange :<|> payToPublicKey :<|> submitTxn :<|> getTransactions) :<|> (blockValidated :<|> blockHeight) :<|> (blockchainActions :<|> setValidationData) :<|> (assertOwnFundsEq :<|> assertIsValidated) =
   client api
