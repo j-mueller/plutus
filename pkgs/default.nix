@@ -77605,6 +77605,7 @@ license = stdenv.lib.licenses.mit;
 , language-plutus-core
 , memory
 , microlens
+, microlens-ghc
 , mmorph
 , monad-stm
 , mtl
@@ -77654,6 +77655,7 @@ hedgehog
 language-plutus-core
 memory
 microlens
+microlens-ghc
 mmorph
 monad-stm
 mtl
