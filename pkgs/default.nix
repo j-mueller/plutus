@@ -55620,7 +55620,6 @@ license = stdenv.lib.licenses.mit;
   mkDerivation
 , base
 , containers
-, hedgehog
 , language-plutus-core
 , mtl
 , stdenv
