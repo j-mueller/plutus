@@ -55620,6 +55620,7 @@ license = stdenv.lib.licenses.mit;
   mkDerivation
 , base
 , containers
+, hedgehog
 , language-plutus-core
 , mtl
 , stdenv
@@ -55766,7 +55767,7 @@ license = stdenv.lib.licenses.bsd3;
 , containers
 , core-to-plc
 , hedgehog
-, microlens
+, lens
 , mtl
 , plutus-th
 , stdenv
@@ -55785,6 +55786,7 @@ libraryHaskellDepends = [
 base
 containers
 core-to-plc
+lens
 mtl
 plutus-th
 template-haskell
@@ -55795,7 +55797,6 @@ base
 containers
 core-to-plc
 hedgehog
-microlens
 plutus-th
 tasty
 tasty-hedgehog
