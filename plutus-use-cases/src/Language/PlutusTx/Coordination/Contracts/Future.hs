@@ -29,11 +29,11 @@ import           Control.Monad.Error.Class    (MonadError (..))
 import qualified Data.Set                     as Set
 import           GHC.Generics                 (Generic)
 import qualified Language.PlutusTx            as PlutusTx 
-import qualified Language.PlutusTx.Validation as PlutusTx
 import           Ledger                       (DataScript (..), PubKey, TxOutRef', Value (..), ValidatorScript (..), scriptTxIn, scriptTxOut)
 import qualified Ledger                       as Ledger
 import           Ledger.Validation            (Height (..), OracleValue (..), PendingTx (..), PendingTxOut (..),
                                               PendingTxOutType (..), Signed (..), ValidatorHash)
+import qualified Ledger.Validation            as Validation
 import           Wallet                       (WalletAPI (..), WalletAPIError, otherError, pubKey, signAndSubmit)
 
 import           Prelude                      hiding ((&&), (||))
@@ -200,7 +200,7 @@ validatorScript ft = ValidatorScript val where
                 PendingTx _ outs _ _ (Height height) _ ownHash = p
 
                 eqPk :: PubKey -> PubKey -> Bool
-                eqPk = $$(PlutusTx.eqPubKey)
+                eqPk = $$(Validation.eqPubKey)
 
                 infixr 3 &&
                 (&&) :: Bool -> Bool -> Bool
@@ -235,7 +235,7 @@ validatorScript ft = ValidatorScript val where
                         penalty + delta
 
                 isPubKeyOutput :: PendingTxOut -> PubKey -> Bool
-                isPubKeyOutput o k = $$(PlutusTx.maybe) False ($$(PlutusTx.eqPubKey) k) ($$(PlutusTx.pubKeyOutput) o)
+                isPubKeyOutput o k = $$(PlutusTx.maybe) False ($$(Validation.eqPubKey) k) ($$(Validation.pubKeyOutput) o)
 
                 --  | Check if a `PendingTxOut` is a public key output for the given pub. key and value
                 paidOutTo :: Int -> PubKey -> PendingTxOut -> Bool
@@ -300,7 +300,7 @@ validatorScript ft = ValidatorScript val where
                                     case ot of
                                         PendingTxOut (Value v) (Just (vh, _)) DataTxOut ->
                                             v > marginShort + marginLong
-                                            && $$(PlutusTx.eqValidator) vh ownHash
+                                            && $$(Validation.eqValidator) vh ownHash
                                         _ -> True
 
                                 _ -> False

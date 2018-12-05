@@ -10,11 +10,11 @@ module Language.PlutusTx.Coordination.Contracts.Swap(
     ) where
 
 import qualified Language.PlutusTx            as PlutusTx
-import qualified Language.PlutusTx.Validation as PlutusTx
 import           Ledger                       (Height, PubKey, ValidatorScript (..), Value (..))
 import qualified Ledger                       as Ledger
 import           Ledger.Validation            (OracleValue (..), PendingTx (..), PendingTxIn (..), PendingTxOut (..),
                                               ValidatorHash)
+import qualified Ledger.Validation            as Validation
 
 import           Prelude                    (Bool (..), Eq (..), Int, Num (..), Ord (..))
 
@@ -90,14 +90,14 @@ swapValidator _ = ValidatorScript result where
             fromInt = PlutusTx.error ()
 
             signedBy :: PendingTxIn -> PubKey -> Bool
-            signedBy = $$(PlutusTx.txInSignedBy)
+            signedBy = $$(Validation.txInSignedBy)
 
             infixr 3 ||
             (||) :: Bool -> Bool -> Bool
             (||) = $$(PlutusTx.or)
 
             isPubKeyOutput :: PendingTxOut -> PubKey -> Bool
-            isPubKeyOutput o k = $$(PlutusTx.maybe) False ($$(PlutusTx.eqPubKey) k) ($$(PlutusTx.pubKeyOutput) o)
+            isPubKeyOutput o k = $$(PlutusTx.maybe) False ($$(Validation.eqPubKey) k) ($$(Validation.pubKeyOutput) o)
 
             -- Verify the authenticity of the oracle value and compute
             -- the payments.
