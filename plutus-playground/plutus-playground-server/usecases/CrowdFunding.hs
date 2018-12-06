@@ -66,27 +66,19 @@ campaignAddress = Ledger.scriptAddress . contributionScript
 --      the owner creates a single transaction with two inputs, referring to
 --      t_1 and t_2. Each input contains the script `contributionScript c`
 --      specialised to a contributor. This case is covered by the
---      definition for `payToOwner` below.
+--      `Collect` branch below.
 --   2. Refund. In this case each contributor creates a transaction with a
 --      single input claiming back their part of the funds. This case is
---      covered by the `refundable` branch.
+--      covered by the `Refund` branch.
 contributionScript :: Campaign -> ValidatorScript
 contributionScript cmp  = ValidatorScript val where
-    val = Ledger.applyScript inner (Ledger.lifted cmp)
-
-    --   See note [Contracts and Validator Scripts] in
-    --       Language.Plutus.Coordination.Contracts
-    inner = Ledger.fromPlcCode $$(PlutusTx.plutus [|| (\Campaign{..} (act :: CampaignAction) (a :: CampaignActor) (p :: PendingTx ValidatorHash) ->
+    val = Ledger.applyScript mkValidator (Ledger.lifted cmp)
+    mkValidator = Ledger.fromPlcCode $$(PlutusTx.plutus [|| (\Campaign{..} (act :: CampaignAction) (con :: CampaignActor) (p :: PendingTx ValidatorHash) ->
         let
 
             infixr 3 &&
             (&&) :: Bool -> Bool -> Bool
             (&&) = $$(PlutusTx.and)
-
-            -- | Check that a pending transaction is signed by the private key
-            --   of the given public key.
-            signedByT :: PendingTx ValidatorHash -> CampaignActor -> Bool
-            signedByT = $$(txSignedBy)
 
             PendingTx ps outs _ _ (Height h) _ _ = p
 
@@ -108,25 +100,22 @@ contributionScript cmp  = ValidatorScript val where
             isValid = case act of
                 Refund -> -- the "refund" branch
                     let
-                        -- Check that all outputs are paid to the public key
-                        -- of the contributor (that is, to the `a` argument of the data script)
 
                         contributorTxOut :: PendingTxOut -> Bool
-                        contributorTxOut o = $$(P.maybe) False (\pk -> $$(eqPubKey) pk a) ($$(pubKeyOutput) o)
+                        contributorTxOut o = case $$(pubKeyOutput) o of
+                            Nothing -> False
+                            Just pk -> $$(eqPubKey) pk con
 
+                        -- Check that all outputs are paid to the public key
+                        -- of the contributor (this key is provided as the data script `con`)
                         contributorOnly = $$(P.all) contributorTxOut outs
 
-                        refundable   = h > collectionDeadline &&
-                                                    contributorOnly &&
-                                                    signedByT p a
+                        refundable = h > collectionDeadline && contributorOnly && $$(txSignedBy) p con
 
                     in refundable
                 Collect -> -- the "successful campaign" branch
                     let
-                        payToOwner = h > deadline &&
-                                    h <= collectionDeadline &&
-                                    totalInputs >= target &&
-                                    signedByT p campaignOwner
+                        payToOwner = h > deadline && h <= collectionDeadline && totalInputs >= target && $$(txSignedBy) p campaignOwner
                     in payToOwner
         in
         if isValid then () else $$(P.error) ()) ||])
