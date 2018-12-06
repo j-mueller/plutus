@@ -61,6 +61,18 @@ test-suite plutus-tx-tests
         template-haskell -any,
         tasty -any
 
+test-suite plutus-tx-doctests
+    type: exitcode-stdio-1.0
+    main-is: doctests.hs
+    hs-source-dirs: doctest
+    default-language: Haskell2010
+    build-depends:
+        base >=4.9 && <5,
+        plutus-tx-plugin -any,
+        plutus-tx -any,
+        template-haskell -any,
+        doctest -any
+
 test-suite plutus-tx-tutorial-doctests
     type: exitcode-stdio-1.0
     main-is: tutorial-doctests.hs
