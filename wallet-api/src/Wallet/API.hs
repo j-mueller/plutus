@@ -63,8 +63,8 @@ import qualified Data.Set                   as Set
 import           Data.Text                  (Text)
 import           GHC.Generics               (Generic)
 import           Ledger                     (Address', DataScript, Height, PubKey (..), RedeemerScript, Signature (..),
-                                             Tx (..), TxIn', TxId', txOutRefId, TxOut (..), TxOut', TxOutType (..), ValidatorScript, Value,
-                                             pubKeyTxOut, scriptAddress, scriptTxIn)
+                                             Tx (..), TxId', TxIn', TxOut (..), TxOut', TxOutType (..), ValidatorScript,
+                                             Value, pubKeyTxOut, scriptAddress, scriptTxIn, txOutRefId)
 import           Text.Show.Deriving         (deriveShow1)
 import           Wallet.Emulator.AddressMap (AddressMap)
 
