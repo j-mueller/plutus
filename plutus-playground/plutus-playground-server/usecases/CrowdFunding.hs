@@ -4,25 +4,12 @@
 -- number of inputs a transaction can have.
 module Language.PlutusTx.Coordination.Contracts.CrowdFunding where
 
-import           Control.Applicative          (Applicative (..))
-import           Control.Lens
-import           Control.Monad                (void)
-import           Data.Foldable                (foldMap)
-import qualified Data.Map                     as Map
-import           Data.Maybe                   (fromMaybe)
-import           Data.Monoid                  (Sum (..))
-import qualified Data.Set                     as Set
-import           GHC.Generics                 (Generic)
-import           Playground.Contract
-
 import qualified Language.PlutusTx            as PlutusTx
-import           Ledger                       (DataScript (..), PubKey (..), TxId', ValidatorScript (..), Value (..), scriptTxIn, Tx)
-import qualified Ledger                       as Ledger
-import           Ledger.Validation            (Height (..), PendingTx (..), PendingTxIn (..), PendingTxOut, ValidatorHash)
-import qualified Ledger.Validation            as Validation
-import           Wallet                       (EventHandler (..), EventTrigger, Range (..), WalletAPI (..),
-                                               WalletDiagnostics (..), andT, blockHeightT, fundsAtAddressT, otherError,
-                                               ownPubKeyTxOut, payToScript, pubKey, signAndSubmit)
+import qualified Language.PlutusTx.Prelude    as P
+import           Ledger
+import           Ledger.Validation
+import           Playground.Contract
+import           Wallet
 
 -- | A crowdfunding campaign.
 data Campaign = Campaign
@@ -43,36 +30,24 @@ PlutusTx.makeLift ''CampaignAction
 
 -- | Contribute funds to the campaign (contributor)
 --
-contribute :: (WalletAPI m, WalletDiagnostics m)
-    => Campaign
-    -> Value
-    -> m ()
+contribute :: Campaign -> Value -> MockWallet ()
 contribute cmp value = do
     _ <- if value <= 0 then otherError "Must contribute a positive value" else pure ()
-    ds <- DataScript . Ledger.lifted . pubKey <$> myKeyPair
-
+    ownPK <- ownPubKey
+    let ds = DataScript (Ledger.lifted ownPK)
     tx <- payToScript (campaignAddress cmp) value ds
     logMsg "Submitted contribution"
 
-    register (refundTrigger cmp) (refund (Ledger.hashTx tx) cmp)
+    register (refundTrigger cmp) (refundHandler (Ledger.hashTx tx) cmp)
     logMsg "Registered refund trigger"
 
 -- | Register a [[EventHandler]] to collect all the funds of a campaign
 --
-collect :: (WalletAPI m, WalletDiagnostics m) => Campaign -> m ()
-collect cmp = register (collectFundsTrigger cmp) $ EventHandler $ \_ -> do
+scheduleCollection :: Campaign -> MockWallet ()
+scheduleCollection cmp = register (collectFundsTrigger cmp) (EventHandler (\_ -> do
         logMsg "Collecting funds"
-        am <- watchedAddresses
-        let scr        = contributionScript cmp
-            contributions = am ^. at (campaignAddress cmp) . to (Map.toList . fromMaybe Map.empty)
-            red        = Ledger.RedeemerScript $ Ledger.lifted Collect
-            con (r, _) = scriptTxIn r scr red
-            ins        = con <$> contributions
-            value = getSum $ foldMap (Sum . snd) contributions
-
-        oo <- ownPubKeyTxOut value
-        void $ signAndSubmit (Set.fromList ins) [oo]
-
+        let redeemerScript = Ledger.RedeemerScript (Ledger.lifted Collect)
+        collectFromScript (contributionScript cmp) redeemerScript))
 
 -- | The address of a [[Campaign]]
 campaignAddress :: Campaign -> Ledger.Address'
@@ -111,7 +86,7 @@ contributionScript cmp  = ValidatorScript val where
             -- | Check that a pending transaction is signed by the private key
             --   of the given public key.
             signedByT :: PendingTx ValidatorHash -> CampaignActor -> Bool
-            signedByT = $$(Validation.txSignedBy)
+            signedByT = $$(txSignedBy)
 
             PendingTx ps outs _ _ (Height h) _ _ = p
 
@@ -128,7 +103,7 @@ contributionScript cmp  = ValidatorScript val where
             totalInputs :: Int
             totalInputs =
                 let v (PendingTxIn _ _ (Value vl)) = vl in
-                $$(PlutusTx.foldr) (\i total -> total + v i) 0 ps
+                $$(P.foldr) (\i total -> total + v i) 0 ps
 
             isValid = case act of
                 Refund -> -- the "refund" branch
@@ -137,9 +112,9 @@ contributionScript cmp  = ValidatorScript val where
                         -- of the contributor (that is, to the `a` argument of the data script)
 
                         contributorTxOut :: PendingTxOut -> Bool
-                        contributorTxOut o = $$(PlutusTx.maybe) False (\pk -> $$(Validation.eqPubKey) pk a) ($$(Validation.pubKeyOutput) o)
+                        contributorTxOut o = $$(P.maybe) False (\pk -> $$(eqPubKey) pk a) ($$(pubKeyOutput) o)
 
-                        contributorOnly = $$(PlutusTx.all) contributorTxOut outs
+                        contributorOnly = $$(P.all) contributorTxOut outs
 
                         refundable   = h > collectionDeadline &&
                                                     contributorOnly &&
@@ -154,36 +129,27 @@ contributionScript cmp  = ValidatorScript val where
                                     signedByT p campaignOwner
                     in payToOwner
         in
-        if isValid then () else $$(PlutusTx.error) ()) ||])
+        if isValid then () else $$(P.error) ()) ||])
 
 -- | An event trigger that fires when a refund of campaign contributions can be claimed
 refundTrigger :: Campaign -> EventTrigger
 refundTrigger c = andT
-    (fundsAtAddressT (campaignAddress c) $ GEQ 1)
-    (blockHeightT (GEQ $ fromIntegral $ succ $ getHeight $ campaignCollectionDeadline c))
+    (fundsAtAddressT (campaignAddress c) (GEQ 1))
+    (blockHeightT (GEQ (succ (campaignCollectionDeadline c))))
 
 -- | An event trigger that fires when the funds for a campaign can be collected
 collectFundsTrigger :: Campaign -> EventTrigger
 collectFundsTrigger c = andT
-    (fundsAtAddressT (campaignAddress c) $ GEQ $ campaignTarget c)
-    (blockHeightT $ fromIntegral . getHeight <$> Interval (campaignDeadline c) (campaignCollectionDeadline c))
+    (fundsAtAddressT (campaignAddress c) (GEQ (campaignTarget c)))
+    (blockHeightT (Interval (campaignDeadline c) (campaignCollectionDeadline c)))
 
 -- | Claim a refund of our campaign contribution
-refund :: (WalletAPI m, WalletDiagnostics m) => TxId' -> Campaign -> EventHandler m
-refund txid cmp = EventHandler $ \_ -> do
+refundHandler :: TxId' -> Campaign -> EventHandler MockWallet
+refundHandler txid cmp = EventHandler (\_ -> do
     logMsg "Claiming refund"
-    am <- watchedAddresses
-    let adr     = campaignAddress cmp
-        utxo    = fromMaybe Map.empty $ am ^. at adr
-        ourUtxo = Map.toList $ Map.filterWithKey (\k _ -> txid == Ledger.txOutRefId k) utxo
-        scr   = contributionScript cmp
-        red   = Ledger.RedeemerScript $ Ledger.lifted Refund
-        i ref = scriptTxIn ref scr red
-        inputs = Set.fromList $ i . fst <$> ourUtxo
-        value  = getSum $ foldMap (Sum . snd) ourUtxo
+    let validatorScript = contributionScript cmp
+        redeemerScript  = Ledger.RedeemerScript (Ledger.lifted Refund)
+    collectFromScriptTxn validatorScript redeemerScript txid)
 
-    out <- ownPubKeyTxOut value
-    void $ signAndSubmit inputs [out]
-
-$(mkFunction 'collect)
+$(mkFunction 'scheduleCollection)
 $(mkFunction 'contribute)
