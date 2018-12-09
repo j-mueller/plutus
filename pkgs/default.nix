@@ -78002,11 +78002,13 @@ license = stdenv.lib.licenses.mit;
 , containers
 , cryptonite
 , deriving-compat
+, doctest
 , hashable
 , hedgehog
 , http-media
 , language-plutus-core
 , lens
+, markdown-unlit
 , memory
 , mtl
 , natural-transformation
@@ -78075,6 +78077,7 @@ warp
 testHaskellDepends = [
 base
 containers
+doctest
 hedgehog
 lens
 plutus-tx
@@ -78082,6 +78085,9 @@ plutus-tx-plugin
 tasty
 tasty-hedgehog
 transformers
+];
+testToolDepends = [
+markdown-unlit
 ];
 doHaddock = false;
 description = "Wallet API";
