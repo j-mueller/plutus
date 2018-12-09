@@ -104,7 +104,7 @@ contributionScript cmp  = ValidatorScript val where
                         in refundable
                     Collect -> -- the "successful campaign" branch
                         let
-                            payToOwner = h > deadline && h <= collectionDeadline && totalInputs >= target && $$(txSignedBy) p campaignOwner
+                            payToOwner = h >= deadline && h < collectionDeadline && totalInputs >= target && $$(txSignedBy) p campaignOwner
                         in payToOwner
             in
             if isValid then () else $$(P.error) () ||])
