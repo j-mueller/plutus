@@ -63,6 +63,7 @@ test-suite plutus-tx-tests
         tasty -any
 
 test-suite plutus-tx-tutorial-doctests
+    buildable: False
     type: exitcode-stdio-1.0
     main-is: tutorial-doctests.hs
     build-tool-depends: markdown-unlit:markdown-unlit -any
