@@ -99,7 +99,7 @@ contributionScript cmp  = ValidatorScript val where
                             -- of the contributor (this key is provided as the data script `con`)
                             contributorOnly = $$(P.all) contributorTxOut outs
 
-                            refundable = h > collectionDeadline && contributorOnly && $$(txSignedBy) p con
+                            refundable = h >= collectionDeadline && contributorOnly && $$(txSignedBy) p con
 
                         in refundable
                     Collect -> -- the "successful campaign" branch
