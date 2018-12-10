@@ -37,7 +37,7 @@ gameValidator = ValidatorScript (Ledger.fromCompiledCode $$(PlutusTx.compile [||
 
     if $$(P.equalsByteString) actual ($$(P.sha2_256) guess)
     then ()
-    else $$(P.traceH) "WRONG!" ($$(P.error) ())
+    else $$(P.error) ($$(P.traceH) "WRONG!" ())
 
     ||]))
 
