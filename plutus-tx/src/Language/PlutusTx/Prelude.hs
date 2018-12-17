@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor       #-}
 {-# LANGUAGE TemplateHaskell     #-}
 module Language.PlutusTx.Prelude (
     -- $prelude
@@ -16,11 +17,13 @@ module Language.PlutusTx.Prelude (
     max,
     -- * Rational numbers
     Ratio(..),
+    fromRational,
     timesR,
     plusR,
     minusR,
     roundR,
     fromIntR,
+    gtR,
     -- * Maybe
     isJust,
     isNothing,
@@ -39,7 +42,8 @@ module Language.PlutusTx.Prelude (
     ) where
 
 import           Data.ByteString.Lazy       (ByteString)        
-import           Prelude                    (Bool (..), Int, Maybe (..), Show, String, (<), (>), (+), (*), (-), (>=), div, rem)
+import           Data.Ratio                 (Rational, denominator, numerator)
+import           Prelude                    (Functor(..), Bool (..), Int, Maybe (..), Show, String, (<), (>), (+), (*), (-), (>=), fromInteger, div, rem)
 
 import qualified Language.PlutusTx.Builtins as Builtins
 import           Language.PlutusTx.Lift     (makeLift)
@@ -130,9 +134,15 @@ max = [|| \(a :: Int) (b :: Int) -> if a > b then a else b ||]
 --   Construct 'Ratio' @Int@s with 'fromIntR' and convert to 
 --   'Int's with 'roundR'.
 data Ratio a = a :% a 
-    deriving (Show)
+    deriving (Functor, Show)
 
 makeLift ''Ratio
+
+-- | Convert a 'Data.Ratio.Rational' to a 'Ratio' @Int@.
+fromRational :: Rational -> Ratio Int
+fromRational rt = fmap fromInteger (n :% d) where
+    n = numerator rt
+    d = denominator rt
 
 -- | Multiply two 'Ratio' @Int@s.
 --
@@ -175,6 +185,18 @@ roundR = [|| \(x :% y) ->
     in
         if (2 * rm >= y) then i + 1 else i
      ||]
+
+-- | Check if a 'Ratio' @Int@ is greater than another one
+gtR :: Q (TExp (Ratio Int -> Ratio Int -> Bool))
+gtR = [|| \(x :% y) (x' :% y') ->
+        -- x'' :% y'' = (x :% y) - (x' :% y')
+        let x'' = x * y' - x'*y
+            y'' = y * y'
+        in
+            if x'' > 0 
+            then y'' > 0
+            else y'' < 0
+    ||]
 
 -- | Convert an 'Int' to a 'Ratio' @Int@.
 --

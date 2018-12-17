@@ -1,10 +1,14 @@
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TemplateHaskell   #-}
-{-# LANGUAGE DeriveGeneric     #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS -fplugin=Language.PlutusTx.Plugin -fplugin-opt Language.PlutusTx.Plugin:dont-typecheck #-}
 module Language.PlutusTx.Coordination.Contracts.Swap(
+    -- * Swap definition
+    SwapParams(..),
+    -- * Contract endpoints
     enterFixed,
     enterFloating
     ) where
@@ -13,10 +17,11 @@ import qualified Language.PlutusTx          as PlutusTx
 import           Language.PlutusTx.Prelude  (Ratio)
 import           Ledger                     (DataScript(..), ValidatorScript (..), Value(..), PubKey)
 import qualified Ledger                     as Ledger
-import           Wallet.API                 (WalletAPI(..), pubKey, payToScript)
+import           Ledger.Validation          (OracleValue(..))
+import           Wallet.API                 (EventHandler(..), EventTrigger, Range(..), WalletAPI(..), ValueUpdate(..), WalletDiagnostics(..), blockHeightT, pubKey, payToScript, orT, updateScriptAddress)
 
 import qualified Language.PlutusTx.Coordination.Contracts.Swap.TH0 as TH0
-import           Language.PlutusTx.Coordination.Contracts.Swap.TH0 (Role(..), Spread(..))
+import           Language.PlutusTx.Coordination.Contracts.Swap.TH0 (OracleLookup(..), Role(..), Spread(..), firstExchange, lastExchange)
 import           Language.PlutusTx.Coordination.Contracts.Swap.TH
 import           Language.PlutusTx.Coordination.StateMachine.TH
 
@@ -37,31 +42,68 @@ initialDataScript SwapParams{..} role other = do
 
 -- | Enter into an fx swap assuming the "fixed" role
 enterFixed :: 
-    (Monad m, WalletAPI m)
-    => SwapParams 
+    (WalletDiagnostics m, WalletAPI m)
+    => OracleLookup
+    -> SwapParams 
     -- ^ Parameters of the swap (can't be changed during the lifetime of the contract)
     -> PubKey
     -- ^ Counterparty (owner of the floating leg of the swap)
     -> m ()
-enterFixed swp so = do
+enterFixed lkp swp so = do
     ds <- initialDataScript swp Fixed so
     let addr = address swp
     _ <- startWatching addr
     _ <- payToScript addr (swapMarginPenalty swp) ds
+
+    register (paymentTrigger swp) (paymentHandler lkp swp Fixed)
     pure ()
 
 -- | Enter into an fx swap assuming the "floating" role
 enterFloating :: 
-    (Monad m, WalletAPI m) 
-    => SwapParams 
+    (WalletDiagnostics m, WalletAPI m) 
+    => OracleLookup
+    -> SwapParams 
     -> PubKey
     -> m ()
-enterFloating swp so = do
+enterFloating lkp swp so = do
     ds <- initialDataScript swp Floating so
     let addr = address swp
     _ <- startWatching addr
     _ <- payToScript addr (swapMarginPenalty swp) ds
+
+    register (paymentTrigger swp) (paymentHandler lkp swp Floating)
     pure ()
+
+-- | Trigger that fires whenever a payment is due
+paymentTrigger :: SwapParams -> EventTrigger
+paymentTrigger p = 
+    let 
+        atDate d = blockHeightT $ Interval d (succ d)
+        x        = swapFirstObservation p
+        xs       = swapObservationTimes p
+    in foldl (\t -> orT t . atDate) (atDate x) xs
+
+paymentHandler :: (WalletDiagnostics m, WalletAPI m) => OracleLookup -> SwapParams -> Role -> EventHandler m
+paymentHandler lkp swp role = EventHandler $ \_ -> do
+    logMsg "Payment is due"
+    h <- blockHeight
+    let ov = lookupOracle lkp h
+        floatingRate = ovValue ov
+        payment = $$(TH0.payment) swp floatingRate
+        recc = $$(TH0.receiver) swp floatingRate
+    if role == recc
+    then 
+        let vls = validator swp
+            currentState = ()
+            action = Exchange ov
+            newState = ()
+            red = mkRedeemerScript newState action
+            dt  = mkDataScript newState action
+            upd = DeltaAmount $ negate payment
+        in
+            updateScriptAddress vls red (const dt) upd
+
+    else pure ()
 
 -- | The current minimum margin
 currentMargin :: Role -> SwapParams -> (Ratio Int) -> Value

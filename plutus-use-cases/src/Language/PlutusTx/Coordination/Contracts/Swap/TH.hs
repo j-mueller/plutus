@@ -28,7 +28,7 @@ import Prelude   hiding ((&&))
 swapStep :: Q (TExp (SwapParams -> PendingTx' -> SwapState -> SwapAction -> SwapState))
 swapStep = [|| \swp p st action -> 
     let
-        SwapParams amt obsTimes fxr pnlty oraclePk = swp
+        SwapParams amt obsTime obsTimes fxr pnlty oraclePk = swp
 
         PendingTx _ _ _ _ currentHeight _ _ = p
 
@@ -53,10 +53,12 @@ swapStep = [|| \swp p st action ->
         totalValOut = $$(TH.foldr) (\(PendingTxOut (Value v') _ _) v -> v + v') 0 ($$(TH.outputsOwnAddress) p)
 
         -- The last payment covered by the swap. 
-        lastPaymentDate = $$(TH.foldr) (\(Height h') h -> $$(TH.max) h' h) 0 obsTimes
+        lastPaymentDate = 
+            let Height start = obsTime in
+            $$(TH.foldr) (\(Height h') h -> $$(TH.max) h' h) start obsTimes
 
         -- Whether a payment is scheduled for the current block
-        canExchangeNow = $$(TH.any) ($$(TH.eqHeight) currentHeight) obsTimes
+        canExchangeNow = $$(TH.any) ($$(TH.eqHeight) currentHeight) (obsTime:obsTimes)
 
         -- | Whether the transaction was signed by the current owner of the fixed leg of the contract
         signedFixed = $$(TH.txSignedBy) p fx
@@ -85,13 +87,15 @@ swapStep = [|| \swp p st action ->
                 clamp :: Int -> Int -> Int -> Int
                 clamp low high x = $$(TH.max) low ($$(TH.min) high x)
 
+                -- TODO: Use direction, payment from TH0
+
                 fixedMargin' = clamp 0 fixedMargin (fixedMargin + delta)
                 floatingMargin' = clamp 0 floatingMargin (floatingMargin - delta)
 
                 isLast = let Height c = currentHeight in c == lastPaymentDate
 
             in
-                if canExchangeNow
+                if canExchangeNow && totalValOut == fixedMargin' + floatingMargin'
                 then 
                     if isLast 
                     then Settled 
@@ -100,7 +104,7 @@ swapStep = [|| \swp p st action ->
                             (SwapMarginAccounts (Value fixedMargin') (Value floatingMargin'))
 
                 else $$(PlutusTx.traceH) "Cannot exchange payments now" ($$(PlutusTx.error) ())
-                
+
 
         AdjustMarginFixedLeg ov -> 
             let                     

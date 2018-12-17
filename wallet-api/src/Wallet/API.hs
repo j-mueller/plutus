@@ -18,15 +18,17 @@ module Wallet.API(
     signature,
     createPayment,
     signAndSubmit,
-    payToScript,
-    payToScript_,
     payToPublicKey,
     payToPublicKey_,
+    ownPubKeyTxOut,
+    ownPubKey,
+    -- * Working with script addresses
+    ValueUpdate(..),
+    payToScript,
+    payToScript_,
     collectFromScript,
     collectFromScriptTxn,
     updateScriptAddress,
-    ownPubKeyTxOut,
-    ownPubKey,
     -- * Triggers
     EventTrigger,
     AnnotatedEventTrigger,
@@ -318,6 +320,11 @@ collectFromScriptTxn vls red txid = do
     out <- ownPubKeyTxOut value
     void $ signAndSubmit inputs [out]
 
+-- | When updating the value at a script address we can either specify a
+--   target value or a difference in value. 
+data ValueUpdate = TargetAmount Value | DeltaAmount Value
+    deriving (Eq, Show)
+
 -- | Spend all the outputs at a script address, and put the specified amount 
 --   back. If the amount is greater than what is currently at the address, use 
 --   the wallet's own funds to make up the difference. If the amount is smaller,--   pay the difference to a public key address owned by this wallet. 
@@ -334,16 +341,18 @@ updateScriptAddress ::
     --   between the current amount and the target amount. If the value is 
     --   positive, then the current amount is greater than the target amount. 
     --   If the value is negative, then the current amount is smaller.
-    -> Value
+    -> ValueUpdate
     -- ^ The target amount
     -> m ()
-updateScriptAddress val red ds targetAmount = do
+updateScriptAddress val red ds updt = do
     am <- watchedAddresses
     let utxo           = maybe [] Map.toList $ am ^. at address
         mkScriptIn ref = scriptTxIn ref val red
         scriptInputs   = Set.fromList $ mkScriptIn . fst <$> utxo
         currentAmount  = getSum $ foldMap (Sum . snd) utxo
-        delta          = currentAmount - targetAmount
+        (delta, targetAmount) = case updt of
+            TargetAmount amt -> (targetAmount - currentAmount, amt)
+            DeltaAmount  dlt -> (dlt, currentAmount + dlt)
         address        = Ledger.scriptAddress val
         scriptOut      = TxOut address targetAmount (PayToScript $ ds delta)
 
