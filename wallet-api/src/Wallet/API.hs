@@ -24,6 +24,7 @@ module Wallet.API(
     payToPublicKey_,
     collectFromScript,
     collectFromScriptTxn,
+    updateScriptAddress,
     ownPubKeyTxOut,
     ownPubKey,
     -- * Triggers
@@ -316,6 +317,48 @@ collectFromScriptTxn vls red txid = do
 
     out <- ownPubKeyTxOut value
     void $ signAndSubmit inputs [out]
+
+-- | Spend all the outputs at a script address, and put the specified amount 
+--   back. If the amount is greater than what is currently at the address, use 
+--   the wallet's own funds to make up the difference. If the amount is smaller,--   pay the difference to a public key address owned by this wallet. 
+--   NOTE: If the amount is equal to what is currently at the address, the 
+--   outputs will are still spent and a new output is produced.
+updateScriptAddress :: 
+    (WalletAPI m, WalletDiagnostics m) 
+    => ValidatorScript
+    -- ^ The validator script for the pay-to-script address
+    -> RedeemerScript
+    -- ^ The redeemer script used to spend the outputs currently at the address
+    -> (Value -> DataScript)
+    -- ^ The data script for the new transaction output, given the difference 
+    --   between the current amount and the target amount. If the value is 
+    --   positive, then the current amount is greater than the target amount. 
+    --   If the value is negative, then the current amount is smaller.
+    -> Value
+    -- ^ The target amount
+    -> m ()
+updateScriptAddress val red ds targetAmount = do
+    am <- watchedAddresses
+    let utxo           = maybe [] Map.toList $ am ^. at address
+        mkScriptIn ref = scriptTxIn ref val red
+        scriptInputs   = Set.fromList $ mkScriptIn . fst <$> utxo
+        currentAmount  = getSum $ foldMap (Sum . snd) utxo
+        delta          = currentAmount - targetAmount
+        address        = Ledger.scriptAddress val
+        scriptOut      = TxOut address targetAmount (PayToScript $ ds delta)
+
+    pkOut <- if delta > 0 
+             then (: []) <$> ownPubKeyTxOut delta
+             else pure []
+
+    (pkIns, pkOutChange) <- if delta < 0
+            then createPaymentWithChange $ negate delta
+            else pure (Set.empty, Nothing)
+
+    let inputs  = Set.union scriptInputs pkIns
+        outputs = scriptOut : pkOut ++ maybeToList pkOutChange
+
+    void $ signAndSubmit inputs outputs
 
 -- | Get the public key for this wallet
 ownPubKey :: (Functor m, WalletAPI m) => m PubKey
