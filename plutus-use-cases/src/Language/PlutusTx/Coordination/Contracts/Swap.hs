@@ -94,9 +94,9 @@ paymentHandler lkp swp role = EventHandler $ \_ -> do
     if role == recc
     then 
         let vls = validator swp
-            currentState = ()
+            currentState = 1112 :: Int
             action = Exchange ov
-            newState = ()
+            newState = 1112 :: Int -- TODO: Fixme
             red = mkRedeemerScript newState action
             dt  = mkDataScript newState action
             upd = DeltaAmount $ negate payment

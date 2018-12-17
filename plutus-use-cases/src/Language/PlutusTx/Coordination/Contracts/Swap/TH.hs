@@ -25,17 +25,17 @@ import           Language.PlutusTx.Coordination.Contracts.Swap.TH0 as TH0
 
 import Prelude   hiding ((&&))
 
-swapStep :: Q (TExp (SwapParams -> PendingTx' -> SwapState -> SwapAction -> SwapState))
-swapStep = [|| \swp p st action -> 
+swapStep :: Q (TExp ((Role, SwapParams) -> PendingTx' -> SwapState -> SwapAction -> SwapState))
+swapStep = [|| \(role, swp) p st action -> 
     let
         SwapParams amt obsTime obsTimes fxr pnlty oraclePk = swp
 
-        PendingTx _ _ _ _ currentHeight _ _ = p
+        PendingTx _ _ _ _ currentHeight _ (vlh, _, _) = p
 
-        (SwapOwners fx fl, SwapMarginAccounts (Value fixedMargin) (Value floatingMargin)) = case st of
-            Ongoing so ma -> (so, ma)
+        SwapOwner fx = case st of
+            Ongoing so -> so
             Settled -> $$(PlutusTx.error) () 
-        
+
         infixr 3 &&
         (&&) :: Bool -> Bool -> Bool
         (&&) = $$(TH.and)

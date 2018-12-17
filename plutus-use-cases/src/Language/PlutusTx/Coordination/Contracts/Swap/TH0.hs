@@ -28,22 +28,57 @@ import           Language.Haskell.TH           (Q, TExp)
 import           Ledger                        (Height (..), PubKey, Value(..))
 import           Ledger.Validation             (OracleValue)
 
-data SwapOwners = SwapOwners {
-  swapOwnersFixedLeg :: PubKey,
-  swapOwnersFloating :: PubKey
-  }
+{- note [Data types in swap transaction outputs]
 
+The swap is contract between two actors. One actor plays the 'Fixed' role and 
+the other actor plays the 'Floating' role. Actors are indentified by their 
+public key. During the lifetime of a contract an actor may transfer their stake 
+in the contract to a different actor. The distinction between actor and role is 
+important: The two roles stay the same during the entire lifetime of the 
+contract, but a role may be played by different actors over time.
+
+The swap is defined by its parameters, 'SwapParams'. Each swap (that is, each 
+value of 'SwapParams') has *two* addresses, one for each role. This is achieved 
+by parameterising the validator script with the product @(Role, SwapParams)@. 
+The purpose of this construction is to allow actors to vary the details of 
+their own role -- margins and actor identities -- independently, without 
+needing the other actor's approval. At the same time, actions that involve the 
+entire contract -- exchanging the payments -- can be performed by 
+either actor because the addresses of the contract are known and don't change.
+
+In terms of transaction outputs, we can visualise the contract as two paths of 
+transactions connected by input-output pairs:
+
+t1 -- t3 --+      +-- t5 --> utxo1
+           +- t4 -+
+t2 --------+      +--> utxo2
+
+
+In this diagram, the top and bottom rows correspond to the two addresses in the 
+contract. The swap is initialised by transactions t1 and t2. t3 and t5 are 
+instances of margin payments. t4 is a payment on the interest rate (the actual 
+swap), consuming from and producing to both addresses.
+
+-}
+
+data Role = Fixed | Floating
+    deriving (Eq, Ord, Show)
+PlutusTx.makeLift ''Role
+
+newtype SwapOwner = SwapOwner { getSwapOwner :: PubKey }
+    deriving (Eq, Ord, Show)
 PlutusTx.makeLift ''SwapOwners
 
-data SwapMarginAccounts = SwapMarginAccounts {
-  marginAccFixed :: Value,
-  marginAccFloating :: Value
-  }
+data OngoingSwap = OngoingSwap 
+    { ongoingSwapOwner             :: SwapOwner
+    , ongoingSwapFixedLegAddress   :: ValidatorHash
+    , ongingSwapFloatingLegAddress :: ValidatorHash
+    }
 
-PlutusTx.makeLift ''SwapMarginAccounts
-
-data SwapState = Ongoing SwapOwners SwapMarginAccounts | Settled
-
+data SwapState = 
+    Ongoing SwapOwner 
+    | Settled
+    deriving (Eq, Ord, Show)
 PlutusTx.makeLift ''SwapState
 
 data SwapParams = SwapParams {
@@ -77,18 +112,11 @@ lastExchange = getMax . foldMap1 Max . paymentDates
 
 data SwapAction = 
   Exchange (OracleValue (Ratio Int))
-  | AdjustMarginFixedLeg (OracleValue (Ratio Int))
-  | AdjustMarginFloatingLeg (OracleValue (Ratio Int))
-  | ChangeOwnerFixedLeg PubKey
-  | ChangeOwnerFloatingLeg PubKey
+  | AdjustMargin (OracleValue (Ratio Int))
+  | ChangeOwner PubKey
   | NoAction
 
 PlutusTx.makeLift ''SwapAction
-
-data Role = Fixed | Floating
-    deriving (Eq, Ord, Show)
-
-PlutusTx.makeLift ''Role
 
 data Spread = Spread {
     fixedRate    :: Ratio Int,
