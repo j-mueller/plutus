@@ -299,7 +299,7 @@ collectFromScript scr red = do
         outputs = am ^. at addr . to (Map.toList . fromMaybe Map.empty)
         con (r, _) = scriptTxIn r scr red
         ins        = con <$> outputs
-        value = getSum $ foldMap (Sum . snd) outputs
+        value = getSum $ foldMap (Sum . txOutValue . snd) outputs
 
     oo <- ownPubKeyTxOut value
     void $ signAndSubmit (Set.fromList ins) [oo]
@@ -315,7 +315,7 @@ collectFromScriptTxn vls red txid = do
         ourUtxo = Map.toList $ Map.filterWithKey (\k _ -> txid == Ledger.txOutRefId k) utxo
         i ref = scriptTxIn ref vls red
         inputs = Set.fromList $ i . fst <$> ourUtxo
-        value  = getSum $ foldMap (Sum . snd) ourUtxo
+        value  = getSum $ foldMap (Sum . txOutValue . snd) ourUtxo
 
     out <- ownPubKeyTxOut value
     void $ signAndSubmit inputs [out]
@@ -349,7 +349,7 @@ updateScriptAddress val red ds updt = do
     let utxo           = maybe [] Map.toList $ am ^. at address
         mkScriptIn ref = scriptTxIn ref val red
         scriptInputs   = Set.fromList $ mkScriptIn . fst <$> utxo
-        currentAmount  = getSum $ foldMap (Sum . snd) utxo
+        currentAmount  = getSum $ foldMap (Sum . txOutValue . snd) utxo
         (delta, targetAmount) = case updt of
             TargetAmount amt -> (targetAmount - currentAmount, amt)
             DeltaAmount  dlt -> (dlt, currentAmount + dlt)
