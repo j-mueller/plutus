@@ -103,7 +103,7 @@ If we want to implement `CampaignValidator` we need to know the parameters of th
 ```haskell
 mkValidatorScript :: Campaign -> ValidatorScript
 mkValidatorScript campaign = ValidatorScript val where
-  val = L.applyScript mkValidator (lifted campaign)
+  val = L.applyScript mkValidator (L.lifted campaign)
   -- ^ val is the script obtained by applying `mkValidator` to the lifted `campaign` value
   mkValidator = L.fromCompiledCode $$(P.compile [||
 ```
