@@ -22,16 +22,19 @@ We need some language extensions and imports:
 {-# OPTIONS_GHC -O0 #-}
 module Tutorial where
 
-import qualified Language.PlutusTx            as PlutusTx
-import           Ledger
-import           Ledger.Validation            as Validation
-import           Wallet
-import           Wallet.Emulator
+import qualified Language.PlutusTx            as P
+import           Ledger                       (DataScript(..), PubKey(..), RedeemerScript(..), Signature(..), Slot(..), Value(..))
+import qualified Ledger                       as L
+import           Ledger.Validation            (PendingTx(..), PendingTxIn(..), PendingTxOut)
+import qualified Ledger.Validation            as V
+import           Wallet                       (EventHandler(..), EventTrigger, Range(Interval, GEQ))
+import qualified Wallet                       as W
+import           Wallet.Emulator              (MockWallet)
 import           Prelude                      hiding ((&&))
 import           GHC.Generics                 (Generic)
 ```
 
-The module imported as `Validation` contains types and functions that can be used in on-chain code. `PlutusTx` lets us translate code between Haskell and Plutus Core (see the [PlutusTx tutorial](https://github.com/input-output-hk/plutus/blob/master/plutus-tx/tutorial/Tutorial.md)). `Wallet.Emulator` covers interactions with the wallet, for example generating the transactions that actually get the crowdfunding contract onto the blockchain.
+The module `Ledger.Validation`, imported as `V`, contains types and functions that can be used in on-chain code. `Language.PlutusTx` lets us translate code between Haskell and Plutus Core (see the [PlutusTx tutorial](https://github.com/input-output-hk/plutus/blob/master/plutus-tx/tutorial/Tutorial.md)). `Ledger` has data types for the ledger model and `Wallet` is the wallet API. `Wallet.Emulator` covers interactions with the wallet, for example generating the transactions that actually get the crowdfunding contract onto the blockchain.
 
 ## 1.1 Data Types
 
@@ -60,7 +63,7 @@ The type of monetary values is `Value`. Dates are expressed in terms of slots, a
 One of the strengths of PlutusTx is the ability to use the same definitions for on-chain and off-chain code, which includes lifting values from Haskell to Plutus Core. To enable values of the `Campaign` type to be lifted, we need to call `makeLift` from the `PlutusTx` module:
 
 ```haskell
-PlutusTx.makeLift ''Campaign
+P.makeLift ''Campaign
 ```
 
 Now we need to figure out what the campaign will look like on the blockchain. Which transactions are involved, who submits them, and in what order?
@@ -71,14 +74,14 @@ We can encode the two possible actions in a data type. For each action we provid
 
 ```haskell
 data CampaignAction = Collect Signature | Refund Signature
-PlutusTx.makeLift ''CampaignAction
+P.makeLift ''CampaignAction
 ```
 
 The `CampaignAction` will be submitted as the redeemer script. Now we need one final bit of information, namely the identity (public key) of each contributor, so that we know the recipient of the refund. This data can't be part of the redeemer script because then a reclaim could be made by anyone, not just the original contributor. Therefore the public key is going to be stored in the data script of the contribution.
 
 ```haskell
 data Contributor = Contributor PubKey
-PlutusTx.makeLift ''Contributor
+P.makeLift ''Contributor
 ```
 
 **Note (What is the role of the data script?)** Pay-to-script outputs contain a (hash of a) validator script and a data script, but their address is the hash of the validator script only, not of its data script. The wallet uses the address to track the state of a contract, by watching the outputs at that address. So the separate data script allows us to have multiple outputs belonging to the same contract but with different data scripts.
@@ -100,9 +103,9 @@ If we want to implement `CampaignValidator` we need to know the parameters of th
 ```haskell
 mkValidatorScript :: Campaign -> ValidatorScript
 mkValidatorScript campaign = ValidatorScript val where
-  val = applyScript mkValidator (lifted campaign)
+  val = L.applyScript mkValidator (lifted campaign)
   -- ^ val is the script obtained by applying `mkValidator` to the lifted `campaign` value
-  mkValidator = fromCompiledCode $$(PlutusTx.compile [||
+  mkValidator = L.fromCompiledCode $$(P.compile [||
 ```
 
 Anything between the `[||` and `||]` quotes is going to be _on-chain code_ and anything outside the quotes is _off-chain code_. We can now implement a lambda function that looks like `mkValidator`, starting with its parameters:
@@ -145,7 +148,7 @@ Then we compute the total value of all transaction inputs, using `Validation.fol
                   totalInputs :: Int
                   totalInputs =
                       let v (PendingTxIn _ _ (Value vl)) = vl in
-                      $$(PlutusTx.foldr) (\i total -> total + v i) 0 ins
+                      $$(P.foldr) (\i total -> total + v i) 0 ins
 ```
 
 We now have all the information we need to check whether the action `act` is allowed. This will be computed as
@@ -162,9 +165,9 @@ In the `Refund` branch we check that the outputs of this transaction all go to t
 ```haskell
                               contributorTxOut :: PendingTxOut -> Bool
                               contributorTxOut o =
-                                case $$(Validation.pubKeyOutput) o of
+                                case $$(V.pubKeyOutput) o of
                                   Nothing -> False
-                                  Just pk -> $$(Validation.eqPubKey) pk pkCon
+                                  Just pk -> $$(V.eqPubKey) pk pkCon
 ```
 
 We check if `o` is a pay-to-pubkey output. If it isn't, then the predicate `contributorTxOut` is false. If it is, then we check if the public key matches the one we got from the data script.
@@ -172,7 +175,7 @@ We check if `o` is a pay-to-pubkey output. If it isn't, then the predicate `cont
 The predicate `contributorTxOut` is applied to all outputs of the current transaction:
 
 ```haskell
-                              contributorOnly = $$(PlutusTx.all) contributorTxOut outs
+                              contributorOnly = $$(P.all) contributorTxOut outs
 ```
 
 For the contribution to be refundable, three conditions must hold. The collection deadline must have passed, all outputs of this transaction must go to the contributor `con`, and the transaction was signed by the contributor.
@@ -211,7 +214,7 @@ In the `Collect` case, the current slot must be between `deadline` and `collecti
 Finally, we can return the unit value `()` if `isValid` is true, or fail with an error otherwise.
 
 ```haskell
-              if isValid then () else ($$(PlutusTx.error) ())
+              if isValid then () else ($$(P.error) ())
                   ||]) -- this is the end of the on-chain (quoted Template Haskell) code
 ```
 
@@ -223,14 +226,14 @@ We will need to know the address of a campaign, which amounts to  hashing the ou
 
 ```haskell
 campaignAddress :: Campaign -> Address
-campaignAddress cmp = scriptAddress (mkValidatorScript cmp)
+campaignAddress cmp = L.scriptAddress (mkValidatorScript cmp)
 ```
 
 Contributors put their public key in a data script:
 
 ```haskell
 mkDataScript :: PubKey -> DataScript
-mkDataScript pk = DataScript (lifted (Contributor pk))
+mkDataScript pk = DataScript (L.lifted (Contributor pk))
 ```
 
 Contract endpoints have the return type `MockWallet ()`, which means that they can use the wallet API to create and submit transactions, query blockchain addresses, and log messages. `MockWallet` indicates that this wallet action can be run by the emulator, so you don't need to have a testnet available. When the contract is ready to be deployed, we simply change the type to `CardanoWallet`. 
@@ -245,34 +248,34 @@ contribute cmp amount = do
 Contributing to a campaign is easy: We need to pay the value `amount` to a script address, and provide our own public key as the data script. Paying to a script address is a common task at the beginning of a contract, and the wallet API implements it in `payToScript_`.
 
 ```haskell
-      pk <- ownPubKey
+      pk <- W.ownPubKey
       let dataScript = mkDataScript pk
-      payToScript_ (campaignAddress cmp) amount dataScript
+      W.payToScript_ (campaignAddress cmp) amount dataScript
 ```
 
 When we want to spend the contributions we need to provide a `RedeemerScript` value. In our case this is just the `CampaignAction`:
 
 ```haskell
 mkRedeemer :: CampaignAction -> RedeemerScript
-mkRedeemer action = RedeemerScript (lifted (action))
+mkRedeemer action = RedeemerScript (L.lifted (action))
 ```
 
 To collect the funds we use `collectFromScript`, which expects a validator script and a redeemer script.
 
 ```haskell
-collect :: Signature -> Campaign -> MockWallet ()
-collect sig cmp =
+collect :: Campaign -> MockWallet ()
+collect cmp = do
+      sig <- W.ownSignature
       let validator = mkValidatorScript cmp
           redeemer = mkRedeemer $ Collect sig
-      in
-          collectFromScript validator redeemer
+      W.collectFromScript validator redeemer
 ```
 
 If we run `collect` now, nothing will happen. Why? Because in order to spend all outputs at the script address, the wallet needs to be aware of this address _before_ the outputs are produced. That way, it can scan incoming blocks from the blockchain for contributions to that address, and doesn't have to keep a record of all unspent outputs of the entire blockchain. So before the campaign starts, the campaign owner needs to run the following action:
 
 ```haskell
 startCampaign :: Campaign -> MockWallet ()
-startCampaign campaign = startWatching (campaignAddress campaign)
+startCampaign campaign = W.startWatching (campaignAddress campaign)
 ```
 
 ## 1.4 Blockchain triggers
@@ -283,9 +286,9 @@ The wallet API allows us to specify `EventTrigger`s with handlers to implement t
 
 ```haskell
 collectFundsTrigger :: Campaign -> EventTrigger
-collectFundsTrigger c = andT
-    (fundsAtAddressT (campaignAddress c) (GEQ (fundingTarget c)))
-    (slotRangeT (Interval (endDate c) (collectionDeadline c)))
+collectFundsTrigger c = W.andT
+    (W.fundsAtAddressT (campaignAddress c) (GEQ (fundingTarget c)))
+    (W.slotRangeT (Interval (endDate c) (collectionDeadline c)))
 ```
 
 The campaign owner can collect contributions when two conditions hold: The funds at the address must have reached the target, and the current slot must be greater than the campaign deadline but smaller than the collection deadline.
@@ -295,10 +298,10 @@ Now we can define an event handler that collects the contributions:
 ```haskell
 collectionHandler :: Campaign -> EventHandler MockWallet
 collectionHandler cmp = EventHandler (\_ -> do
-        logMsg "Collecting funds"
-        sig <- ownSignature
-        let redeemerScript = Ledger.RedeemerScript (Ledger.lifted (Collect sig))
-        collectFromScript (mkValidatorScript cmp) redeemerScript)
+        W.logMsg "Collecting funds"
+        sig <- W.ownSignature
+        let redeemerScript = L.RedeemerScript (L.lifted (Collect sig))
+        W.collectFromScript (mkValidatorScript cmp) redeemerScript)
 ```
 
 The handler is function of one argument, which we ignore in this case (the argument tells us which of the conditions in the trigger are true, which can be useful if we used `orT` to build a complex condition). In our case we don't need this information because we know that both the `fundsAtAddressT` and the `slotRangeT` conditions hold when the event handler is run, so we can call `collectFromScript` immediately.
@@ -309,7 +312,7 @@ With that, we can re-write the `startCampaign` endpoint to register a `collectFu
 
 ```haskell
 scheduleCollection :: Campaign -> MockWallet ()
-scheduleCollection cmp = register (collectFundsTrigger cmp) (collectionHandler cmp)
+scheduleCollection cmp = W.register (collectFundsTrigger cmp) (collectionHandler cmp)
 ```
 
 Now the campaign owner only has to run `scheduleCollection` at the beginning of the campaign and the wallet will collect the funds automatically.
@@ -323,19 +326,19 @@ If we submitted a refund transaction for all outputs, that transaction would fai
 ```haskell
 refundHandler :: TxId -> Campaign -> EventHandler MockWallet
 refundHandler txid cmp = EventHandler (\_ -> do
-    logMsg "Claiming refund"
-    sig <- ownSignature
-    let redeemer  = Ledger.RedeemerScript (Ledger.lifted (Refund sig))
-    collectFromScriptTxn (mkValidatorScript cmp) redeemer txid)
+    W.logMsg "Claiming refund"
+    sig <- W.ownSignature
+    let redeemer  = L.RedeemerScript (L.lifted (Refund sig))
+    W.collectFromScriptTxn (mkValidatorScript cmp) redeemer txid)
 ```
 
 Now we can register the refund handler when we make the contribution. The condition for being able to claim a refund is
 
 ```haskell
 refundTrigger :: Campaign -> EventTrigger
-refundTrigger c = andT
-    (fundsAtAddressT (campaignAddress c) (GEQ 1))
-    (slotRangeT (GEQ (succ (collectionDeadline c))))
+refundTrigger c = W.andT
+    (W.fundsAtAddressT (campaignAddress c) (GEQ 1))
+    (W.slotRangeT (GEQ (succ (collectionDeadline c))))
 ```
 
 We will call the new endpoint `contribute2` because it replaces the `contribute` endpoint defined above.
@@ -343,19 +346,19 @@ We will call the new endpoint `contribute2` because it replaces the `contribute`
 ```haskell
 contribute2 :: Campaign -> Value -> MockWallet ()
 contribute2 cmp amount = do
-      pk <- ownPubKey
+      pk <- W.ownPubKey
       let dataScript = mkDataScript pk
 
       -- payToScript returns the transaction that was submitted
       -- (unlike payToScript_ which returns unit)
-      tx <- payToScript (campaignAddress cmp) amount dataScript
-      logMsg "Submitted contribution"
+      tx <- W.payToScript (campaignAddress cmp) amount dataScript
+      W.logMsg "Submitted contribution"
 
       -- Ledger.hashTx gives the `TxId` of a transaction
       let txId = Ledger.hashTx tx
 
-      register (refundTrigger cmp) (refundHandler txId cmp)
-      logMsg "Registered refund trigger"
+      W.register (refundTrigger cmp) (refundHandler txId cmp)
+      W.logMsg "Registered refund trigger"
 ```
 
 That brings our total number contract endpoints down to two: `contribute2` for contributors, and `scheduleCollection` for campaign owners.
