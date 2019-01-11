@@ -317,7 +317,7 @@ scheduleCollection cmp = W.register (collectFundsTrigger cmp) (collectionHandler
 
 Now the campaign owner only has to run `scheduleCollection` at the beginning of the campaign and the wallet will collect the funds automatically.
 
-This takes care of the successful outcome to the campaign. We need another contract endpoint for claiming a refund in case the goal was not reached. After contributing to a campaign we do not need any user input to determine whether we are eligible for a refund of our contribution. Eligibility is defined entirely in terms of the blockchain state, and therefore we can use the event handler mechanism to automatically process our refund. 
+This takes care of the successful outcome to the campaign. We need another contract endpoint for claiming a refund in case the goal was not reached. After contributing to a campaign we do not need any user input to determine whether we are eligible for a refund of our contribution. Eligibility is defined entirely in terms of the blockchain state, and therefore we can use the event mechanism to automatically process our refund. 
 
 Let's start with the event handler. Just like the `collection` handler, our refund handler should also collect outputs from a script address, so we could use `collectFromScript` to implement it. However, `collectFromScript` consumes *all* outputs at the script address. In our refund transaction we only want to consume the output that corresponds to our own contribution. 
 
@@ -355,7 +355,7 @@ contribute2 cmp amount = do
       W.logMsg "Submitted contribution"
 
       -- Ledger.hashTx gives the `TxId` of a transaction
-      let txId = Ledger.hashTx tx
+      let txId = L.hashTx tx
 
       W.register (refundTrigger cmp) (refundHandler txId cmp)
       W.logMsg "Registered refund trigger"
