@@ -1,11 +1,11 @@
 # wallet-api: Wallet-API tutorial
 
-This tutorial shows how to implement a simple crowdfunding campaign as a Plutus contract, using the wallet API submit it to the blockchain. The tutorial is written as a literate Haskell file, so it can be fed directly to the Haskell compiler. There are two ways to run the code:
+This tutorial shows how to implement a simple crowdfunding campaign as a Plutus contract, using the wallet API to submit it to the blockchain. There are two ways to run the code:
 
 1. Open the [Plutus Playground](https://prod.playground.plutus.iohkdev.io/), delete all the text in the editor field, and type / copy the code bits in there. Make sure to preserve the indentation.
-2. Clone the Plutus repository at `git@github.com:input-output-hk/plutus.git` and build the `wallet-api` library using `nix-build -A localPackages.wallet-api`. This runs the `wallet-api-doctests` test suite that compiles the tutorial. Alternatively, run `cabal test wallet-api`. Note that the test suite requires Unix symlinks to be supported by the file system, which means that it will not work on Windows Subsystem for Linux (WSL), even though nix generally does work!
+2. The tutorial is written as a literate Haskell file, so it can be fed directly to the Haskell compiler. The easiest way to do that is to clone the Plutus repository at `git@github.com:input-output-hk/plutus.git` and build the `wallet-api` library using `nix-build -A localPackages.wallet-api`. This runs the `wallet-api-doctests` test suite that compiles the tutorial. Alternatively, run `cabal test wallet-api`. Note that the test suite requires Unix symlinks to be supported by the file system, which means that it will not work on Windows Subsystem for Linux (WSL), even though nix generally does work!
 
-The tutorial is has two parts. In part 1 we write the contract, including all the data types we need, validator scripts, and contract endpoints that handle the interactions between wallet and the blockchain. In part 2 we show two ways to test the contract.
+The tutorial has two parts. In part 1 we write the contract, including all the data types we need, validator scripts, and contract endpoints that handle the interactions between wallet and blockchain. In part 2 we show how to test the contract.
 
 # 1. Contract Definition
 
@@ -23,7 +23,7 @@ We need some language extensions and imports:
 module Tutorial where
 
 import qualified Language.PlutusTx            as P
-import           Ledger                       (DataScript(..), PubKey(..), RedeemerScript(..), Signature(..), Slot(..), Value(..))
+import           Ledger                       (Address, DataScript(..), PubKey(..), RedeemerScript(..), Signature(..), Slot(..), TxId, ValidatorScript(..), Value(..))
 import qualified Ledger                       as L
 import           Ledger.Validation            (PendingTx(..), PendingTxIn(..), PendingTxOut)
 import qualified Ledger.Validation            as V
@@ -120,7 +120,7 @@ Before we check whether `act` is permitted, we define a number of intermediate v
               let
                   infixr 3 &&
                   (&&) :: Bool -> Bool -> Bool
-                  (&&) = $$(PlutusTx.and)
+                  (&&) = $$(P.and)
 
                   signedBy :: PubKey -> Signature -> Bool
                   signedBy (PubKey pk) (Signature s) = pk == s
