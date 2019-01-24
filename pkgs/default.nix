@@ -56299,6 +56299,7 @@ license = stdenv.lib.licenses.bsd3;
 , base
 , bytestring
 , language-plutus-core
+, lens
 , optparse-applicative
 , plutus-core-interpreter
 , prettyprinter
@@ -56317,6 +56318,7 @@ executableHaskellDepends = [
 base
 bytestring
 language-plutus-core
+lens
 optparse-applicative
 plutus-core-interpreter
 prettyprinter
@@ -78939,6 +78941,7 @@ license = stdenv.lib.licenses.mit;
 , containers
 , cryptonite
 , deriving-compat
+, doctest
 , hashable
 , hedgehog
 , http-media
@@ -79002,6 +79005,9 @@ swagger2
 template-haskell
 text
 transformers
+];
+libraryToolDepends = [
+doctest
 ];
 executableHaskellDepends = [
 base
