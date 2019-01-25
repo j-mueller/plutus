@@ -1,4 +1,4 @@
-{-# LANGUAGE ConstraindKinds    #-}
+{-# LANGUAGE ConstraintKinds    #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts   #-}
