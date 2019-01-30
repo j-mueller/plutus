@@ -23,8 +23,6 @@ self: super: {
 
     plutus-tutorial = doctest doctestOpts super.plutus-tutorial;
 
-    wallet-api = doctest doctestOpts super.wallet-api;
-
     ########################################################################
     # The base Haskell package builder
 

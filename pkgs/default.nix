@@ -78941,7 +78941,6 @@ license = stdenv.lib.licenses.mit;
 , containers
 , cryptonite
 , deriving-compat
-, doctest
 , hashable
 , hedgehog
 , http-media
@@ -79005,9 +79004,6 @@ swagger2
 template-haskell
 text
 transformers
-];
-libraryToolDepends = [
-doctest
 ];
 executableHaskellDepends = [
 base
