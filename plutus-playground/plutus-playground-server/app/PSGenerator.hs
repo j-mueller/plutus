@@ -28,6 +28,7 @@ import           Language.PureScript.Bridge                (BridgeData, BridgePa
                                                             psTypeParameters, typeModule, typeName, writePSTypes, (^==))
 import           Language.PureScript.Bridge.PSTypes        (psArray, psInt, psString)
 import           Language.PureScript.Bridge.TypeParameters (A)
+import           Ledger.Ada                                (Ada)
 import           Ledger.Index                              (ValidationError)
 import           Ledger.Interval                           (Interval, Slot)
 import           Ledger.Types                              (AddressOf, DataScript, PubKey, RedeemerScript, Signature,
@@ -174,6 +175,7 @@ myTypes =
     , mkSumType (Proxy @UtxoLocation)
     , mkSumType (Proxy @FlowGraph)
     , mkSumType (Proxy @(Interval A))
+    , mkSumType (Proxy @Ada)
     ]
 
 mySettings :: Settings
