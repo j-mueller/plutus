@@ -97,10 +97,10 @@ contributionScript cmp  = ValidatorScript val where
                 refndRange :: SlotRange
                 refndRange = $$(Interval.from) campaignCollectionDeadline
 
-                -- `totalInputs` is the sum of the values of all transation
+                -- `totalInputs` is the sum of the ada values of all transaction
                 -- inputs. We ise `foldr` from the Prelude to go through the
                 -- list and sum up the values.
-                totalInputs :: Int
+                totalInputs :: Ada
                 totalInputs =
                     let v (PendingTxIn _ _ vl) = $$(Ada.fromValue) vl in
                     $$(P.foldr) (\i total -> $$(Ada.plus) total (v i)) Ada.zero ps
@@ -127,7 +127,7 @@ contributionScript cmp  = ValidatorScript val where
                         let
                             payToOwner = 
                                 $$(Interval.contains) collRange range
-                                && $$(PlutusTx.geq) totalInputs target
+                                && $$(Ada.geq) totalInputs campaignTarget
                                 && campaignOwner `signedBy` sig
                         in payToOwner
             in
