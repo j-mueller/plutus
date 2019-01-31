@@ -146,7 +146,6 @@ messagesSpec =
 crowdfundingSpec :: Spec
 crowdfundingSpec =
     describe "crowdfunding" $ do
-        let ten = Ada.adaValueOf 10
         it "should compile" $ compile crowdfunding >>= (`shouldSatisfy` isRight)
         it "should run successful campaign" $
             evaluate successfulCampaign >>=
@@ -160,6 +159,7 @@ crowdfundingSpec =
                                  , (Wallet 3, ten)
                                  ])
   where
+    ten = Ada.adaValueOf 10
     failedCampaign =
         Evaluation
             [(Wallet 1, ten), (Wallet 2, ten), (Wallet 3, ten)]
