@@ -107,7 +107,7 @@ validatorScript v = ValidatorScript val where
             -- order (1 PubKey output, followed by 0 or 1 script outputs)
             amountSpent :: Ada
             amountSpent = case os of
-                PendingTxOut (Value v') _ (PubKeyTxOut pk):_
+                PendingTxOut v' _ (PubKeyTxOut pk):_
                     | pk `eqPk` vestingOwner -> $$(Ada.fromValue) v'
                 _ -> $$(P.error) ()
 

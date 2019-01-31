@@ -183,7 +183,7 @@ scheduleCollection cmp = do
 -- | An event trigger that fires when a refund of campaign contributions can be claimed
 refundTrigger :: Campaign -> EventTrigger
 refundTrigger c = andT
-    (fundsAtAddressT (campaignAddress c) (W.intervalFrom ($$(Ada.toValue) 1))
+    (fundsAtAddressT (campaignAddress c) (W.intervalFrom ($$(Ada.toValue) 1)))
     (slotRangeT (refundRange c))
 
 -- | An event trigger that fires when the funds for a campaign can be collected
