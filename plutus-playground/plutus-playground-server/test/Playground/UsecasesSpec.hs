@@ -162,7 +162,7 @@ crowdfundingSpec =
     ten = Ada.adaValueOf 10
     failedCampaign =
         Evaluation
-            [(Wallet 1, ten), (Wallet 2, ten), (Wallet 3, ten)]
+            [(Wallet 1, 10), (Wallet 2, 10), (Wallet 3, 10)]
             [ Action (Fn "scheduleCollection") (Wallet 1) [theCampaign]
             , Action (Fn "contribute") (Wallet 2) [theCampaign, theContribution]
             , Wait 20
@@ -171,7 +171,7 @@ crowdfundingSpec =
             []
     successfulCampaign =
         Evaluation
-            [(Wallet 1, ten), (Wallet 2, ten), (Wallet 3, ten)]
+            [(Wallet 1, 10), (Wallet 2, 10), (Wallet 3, 10)]
             [ Action (Fn "scheduleCollection") (Wallet 1) [theCampaign]
             , Action (Fn "contribute") (Wallet 2) [theCampaign, theContribution]
             , Action (Fn "contribute") (Wallet 3) [theCampaign, theContribution]
