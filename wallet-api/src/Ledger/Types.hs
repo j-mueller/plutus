@@ -125,7 +125,6 @@ import           Language.PlutusTx.TH                     (CompiledCode, compile
 
 import           Ledger.Interval                          (Slot(..), SlotRange)
 import           Ledger.Ada                               (Ada)
-import qualified Ledger.Ada.TH                            as TH
 import           Ledger.Value                             (Value)
 import qualified Ledger.Value.TH                          as V
 
