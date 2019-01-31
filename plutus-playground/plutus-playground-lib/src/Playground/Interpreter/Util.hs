@@ -9,7 +9,6 @@ import qualified Data.Aeson                 as JSON
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import           Data.Foldable              (foldl')
 import qualified Data.Map                   as Map
-import           Data.Monoid                (Sum (Sum), getSum)
 import qualified Data.Set                   as Set
 import qualified Data.Typeable              as T
 import qualified Ledger.Ada                 as Ada
