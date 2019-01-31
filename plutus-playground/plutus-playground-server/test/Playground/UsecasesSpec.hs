@@ -63,20 +63,21 @@ gameSpec =
         it "should unlock the funds" $
             evaluate gameEvalSuccess >>=
             (`shouldSatisfy` hasFundsDistribution
-                                 [(Wallet 1, 12), (Wallet 2, 8)])
+                                 [(Wallet 1, Ada.adaValueOf 12), (Wallet 2, Ada.adaValueOf 8)])
         it "should keep the funds" $
             evaluate gameEvalFailure >>=
             (`shouldSatisfy` hasFundsDistribution
-                                 [(Wallet 1, 10), (Wallet 2, 8)])
+                                 [(Wallet 1, ten), (Wallet 2, Ada.adaValueOf 8)])
         it
             "Sequential fund transfer fails - 'Game' script - 'payToPublicKey_' action" $
             evaluate payAll >>=
             (`shouldSatisfy` hasFundsDistribution
-                                 [ (Wallet 1, 10)
-                                 , (Wallet 2, 10)
-                                 , (Wallet 3, 10)
+                                 [ (Wallet 1, ten)
+                                 , (Wallet 2, ten)
+                                 , (Wallet 3, ten)
                                  ])
   where
+    ten = Ada.adaValueOf 10
     gameEvalFailure =
         Evaluation
             [(Wallet 1, 10), (Wallet 2, 10)]
