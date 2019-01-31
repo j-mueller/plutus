@@ -103,7 +103,7 @@ contributionScript cmp  = ValidatorScript val where
                 totalInputs :: Ada
                 totalInputs =
                     let v (PendingTxIn _ _ vl) = $$(Ada.fromValue) vl in
-                    $$(P.foldr) (\i total -> $$(Ada.plus) total (v i)) Ada.zero ps
+                    $$(P.foldr) (\i total -> $$(Ada.plus) total (v i)) $$(Ada.zero) ps
 
                 isValid = case act of
                     Refund sig -> -- the "refund" branch
