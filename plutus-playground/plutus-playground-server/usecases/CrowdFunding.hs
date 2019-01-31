@@ -102,7 +102,7 @@ contributionScript cmp  = ValidatorScript val where
                 -- list and sum up the values.
                 totalInputs :: Int
                 totalInputs =
-                    let v (PendingTxIn _ _ vl) = $(Ada.fromValue) vl in
+                    let v (PendingTxIn _ _ vl) = $$(Ada.fromValue) vl in
                     $$(P.foldr) (\i total -> $$(Ada.plus) total (v i)) Ada.zero ps
 
                 isValid = case act of

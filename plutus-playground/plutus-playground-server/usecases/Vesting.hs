@@ -48,7 +48,7 @@ PlutusTx.makeLift ''VestingData
 --   [[VestingData]] representing the current state of the process
 vestFunds :: MonadWallet m => Vesting -> Ada -> m ()
 vestFunds vst adaAmount = do
-    _ <- if value < totalAmount vst then throwOtherError "Value must not be smaller than vested amount" else pure ()
+    _ <- if adaAmount < totalAmount vst then throwOtherError "Value must not be smaller than vested amount" else pure ()
     let value = $$(Ada.toValue) adaAmount
     (payment, change) <- createPaymentWithChange value
     let contractAddress = Ledger.scriptAddress (validatorScript vst)
