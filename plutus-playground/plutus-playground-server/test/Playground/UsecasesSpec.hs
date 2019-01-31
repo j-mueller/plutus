@@ -13,6 +13,7 @@ import           Data.Either            (isRight)
 import qualified Data.Text              as Text
 import qualified Data.Text.Lazy         as TL
 import           Ledger.Types           (Blockchain, Value)
+import qualified Ledger.Ada             as Ada
 import           Playground.API         (Evaluation (Evaluation), Expression (Action, Wait), Fn (Fn), FunctionSchema,
                                          PlaygroundError, SimpleArgumentSchema, SourceCode (SourceCode), functionSchema)
 import qualified Playground.Interpreter as PI
@@ -145,22 +146,23 @@ messagesSpec =
 crowdfundingSpec :: Spec
 crowdfundingSpec =
     describe "crowdfunding" $ do
+        let ten = Ada.adaValueOf 10
         it "should compile" $ compile crowdfunding >>= (`shouldSatisfy` isRight)
         it "should run successful campaign" $
             evaluate successfulCampaign >>=
             (`shouldSatisfy` hasFundsDistribution
-                                 [(Wallet 1, 26), (Wallet 2, 2), (Wallet 3, 2)])
+                                 [(Wallet 1, Ada.adaValueOf 26), (Wallet 2, Ada.adaValueOf 2), (Wallet 3, Ada.adaValueOf 2)])
         it "should run failed campaign" $
             evaluate failedCampaign >>=
             (`shouldSatisfy` hasFundsDistribution
-                                 [ (Wallet 1, 10)
-                                 , (Wallet 2, 10)
-                                 , (Wallet 3, 10)
+                                 [ (Wallet 1, ten)
+                                 , (Wallet 2, ten)
+                                 , (Wallet 3, ten)
                                  ])
   where
     failedCampaign =
         Evaluation
-            [(Wallet 1, 10), (Wallet 2, 10), (Wallet 3, 10)]
+            [(Wallet 1, ten), (Wallet 2, ten), (Wallet 3, ten)]
             [ Action (Fn "scheduleCollection") (Wallet 1) [theCampaign]
             , Action (Fn "contribute") (Wallet 2) [theCampaign, theContribution]
             , Wait 20
@@ -169,7 +171,7 @@ crowdfundingSpec =
             []
     successfulCampaign =
         Evaluation
-            [(Wallet 1, 10), (Wallet 2, 10), (Wallet 3, 10)]
+            [(Wallet 1, ten), (Wallet 2, ten), (Wallet 3, ten)]
             [ Action (Fn "scheduleCollection") (Wallet 1) [theCampaign]
             , Action (Fn "contribute") (Wallet 2) [theCampaign, theContribution]
             , Action (Fn "contribute") (Wallet 3) [theCampaign, theContribution]
