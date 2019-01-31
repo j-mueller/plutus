@@ -49,8 +49,8 @@ vestingSpec =
                   (Fn "vestFunds")
                   (Wallet 1)
                   [ JSON.String
-                        "{\"vestingTranche1\":{\"vestingTrancheDate\":{\"getSlot\":1},\"vestingTrancheAmount\":{\"getValue\":1}},\"vestingTranche2\":{\"vestingTrancheDate\":{\"getSlot\":1},\"vestingTrancheAmount\":{\"getValue\":1}},\"vestingOwner\":{\"getPubKey\":1}}"
-                  , JSON.String "{\"getValue\": 1}"
+                        "{\"vestingTranche1\":{\"vestingTrancheDate\":{\"getSlot\":1},\"vestingTrancheAmount\":{\"getAda\":1}},\"vestingTranche2\":{\"vestingTrancheDate\":{\"getSlot\":1},\"vestingTrancheAmount\":{\"getAda\":1}},\"vestingOwner\":{\"getPubKey\":1}}"
+                  , JSON.String "{\"getAda\": 1}"
                   ]
             ]
             (sourceCode vesting)
@@ -85,7 +85,7 @@ gameSpec =
             , Action
                   (Fn "lock")
                   (Wallet 2)
-                  [JSON.String "\"abcde\"", JSON.String "{\"getValue\": 2}"]
+                  [JSON.String "\"abcde\"", JSON.String "{\"getAda\": 2}"]
             , Action (Fn "guess") (Wallet 1) [JSON.String "\"ade\""]
             ]
             (sourceCode game)
@@ -97,7 +97,7 @@ gameSpec =
             , Action
                   (Fn "lock")
                   (Wallet 2)
-                  [JSON.String "\"abcde\"", JSON.String "{\"getValue\": 2}"]
+                  [JSON.String "\"abcde\"", JSON.String "{\"getAda\": 2}"]
             , Action (Fn "guess") (Wallet 1) [JSON.String "\"abcde\""]
             ]
             (sourceCode game)
@@ -188,13 +188,13 @@ crowdfundingSpec =
         JSON.encodeToLazyText $
         object
             [ "campaignDeadline" .= object ["getSlot" .= mkI 10]
-            , "campaignTarget" .= object ["getValue" .= mkI 15]
+            , "campaignTarget" .= object ["getAda" .= mkI 15]
             , "campaignCollectionDeadline" .= object ["getSlot" .= mkI 20]
             , "campaignOwner" .= object ["getPubKey" .= mkI 1]
             ]
     theContribution =
         JSON.String $
-        TL.toStrict $ JSON.encodeToLazyText $ object ["getValue" .= mkI 8]
+        TL.toStrict $ JSON.encodeToLazyText $ object ["getAda" .= mkI 8]
 
 sourceCode :: BSC.ByteString -> SourceCode
 sourceCode = SourceCode . Text.pack . BSC.unpack
