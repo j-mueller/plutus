@@ -31,7 +31,7 @@ We also need the `{-# OPTIONS_GHC -O0 #-}` compiler option. It disables some of 
 ```haskell
 import qualified Language.PlutusTx            as P
 import qualified Ledger.Interval              as P
-import           Ledger                       (Address, DataScript(..), PubKey(..), RedeemerScript(..), Signature(..), Slot(..), TxId, ValidatorScript(..), Value(..))
+import           Ledger                       (Address, DataScript(..), PubKey(..), RedeemerScript(..), Signature(..), Slot(..), TxId, ValidatorScript(..))
 import qualified Ledger                       as L
 import qualified Ledger.Ada.TH                as Ada
 import           Ledger.Ada.TH                (Ada)
