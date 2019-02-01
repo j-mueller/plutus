@@ -161,8 +161,8 @@ Then we compute the total value of all transaction inputs, using `P.foldr` on th
                         -- define a function "addToTotal" that adds the ada value of a 
                         -- 'PendingTxIn' to the total
                         let addToTotal (PendingTxIn _ _ vl) total = 
-                            let adaVl = $$(Ada.fromValue) vl 
-                            in $$(Ada.plus) total adaVl
+                                let adaVl = $$(Ada.fromValue) vl 
+                                in $$(Ada.plus) total adaVl
 
                         -- Apply "addToTotal" to each transaction input, summing up the results
                         in $$(PlutusTx.foldr) addToTotal $$(Ada.zero) ps
