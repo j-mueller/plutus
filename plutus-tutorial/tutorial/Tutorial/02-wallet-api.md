@@ -165,7 +165,7 @@ Then we compute the total value of all transaction inputs, using `P.foldr` on th
                                 in $$(Ada.plus) total adaVl
 
                         -- Apply "addToTotal" to each transaction input, summing up the results
-                        in $$(PlutusTx.foldr) addToTotal $$(Ada.zero) ps
+                        in $$(P.foldr) addToTotal $$(Ada.zero) ps
 ```
 
 We now have all the information we need to check whether the action `act` is allowed. This will be computed as
