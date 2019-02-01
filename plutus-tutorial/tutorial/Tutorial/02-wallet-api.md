@@ -165,7 +165,7 @@ Then we compute the total value of all transaction inputs, using `P.foldr` on th
                                 in $$(Ada.plus) total adaVl
 
                         -- Apply "addToTotal" to each transaction input, summing up the results
-                        in $$(P.foldr) addToTotal $$(Ada.zero) ps
+                        in $$(P.foldr) addToTotal $$(Ada.zero) ins
 ```
 
 We now have all the information we need to check whether the action `act` is allowed. This will be computed as
@@ -219,7 +219,7 @@ In the `Collect` case, the current slot must be between `deadline` and `collecti
 
 ```haskell
                           $$(P.contains) ($$(P.interval) deadline collectionDeadline) txnValidRange &&
-                          $$(Ada.geq) totalInputs fundingTarget &&
+                          $$(Ada.geq) totalInputs target &&
                           campaignOwner `signedBy` sig
 
               in
@@ -306,7 +306,7 @@ The wallet API allows us to specify a pair of [`EventTrigger`](https://input-out
 collectFundsTrigger :: Campaign -> EventTrigger
 collectFundsTrigger c = W.andT
     -- We use `W.intervalFrom` to create an open-ended interval that starts at the funding target.
-    (W.fundsAtAddressT (campaignAddress c) (W.intervalFrom ($$(Ada.toValue) (campaignTarget c))))
+    (W.fundsAtAddressT (campaignAddress c) (W.intervalFrom ($$(Ada.toValue) (fundingTarget c))))
 
     -- With `W.interval` we create an interval from the campaign's end date (inclusive) to 
     -- the collection deadline (exclusive)
@@ -363,7 +363,7 @@ Now we can register the refund handler when we make the contribution. The condit
 ```haskell
 refundTrigger :: Campaign -> EventTrigger
 refundTrigger c = W.andT
-    (fundsAtAddressT (campaignAddress c) (W.intervalFrom ($$(Ada.toValue) 1)))
+    (W.fundsAtAddressT (campaignAddress c) (W.intervalFrom ($$(Ada.toValue) 1)))
     (W.slotRangeT (W.intervalFrom (collectionDeadline c)))
 ```
 
