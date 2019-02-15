@@ -686,7 +686,7 @@ evaluateContract = [|| \
                 && scriptOutValue == scriptInValue - pv
                 && signature `signedBy` to
             in  if isValid then let
-                in case $$(discountFromPairList) from blockHeight (Ada pv) commits of
+                in case $$(discountFromPairList) from blockHeight ($$(Ada.fromInt) pv) commits of
                     Just updatedCommits -> let
                         updatedState = State updatedCommits choices
                         in (updatedState, con, True)
@@ -813,7 +813,7 @@ validatorScript = [|| \
 
         -- Expected amount of money in TxOut Marlowe Contract
         scriptOutValue = case inputCommand of
-            SpendDeposit _ -> Ada 0
+            SpendDeposit _ -> $$(Ada.fromInt) 0
             _ -> let (PendingTxOut change
                         (Just (outputValidatorHash, DataScriptHash dataScriptHash)) DataTxOut : _) = pendingTxOutputs
                 {-  Check that TxOut is a valid continuation.
