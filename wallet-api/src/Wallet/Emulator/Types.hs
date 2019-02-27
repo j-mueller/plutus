@@ -357,11 +357,16 @@ emulatorState' tp = emptyEmulatorState
     & txPool .~ tp
 
 -- | Validate a transaction in the current emulator state
-validateEm :: EmulatorState -> Tx -> Maybe Index.ValidationError
-validateEm EmulatorState{_index=idx, _chainNewestFirst = ch} txn =
+validateEm :: MonadState Index.Index m => Slot -> Tx -> m (Maybe Index.ValidationError)
+validateEm txn = do
+    idx <- use
     let h = lastSlot ch
-        result = Index.runValidation (Index.validateTransaction h txn) idx in
-    either Just (const Nothing) result
+        result = Index.runValidation (Index.validateTransaction h txn) idx
+    case result of
+        Left e -> pure (Just e)
+        Right idx' -> do
+            _ <- put idx'
+            pure Nothing
 
 liftMockWallet :: (MonadState EmulatorState m) => Wallet -> MockWallet a -> m ([Tx], Either WalletAPIError a)
 liftMockWallet wallet act = do
@@ -388,12 +393,12 @@ evalEmulated = \case
     WalletRecvNotification wallet trigger -> fst <$> liftMockWallet wallet (handleNotifications trigger)
     BlockchainProcessPending -> do
         emState <- get
-        let (ValidatedBlock block events rest) = validateBlock emState (_txPool emState)
+        let (ValidatedBlock block events rest idx') = validateBlock emState (_txPool emState)
             newChain = block : _chainNewestFirst emState
         put emState {
             _chainNewestFirst = newChain,
             _txPool = rest,
-            _index = Index.insertBlock block (_index emState),
+            _index = idx',
             _emulatorLog   = SlotAdd (lastSlot newChain) : events ++ _emulatorLog emState
             }
         pure block
@@ -408,14 +413,16 @@ data ValidatedBlock = ValidatedBlock
     , vlbRest   :: [Tx]
     -- ^ Transactions that haven't been validated because the current slot is
     --   not in their validation interval
+    , vlbIndex  :: Index.UtxoIndex
+    -- ^ Update UTXO index
     }
 
 -- | Validate a block in an [[EmulatorState]], returning the valid transactions
 --   and all success/failure events
 validateBlock :: EmulatorState -> [Tx] -> ValidatedBlock
-validateBlock emState txns = ValidatedBlock block events rest where
+validateBlock emState txns = ValidatedBlock block events rest idx' where
     (eligibleTxns, rest) = partition canValidateNow txns
-    processed = (\tx -> (tx, validateEm emState tx)) <$> eligibleTxns
+    (idx', processd) = runState (traverse (\t -> fmap (t,) (validateEm slot t))eligibleTxns) (emState ^. index)
     validTxns = fst <$> filter (isNothing . snd) processed
     block = validTxns
     mkEvent (t, result) =
