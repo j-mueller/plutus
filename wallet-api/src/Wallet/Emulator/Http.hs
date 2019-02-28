@@ -258,7 +258,7 @@ processPending = do
 processPendingSTM :: TVar EmulatorState -> STM [Tx]
 processPendingSTM var = do
   es <- readTVar var
-  let Types.ValidatedBlock block _ rest = Types.validateBlock es (_txPool es)
+  let Types.ValidatedBlock block _ rest _ = Types.validateBlock es (_txPool es)
       newState = addBlock block . set txPool rest $ es
   writeTVar var newState
   pure block

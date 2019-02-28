@@ -359,10 +359,9 @@ emulatorState' tp = emptyEmulatorState
 
 -- | Validate a transaction in the current emulator state
 validateEm :: MonadState Index.UtxoIndex m => Slot -> Tx -> m (Maybe Index.ValidationError)
-validateEm txn = do
-    idx <- use
-    let h = lastSlot ch
-        result = Index.runValidation (Index.validateTransaction h txn) idx
+validateEm h txn = do
+    idx <- get
+    let result = Index.runValidation (Index.validateTransaction h txn) idx
     case result of
         Left e -> pure (Just e)
         Right idx' -> do
@@ -423,7 +422,7 @@ data ValidatedBlock = ValidatedBlock
 validateBlock :: EmulatorState -> [Tx] -> ValidatedBlock
 validateBlock emState txns = ValidatedBlock block events rest idx' where
     (eligibleTxns, rest) = partition canValidateNow txns
-    (idx', processd) = runState (traverse (\t -> fmap (t,) (validateEm slot t))eligibleTxns) (emState ^. index)
+    (processed, idx') = runState (traverse (\t -> fmap (t,) (validateEm currentSlot t))eligibleTxns) (emState ^. index)
     validTxns = fst <$> filter (isNothing . snd) processed
     block = validTxns
     mkEvent (t, result) =
