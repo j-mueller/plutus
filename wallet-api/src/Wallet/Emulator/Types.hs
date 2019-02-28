@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DerivingStrategies    #-}
@@ -357,7 +358,7 @@ emulatorState' tp = emptyEmulatorState
     & txPool .~ tp
 
 -- | Validate a transaction in the current emulator state
-validateEm :: MonadState Index.Index m => Slot -> Tx -> m (Maybe Index.ValidationError)
+validateEm :: MonadState Index.UtxoIndex m => Slot -> Tx -> m (Maybe Index.ValidationError)
 validateEm txn = do
     idx <- use
     let h = lastSlot ch
