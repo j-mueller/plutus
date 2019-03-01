@@ -151,7 +151,7 @@ txnUpdateUtxo = property $ do
         txId = hashTx txn
     Hedgehog.assert (t1 == txn)
     Hedgehog.assert $ case (e1, e2) of
-        (TxnSubmit i1, TxnValidationFail txi _) -> i1 == txId && txi == txId
+        (TxnValidationFail txi _, TxnSubmit i1) -> i1 == txId && txi == txId
         _ -> False
 
 validTrace :: Property
