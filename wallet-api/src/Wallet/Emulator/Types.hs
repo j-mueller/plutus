@@ -393,7 +393,12 @@ evalEmulated = \case
     WalletRecvNotification wallet trigger -> fst <$> liftMockWallet wallet (handleNotifications trigger)
     BlockchainProcessPending -> do
         emState <- get
-        let (ValidatedBlock block events rest idx') = validateBlock emState (_txPool emState)
+        let 
+            currentSlot = lastSlot (_chainNewestFirst emState)
+            idx         = _index emState
+            pool        = _txPool emState
+            (ValidatedBlock block events rest idx') = 
+                validateBlock currentSlot idx pool
             newChain = block : _chainNewestFirst emState
         put emState {
             _chainNewestFirst = newChain,
@@ -419,19 +424,34 @@ data ValidatedBlock = ValidatedBlock
 
 -- | Validate a block in an [[EmulatorState]], returning the valid transactions
 --   and all success/failure events
-validateBlock :: EmulatorState -> [Tx] -> ValidatedBlock
-validateBlock emState txns = ValidatedBlock block events rest idx' where
-    (eligibleTxns, rest) = partition canValidateNow txns
-    (processed, idx') = runState (traverse (\t -> fmap (t,) (validateEm currentSlot t))eligibleTxns) (emState ^. index)
-    validTxns = fst <$> filter (isNothing . snd) processed
-    block = validTxns
-    mkEvent (t, result) =
-        case result of
-            Nothing  -> TxnValidate (hashTx t)
-            Just err -> TxnValidationFail (hashTx t) err
-    events = mkEvent <$> processed
-    canValidateNow tx = $$(Interval.member) currentSlot (txValidRange tx)
-    currentSlot = emState ^. chainNewestFirst . to lastSlot
+validateBlock :: Slot -> Index.UtxoIndex -> [Tx] -> ValidatedBlock
+validateBlock currentSlot idx txns = 
+    let
+        -- Select those transactions that can be validated in the 
+        -- current slot
+        (eligibleTxns, rest) = partition (canValidateNow currentSlot) txns
+
+        -- Validate eligible transactions, updating the UTXO index each time
+        (processed, idx') = runState (traverse (\t -> fmap (t,) (validateEm currentSlot t)) eligibleTxns) idx
+
+        -- The new block contains all transaction that were validated
+        -- successfully
+        block = fst <$> filter (isNothing . snd) processed
+
+        -- Also return an `EmulatorEvent` for each transaction that was 
+        -- processed
+        events = uncurry mkEvent <$> processed
+
+    in ValidatedBlock block events rest idx'
+
+canValidateNow :: Slot -> Tx -> Bool
+canValidateNow currentSlot tx = $$(Interval.member) currentSlot (txValidRange tx)
+
+mkEvent :: Tx -> Maybe Index.ValidationError -> EmulatorEvent
+mkEvent t result = 
+    case result of
+        Nothing  -> TxnValidate (hashTx t)
+        Just err -> TxnValidationFail (hashTx t) err
 
 processEmulated :: (MonadEmulator m) => Trace MockWallet a -> m a
 processEmulated = interpretWithMonad evalEmulated

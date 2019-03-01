@@ -42,7 +42,8 @@ tests = testGroup "all tests" [
         testProperty "initial transaction is valid" initialTxnValid,
         testProperty "compute UTxO of trivial blockchain" utxo,
         testProperty "validate transaction" txnValid,
-        testProperty "validate transaction when it can be validated" txnValidFrom
+        testProperty "validate transaction when it can be validated" txnValidFrom,
+        testProperty "update UTXO set after each transaction" txnUpdateUtxo
         ],
     testGroup "UTXO index" [
         testProperty "create an index of transactions" txnIndex,
@@ -137,6 +138,21 @@ simpleTrace txn = do
     [txn'] <- walletAction (Wallet 1) $ submitTxn txn
     block <- processPending
     assertIsValidated txn'
+
+txnUpdateUtxo :: Property
+txnUpdateUtxo = property $ do
+    (Mockchain m _, txn) <- forAll genChainTxn
+    let idx  = Index.initialise [m]
+        slot = 1
+
+        -- Validate a pool that contains `txn` twice. It should succeed the 
+        -- first and fail the second time
+        ValidatedBlock [t1] [e1, e2] [] _ = validateBlock slot idx [txn, txn]
+        txId = hashTx txn
+    Hedgehog.assert (t1 == txn)
+    Hedgehog.assert $ case (e1, e2) of
+        (TxnSubmit i1, TxnValidationFail txi _) -> i1 == txId && txi == txId
+        _ -> False
 
 validTrace :: Property
 validTrace = property $ do
