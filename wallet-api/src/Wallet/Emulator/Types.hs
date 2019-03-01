@@ -422,8 +422,9 @@ data ValidatedBlock = ValidatedBlock
     -- ^ Update UTXO index
     }
 
--- | Validate a block in an [[EmulatorState]], returning the valid transactions
---   and all success/failure events
+-- | Validate a block given the current slot and UTXO set, returning the valid 
+--   transactions, success/failure events, remaining transactions and the 
+--   updated UTXO set.
 validateBlock :: Slot -> Index.UtxoIndex -> [Tx] -> ValidatedBlock
 validateBlock currentSlot idx txns = 
     let
