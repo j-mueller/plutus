@@ -288,4 +288,4 @@ withdraw vst vl = do
 
     pure ()
 
-$(mkFunctions ['vestFunds, 'registerVestingScheme])
+$(mkFunctions ['vestFunds, 'registerVestingScheme, 'withdraw])
