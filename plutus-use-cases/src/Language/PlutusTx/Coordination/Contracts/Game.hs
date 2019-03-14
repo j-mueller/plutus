@@ -6,7 +6,9 @@ module Language.PlutusTx.Coordination.Contracts.Game(
     guess,
     startGame,
     -- * Validator script
-    gameValidator
+    gameValidator,
+    -- * Address
+    gameAddress
     ) where
 
 import qualified Language.PlutusTx            as PlutusTx
