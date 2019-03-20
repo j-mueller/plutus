@@ -21,6 +21,7 @@ import           Language.Plutus.Contract                      (ContractOut (Con
                                                                 LedgerUpdate)
 import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress)
 import           Ledger.Ada                                    (Ada)
+import qualified Wallet.Emulator.AddressMap                    as AM
 
 -- | Parameters for the "lock" endpoint
 data LockParams = LockParams
@@ -37,34 +38,49 @@ newtype GuessParams = GuessParams
     deriving stock (Eq, Ord, Show, Generic)
     deriving newtype (Aeson.FromJSON, Aeson.ToJSON)
 
+newtype GameState = GameState
+    { interestingAddresses :: AM.AddressMap
+    }
+    deriving stock (Show, Generic)
+    deriving newtype (Aeson.FromJSON, Aeson.ToJSON)
+
+initialState :: GameState
+initialState = GameState mempty
+
 type GuessingGameAPI =
+
+  --  All endpoints (except layout) are POST endpoints. They expect the current
+  --  'GameState' and an endpoint-specific argument, and return the new
+  --  'GameState' and a list of 'ContractOut' events.
 
   --  The first two endpoints are the same for all contracts:
 
   -- ledger-update, informing the contract about changes to the ledger state
-    "ledger-update" :> ReqBody '[JSON] LedgerUpdate :> Post '[JSON] [ContractOut] -- POST /ledger-update
+    "ledger-update" :> ReqBody '[JSON] (GameState, LedgerUpdate) :> Post '[JSON] (GameState, [ContractOut]) -- POST /ledger-update
 
   -- initialise, a sequence of 'ContractOut' events that need to be processed
   -- when the contract is first started.
-    :<|> "initialise" :> Get '[JSON] [ContractOut]
+    :<|> "initialise" :> Get '[JSON] (GameState, [ContractOut])
 
   -- The following two endpoints are specific to this example (guessing game)
 
-  -- lock some
-    :<|> "lock" :> ReqBody '[JSON] LockParams :> Post '[JSON] [ContractOut] -- POST /lock
-    :<|> "guess" :> ReqBody '[JSON] GuessParams :> Post '[JSON] [ContractOut] -- POST /guess
+  -- lock some funds
+    :<|> "lock" :> ReqBody '[JSON] (GameState, LockParams) :> Post '[JSON] (GameState, [ContractOut]) -- POST /lock
 
-    -- returns a textual description of the API (this is only a stand-in until
-    -- we have an actual schema endpoint)
+  -- make a guess
+    :<|> "guess" :> ReqBody '[JSON] (GameState, GuessParams) :> Post '[JSON] (GameState, [ContractOut]) -- POST /guess
+
+  -- returns a textual description of the API (this is only a stand-in until
+  -- we have an actual schema endpoint)
     :<|> "layout" :> Get '[JSON] Text
 
 server :: Server GuessingGameAPI
 server = ledgerUpdate :<|> initialise :<|> lock :<|> guess_ :<|> l
     where
-        ledgerUpdate _ = pure [ContractError "not implemented"]
-        initialise     = pure [StartWatching gameAddress]
-        lock _         = pure [ContractError "not implemnted"]
-        guess_ _       = pure [ContractError "not implemented"]
+        ledgerUpdate (s, _) = pure (s, [ContractError "not implemented"])
+        initialise          = pure (initialState, [StartWatching gameAddress])
+        lock (s, _)         = pure (s, [ContractError "not implemented"])
+        guess_ (s, _)       = pure (s, [ContractError "not implemented"])
         l = pure (layout (Proxy @GuessingGameAPI))
 
 app :: Application

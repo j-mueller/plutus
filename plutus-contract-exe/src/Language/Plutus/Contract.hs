@@ -59,23 +59,14 @@ data ContractOut =
       -- ^ Start watching an address. This adds the address to the set of
       --   "interesting addresses" of this contract instance.
 
-      -- | Checkpoint Aeson.Value
-      -- ^ Write a checkpoint (a JSON value)
-      --   Commented out for now. We need to think about how best to reset the
-      --   contract state to a checkpoint. Maybe there could be a POST /state
-      --   endpoint?
-      --   Another option would be to allow POST and GET at the /state route
-      --   (instead of the 'Checkpoint' constructor for 'ContractOut'). This
-      --   would allow the app platform greater scope in starting and stopping
-      --   the contract process.
-
       | ContractError Text
       -- ^ An error occurred during contract execution.
       --   NOTE: Should we also set the appropriate HTTP status code?
 
       | ContractFinished
       -- ^ Execution of the contract has ended. No further ledger updates are
-      --   required and no user actions are possible.
+      --   required and no user actions are possible. All triggers associated
+      --   with this contract instance can be deleted.
 
       deriving stock (Eq, Ord, Show, Generic)
       deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
