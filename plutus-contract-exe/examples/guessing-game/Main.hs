@@ -12,6 +12,7 @@ module Main where
 import qualified Data.Aeson                                    as Aeson
 import           Data.Proxy                                    (Proxy (Proxy))
 import           Data.Text                                     (Text)
+import qualified Data.Text                                     as Text
 import           GHC.Generics                                  (Generic)
 import           Network.Wai.Handler.Warp                      (run)
 import           Servant                                       ((:<|>) ((:<|>)), (:>), Get, JSON, Post, ReqBody)
@@ -22,6 +23,7 @@ import           Language.Plutus.Contract                      (ContractOut (Con
 import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress, gameDataScript)
 import           Ledger.Ada                                    (Ada)
 import qualified Ledger.Ada                                    as Ada
+import qualified Ledger.Types as L
 import qualified Wallet.Emulator.AddressMap                    as AM
 
 -- | Parameters for the "lock" endpoint
@@ -83,13 +85,14 @@ server = ledgerUpdate :<|> initialise :<|> lock :<|> guess_ :<|> l
         initialise          = pure (initialState, [StartWatching gameAddress])
         lock (s, p)         =
           let
-              LockParams secretWord amount = p
-              vl         = Ada.toValue vl
-              dataScript = gameDataScript $ Text.toString secretWord
-              output = TxOutOf gameAddress vl (PayToScript dataScript)
-              tx     = mkUnbalancedTx [] [output] 
+              LockParams secret amt = p
+              vl         = Ada.toValue amt
+              dataScript = gameDataScript $ Text.unpack secret
+              output = L.TxOutOf gameAddress vl (L.PayToScript dataScript)
+              tx     = mkUnbalancedTx [] [output]
           in
             -- submit transaction, then this contract instance is finished
+            -- see note [ContractFinished event] in Language.Plutus.Contract
             pure (s, [SubmitTransaction tx, ContractFinished])
         guess_ (s, _)       = pure (s, [ContractError "not implemented"])
         l = pure (layout (Proxy @GuessingGameAPI))

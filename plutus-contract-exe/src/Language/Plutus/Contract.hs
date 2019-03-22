@@ -97,7 +97,7 @@ network, the contract backend needs to
 The 'ContractFinished' event signals that this *instance* of the contract is 
 finished. This means that no more interactions with the instance are possible. 
 It is an opportunity for the contract backend to delete all triggers associated
-with the instance.
+with the instance, and to update the UI (disable/archive/etc)
 
 Note that the 'ContractFinished' does not say anything about unspent outputs at 
 the contract address. There may still be unspent outputs at the address, but the
@@ -131,7 +131,8 @@ data ContractOut =
       | ContractFinished
       -- ^ Execution of the contract has ended. No further ledger updates are
       --   required and no user actions are possible. All triggers associated
-      --   with this contract instance can be deleted.
+      --   with this contract instance can be deleted. See note 
+      --   [ContractFinished event]
 
       deriving stock (Eq, Ord, Show, Generic)
       deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
