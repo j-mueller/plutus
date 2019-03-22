@@ -3,32 +3,34 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeOperators              #-}
 -- | Contract interface for the guessing game
 module Main where
 
+import           Control.Lens                                  (at, (^.))
 import qualified Data.Aeson                                    as Aeson
+import qualified Data.Map                                      as Map
+import           Data.Maybe                                    (fromMaybe)
 import           Data.Proxy                                    (Proxy (Proxy))
 import           Data.Text                                     (Text)
-import qualified Data.Text                                     as Text
 import           GHC.Generics                                  (Generic)
 import           Network.Wai.Handler.Warp                      (run)
 import           Servant                                       ((:<|>) ((:<|>)), (:>), Get, JSON, Post, ReqBody)
 import           Servant.Server                                (Application, Server, layout, serve)
 
-import           Language.Plutus.Contract                      (ContractOut (ContractError, ContractFinished, StartWatching, SubmitTransaction),
-                                                                LedgerUpdate, mkUnbalancedTx)
-import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress, gameDataScript)
+import           Language.Plutus.Contract                      (ContractOut (ContractFinished, StartWatching, SubmitTransaction),
+                                                                LedgerUpdate (OutputAdded, OutputSpent), mkUnbalancedTx)
+import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress, gameDataScript, gameRedeemerScript,
+                                                                gameValidator)
 import           Ledger.Ada                                    (Ada)
 import qualified Ledger.Ada                                    as Ada
-import qualified Ledger.Types as L
+import qualified Ledger.Types                                  as L
 import qualified Wallet.Emulator.AddressMap                    as AM
 
 -- | Parameters for the "lock" endpoint
 data LockParams = LockParams
-    { secretWord :: Text
+    { secretWord :: String
     , amount     :: Ada
     }
     deriving stock (Eq, Ord, Show, Generic)
@@ -36,7 +38,7 @@ data LockParams = LockParams
 
 --  | Parameters for the "guess" endpoint
 newtype GuessParams = GuessParams
-    { guess :: Text
+    { guess :: String
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving newtype (Aeson.FromJSON, Aeson.ToJSON)
@@ -81,20 +83,49 @@ type GuessingGameAPI =
 server :: Server GuessingGameAPI
 server = ledgerUpdate :<|> initialise :<|> lock :<|> guess_ :<|> l
     where
-        ledgerUpdate (s, _) = pure (s, [ContractError "not implemented"])
+
+        -- To initialise the game contract we start watching the game address
+        -- TODO: We don't need to watch the game address if we are the
+        --       organisers of the game. (See note [ContractFinished event] in
+        --       Language.Plutus.Contract). Maybe we need one initialise
+        --       endpoint per role?
         initialise          = pure (initialState, [StartWatching gameAddress])
-        lock (s, p)         =
+
+        -- When the outputs at the address change we call 'AM.updateAddresses'
+        -- to update the 'GameState'
+        ledgerUpdate (GameState mp, u) =
+            let mp' = case u of
+                        OutputAdded _ tx -> AM.updateAddresses tx mp
+                        OutputSpent _ tx -> AM.updateAddresses tx mp
+                        _                -> mp
+            in
+                pure (GameState mp', [])
+
+        -- The lock endpoint. Produces a transaction with a single
+        -- pay-to-script output, locked by the game validator using
+        -- the hash of the secret word.
+        lock (s, LockParams secret amt) =
           let
-              LockParams secret amt = p
               vl         = Ada.toValue amt
-              dataScript = gameDataScript $ Text.unpack secret
+              dataScript = gameDataScript secret
               output = L.TxOutOf gameAddress vl (L.PayToScript dataScript)
               tx     = mkUnbalancedTx [] [output]
           in
             -- submit transaction, then this contract instance is finished
             -- see note [ContractFinished event] in Language.Plutus.Contract
             pure (s, [SubmitTransaction tx, ContractFinished])
-        guess_ (s, _)       = pure (s, [ContractError "not implemented"])
+
+        -- The guess endpoint. Produces a transaction that spends all known
+        -- outputs at the game address using the
+        guess_ (GameState mp, GuessParams gss)       =
+            let
+                outputs  = fmap fst . Map.toList . fromMaybe Map.empty $ mp ^. at gameAddress
+                redeemer = gameRedeemerScript gss
+                inp      = (\o -> L.scriptTxIn o gameValidator redeemer) <$> outputs
+                tx       = mkUnbalancedTx inp []
+            in
+                pure (GameState mp, [SubmitTransaction tx, ContractFinished])
+
         l = pure (layout (Proxy @GuessingGameAPI))
 
 app :: Application

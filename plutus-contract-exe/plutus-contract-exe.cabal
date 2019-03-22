@@ -68,3 +68,5 @@ executable contract-exe-guessing-game
         servant-server -any,
         text -any,
         warp -any,
+        lens -any,
+        containers -any,

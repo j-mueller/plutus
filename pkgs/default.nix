@@ -56615,6 +56615,8 @@ license = stdenv.lib.licenses.mit;
   mkDerivation
 , aeson
 , base
+, containers
+, lens
 , plutus-use-cases
 , servant
 , servant-server
@@ -56637,11 +56639,15 @@ text
 wallet-api
 ];
 executableHaskellDepends = [
+aeson
 base
+containers
+lens
 plutus-use-cases
 servant
 servant-server
 text
+wallet-api
 warp
 ];
 doHaddock = false;
