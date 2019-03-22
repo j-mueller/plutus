@@ -17,10 +17,11 @@ import           Network.Wai.Handler.Warp                      (run)
 import           Servant                                       ((:<|>) ((:<|>)), (:>), Get, JSON, Post, ReqBody)
 import           Servant.Server                                (Application, Server, layout, serve)
 
-import           Language.Plutus.Contract                      (ContractOut (ContractError, StartWatching),
-                                                                LedgerUpdate)
-import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress)
+import           Language.Plutus.Contract                      (ContractOut (ContractError, ContractFinished, StartWatching, SubmitTransaction),
+                                                                LedgerUpdate, mkUnbalancedTx)
+import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress, gameDataScript)
 import           Ledger.Ada                                    (Ada)
+import qualified Ledger.Ada                                    as Ada
 import qualified Wallet.Emulator.AddressMap                    as AM
 
 -- | Parameters for the "lock" endpoint
@@ -49,9 +50,10 @@ initialState = GameState mempty
 
 type GuessingGameAPI =
 
-  --  All endpoints (except layout) are POST endpoints. They expect the current
-  --  'GameState' and an endpoint-specific argument, and return the new
-  --  'GameState' and a list of 'ContractOut' events.
+  --  All endpoints (except layout) use the POST method to supply parameters in
+  --  the request body. They expect the current 'GameState' and an
+  --  endpoint-specific argument, and return the new 'GameState' and a list of
+  --  'ContractOut' events.
 
   --  The first two endpoints are the same for all contracts:
 
@@ -79,7 +81,16 @@ server = ledgerUpdate :<|> initialise :<|> lock :<|> guess_ :<|> l
     where
         ledgerUpdate (s, _) = pure (s, [ContractError "not implemented"])
         initialise          = pure (initialState, [StartWatching gameAddress])
-        lock (s, _)         = pure (s, [ContractError "not implemented"])
+        lock (s, p)         =
+          let
+              LockParams secretWord amount = p
+              vl         = Ada.toValue vl
+              dataScript = gameDataScript $ Text.toString secretWord
+              output = TxOutOf gameAddress vl (PayToScript dataScript)
+              tx     = mkUnbalancedTx [] [output] 
+          in
+            -- submit transaction, then this contract instance is finished
+            pure (s, [SubmitTransaction tx, ContractFinished])
         guess_ (s, _)       = pure (s, [ContractError "not implemented"])
         l = pure (layout (Proxy @GuessingGameAPI))
 
