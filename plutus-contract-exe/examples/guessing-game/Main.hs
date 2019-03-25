@@ -116,7 +116,7 @@ server = ledgerUpdate :<|> initialise :<|> lock :<|> guess_ :<|> l
             pure (s, [SubmitTransaction tx, ContractFinished])
 
         -- The guess endpoint. Produces a transaction that spends all known
-        -- outputs at the game address using the
+        -- outputs at the game address using the guess
         guess_ (GameState mp, GuessParams gss)       =
             let
                 outputs  = fmap fst . Map.toList . fromMaybe Map.empty $ mp ^. at gameAddress
