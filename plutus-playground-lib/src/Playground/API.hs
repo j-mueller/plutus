@@ -33,9 +33,9 @@ import           GHC.Generics                 (Generic)
 import           Language.Haskell.Interpreter (CompilationError (CompilationError, RawError), column, filename, row,
                                                text)
 import qualified Language.Haskell.TH.Syntax   as TH
-import qualified Ledger.Value                 as V
 import           Ledger.Types                 (Blockchain, PubKey, Tx, TxId)
 import           Ledger.Validation            (ValidatorHash)
+import qualified Ledger.Value                 as V
 import           Servant.API                  ((:<|>), (:>), Get, JSON, Post, ReqBody)
 import           Text.Read                    (readMaybe)
 import           Wallet.Emulator.Types        (EmulatorEvent, Wallet)
