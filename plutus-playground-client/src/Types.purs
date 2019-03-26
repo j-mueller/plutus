@@ -56,7 +56,7 @@ _walletId :: Lens' Wallet Int
 _walletId = _Wallet <<< prop (SProxy :: SProxy "getWallet")
 
 _ada :: Lens' Value Int
-_ada = _Value <<< prop (SProxy :: SProxy "getAda")
+_ada = _Value <<< _ <<< gprop (SProxy :: SProxy "getValue")
 
 data Action
   = Action
