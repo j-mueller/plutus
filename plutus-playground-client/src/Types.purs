@@ -18,11 +18,9 @@ import Data.Functor.Coproduct.Nested (Coproduct3)
 import Data.Generic (class Generic, gEq, gShow)
 import Data.Int as Int
 import Data.Lens (Lens, Lens', Prism', _2, over, prism', to, traversed, view)
-import Data.Lens.Index as Ix
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Maybe (Maybe(..))
-import Data.Maybe as Maybe
 import Data.Newtype (class Newtype, unwrap)
 import Data.NonEmpty ((:|))
 import Data.RawJson (RawJson(..))
@@ -58,7 +56,7 @@ _walletId :: Lens' Wallet Int
 _walletId = _Wallet <<< prop (SProxy :: SProxy "getWallet")
 
 _ada :: Lens' Value Int
-_ada =  Ix.ix 0 <<< _Value <<< prop (SProxy :: SProxy "getValue") 
+_ada = _Ada <<< prop (SProxy :: SProxy "getAda")
 
 data Action
   = Action
