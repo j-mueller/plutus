@@ -57,8 +57,8 @@ _walletId :: Lens' Wallet Int
 _walletId = _Wallet <<< prop (SProxy :: SProxy "getWallet")
 
 _ada :: Lens' Value Int
-_ada = Maybe.fromMaybe 0 <<< Array.head <<< _Value <<< prop (SProxy :: SProxy "getValue") 
-
+_ada = Array.head <<< _Value <<< prop (SProxy :: SProxy "getValue") 
+-- Data.Maybe
 data Action
   = Action
       { simulatorWallet :: SimulatorWallet
