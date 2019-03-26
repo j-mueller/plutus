@@ -33,7 +33,7 @@ import           GHC.Generics                 (Generic)
 import           Language.Haskell.Interpreter (CompilationError (CompilationError, RawError), column, filename, row,
                                                text)
 import qualified Language.Haskell.TH.Syntax   as TH
-import           Ledger.Ada                   (Ada)
+import qualified Ledger.Value                 as V
 import           Ledger.Types                 (Blockchain, PubKey, Tx, TxId)
 import           Ledger.Validation            (ValidatorHash)
 import           Servant.API                  ((:<|>), (:>), Get, JSON, Post, ReqBody)
@@ -81,7 +81,7 @@ type Program = [Expression]
 
 data SimulatorWallet = SimulatorWallet
   { simulatorWalletWallet  :: Wallet
-  , simulatorWalletBalance :: Ada
+  , simulatorWalletBalance :: V.Value
   }
   deriving (Show, Generic, Eq, ToJSON, FromJSON)
 
