@@ -21,6 +21,7 @@ import Data.Lens (Lens, Lens', Prism', _2, over, prism', to, traversed, view)
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Maybe (Maybe(..))
+import Data.Maybe as Maybe
 import Data.Newtype (class Newtype, unwrap)
 import Data.NonEmpty ((:|))
 import Data.RawJson (RawJson(..))
@@ -56,7 +57,7 @@ _walletId :: Lens' Wallet Int
 _walletId = _Wallet <<< prop (SProxy :: SProxy "getWallet")
 
 _ada :: Lens' Value Int
-_ada = _Value <<< prop (SProxy :: SProxy "getValue") <<< Array.head
+_ada = Maybe.fromMaybe 0 <<< Array.head <<< _Value <<< prop (SProxy :: SProxy "getValue") 
 
 data Action
   = Action
