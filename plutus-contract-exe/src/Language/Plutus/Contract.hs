@@ -44,14 +44,14 @@ import qualified Data.Aeson   as Aeson
 import           Data.Text    (Text)
 import           GHC.Generics (Generic)
 
-import qualified Ledger.Types as T
+import qualified Ledger       as L
 import           Ledger.Value as V
 
 -- | An unsigned and potentially unbalanced transaction, as returned by
 --   a contract endpoint.
 data UnbalancedTx = UnbalancedTx
-        { utxInputs  :: [T.TxIn]
-        , utxOutputs :: [T.TxOut]
+        { utxInputs  :: [L.TxIn]
+        , utxOutputs :: [L.TxOut]
         , utxForge   :: V.Value
         }
 
@@ -59,7 +59,7 @@ data UnbalancedTx = UnbalancedTx
         deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 -- | Make an unbalanced transaction that does not forge any value.
-mkUnbalancedTx :: [T.TxIn] -> [T.TxOut] -> UnbalancedTx
+mkUnbalancedTx :: [L.TxIn] -> [L.TxOut] -> UnbalancedTx
 mkUnbalancedTx ins outs = UnbalancedTx ins outs V.zero
 
 {- note [Unbalanced transactions]
@@ -120,7 +120,7 @@ data ContractOut =
       SubmitTransaction UnbalancedTx
       -- ^ Produce an 'UnbalancedTx'. See note [Unbalanced transactions]
 
-      | StartWatching T.Address
+      | StartWatching L.Address
       -- ^ Start watching an address. This adds the address to the set of
       -- "interesting addresses" of this contract instance.
 
@@ -139,24 +139,24 @@ data ContractOut =
 
 -- | Events that inform the contract about changes to the ledger state.
 data LedgerUpdate =
-    OutputSpent T.TxOutRef T.Tx
+    OutputSpent L.TxOutRef L.Tx
     -- ^ An output from one of the interesting addresses was spent. Includes
     --   the transaction that spent the output.
-    --   The transaction *spends* the UTXO referenced by 'T.TxOutRef'.
+    --   The transaction *spends* the UTXO referenced by 'L.TxOutRef'.
 
-    | OutputAdded T.TxOutRef T.Tx
+    | OutputAdded L.TxOutRef L.Tx
     -- ^ An output was produced to one of the interesting addresses.
-    --   The transaction *produces* the UTXO referenced by 'T.TxOutRef'
+    --   The transaction *produces* the UTXO referenced by 'L.TxOutRef'
 
     -- NOTE: A transaction that spends an output from an interesting address and
     --       produces a new output to that address will trigger two events:
-    --       'OutputSpent' and 'OutputAdded' (with the same 'T.Tx'
-    --       argument but with different 'T.TxOutRef' arguments).
+    --       'OutputSpent' and 'OutputAdded' (with the same 'L.Tx'
+    --       argument but with different 'L.TxOutRef' arguments).
     --
     --       TODO: Does it make sense to have a 3rd event type for this
     --       situation?
 
-    | SlotChange T.Slot
+    | SlotChange L.Slot
     -- ^ The current slot has changed.
 
     deriving stock (Eq, Ord, Show, Generic)
