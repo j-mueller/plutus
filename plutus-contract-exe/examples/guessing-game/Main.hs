@@ -23,9 +23,9 @@ import           Language.Plutus.Contract                      (ContractOut (Con
                                                                 LedgerUpdate (OutputAdded, OutputSpent), mkUnbalancedTx)
 import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress, gameDataScript, gameRedeemerScript,
                                                                 gameValidator)
+import qualified Ledger                                        as L
 import           Ledger.Ada                                    (Ada)
 import qualified Ledger.Ada                                    as Ada
-import qualified Ledger                                        as L
 import qualified Wallet.Emulator.AddressMap                    as AM
 
 -- | Parameters for the "lock" endpoint
