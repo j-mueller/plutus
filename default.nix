@@ -228,8 +228,8 @@ let
     plutus-contract-exe = rec {
       static = pkgs.haskell.lib.justStaticExecutables;
 
-      pid1 =  static haskellPackages.pid1;
-      contract = static haskellPackages.plutus-contract-exe;
+      pid1 =  haskellPackages.pid1;
+      contract = haskellPackages.plutus-contract-exe;
 
       docker = pkgs.dockerTools.buildImage {
           name = "plutus-contract-exe";
