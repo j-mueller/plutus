@@ -46,7 +46,9 @@ let
     docs = lib.mapAttrs (_: _: linux) packageSet.docs;  
     tests = lib.mapAttrs (_: _: supportedSystems) packageSet.tests;  
     dev.packages = lib.mapAttrs (_: _: supportedSystems) packageSet.dev.packages;  
-    dev.scripts = lib.mapAttrs (_: _: supportedSystems) packageSet.dev.scripts;  
+    dev.scripts = lib.mapAttrs (_: _: supportedSystems) packageSet.dev.scripts; 
+
+    plutus-contract-exe = lib.mapAttrs (_: _: supportedSystems)  packageSet.plutus-contract-exe;
   }; 
   
   testJobsets = mapTestOn systemMapping;
