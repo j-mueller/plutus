@@ -41,7 +41,7 @@ let
     # At least the client is broken on darwin for some yarn reason
     meadow = lib.mapAttrs (_: _: linux) 
         # don't build the docker image on hydra
-        (lib.filterAttrs (n: v: n != "docker") packageSet.meadow);  
+        (lib.filterAttrs (n: v: n != "docker") packageSet.meadow);
     # texlive is broken on darwin at our nixpkgs pin
     docs = lib.mapAttrs (_: _: linux) packageSet.docs;  
     tests = lib.mapAttrs (_: _: supportedSystems) packageSet.tests;  
@@ -63,6 +63,7 @@ in lib.fix (jobsets: testJobsets // {
       ++ (allJobs jobsets.docs) 
       ++ (allJobs jobsets.plutus-playground)
       ++ (allJobs jobsets.meadow)
-      ++ (allJobs jobsets.dev.scripts);
+      ++ (allJobs jobsets.dev.scripts)
+      ++ (allJobs jobsets.plutus-contract-exe);
   });
 })
