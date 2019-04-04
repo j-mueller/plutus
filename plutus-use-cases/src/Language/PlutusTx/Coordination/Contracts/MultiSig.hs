@@ -21,7 +21,6 @@ import qualified Data.Map                     as Map
 import qualified Data.Set                     as Set
 import           Data.Foldable                (fold)
 import qualified Ledger.Ada                   as Ada
-import qualified Ledger.Crypto                as Crypto
 import qualified Ledger.Value                 as Value
 import qualified Language.PlutusTx            as P
 import           Ledger                       as Ledger hiding (initialise, to)
