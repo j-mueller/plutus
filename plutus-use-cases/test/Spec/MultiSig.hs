@@ -22,7 +22,7 @@ tests = testGroup "multisig" [
 nOutOfFiveTest :: Int -> HUnit.Assertion
 nOutOfFiveTest i = do
     let initialState = EM.emulatorStateInitialDist (Map.singleton (EM.walletPubKey (EM.Wallet 1)) (Ada.adaValueOf 10))
-        (result, _) = EM.runEmulator initialState (MS.threeOutOfFive i)
+        (result, _) = EM.runEmulator initialState (threeOutOfFive i)
         isOk = if i < 3 then isLeft result else isRight result
     HUnit.assertBool "transaction failed to validate" isOk
 
