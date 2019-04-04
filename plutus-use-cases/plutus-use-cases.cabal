@@ -71,7 +71,8 @@ test-suite plutus-use-cases-test
         wallet-api -any,
         plutus-use-cases,
         plutus-tx -any,
-        template-haskell -any
+        template-haskell -any,
+        lens -any
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
