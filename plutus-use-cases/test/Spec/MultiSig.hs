@@ -9,6 +9,7 @@ import           Test.Tasty
 import qualified Test.Tasty.HUnit                                  as HUnit
 
 import           Language.PlutusTx.Coordination.Contracts.MultiSig as MS
+import           Ledger                                            (PrivateKey, PubKey, Tx)
 import qualified Ledger.Ada                                        as Ada
 import qualified Ledger.Crypto                                     as Crypto
 import qualified Wallet.Emulator                                   as EM
