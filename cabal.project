@@ -37,6 +37,9 @@ program-options
   alex-options: -g
   happy-options: -gcsa
 
+package cardano-crypto
+  flags: -bench
+
 source-repository-package
   type: git
   location: https://github.com/shmish111/servant-purescript.git
