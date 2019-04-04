@@ -38,7 +38,7 @@ program-options
   happy-options: -gcsa
 
 package cardano-crypto
-  flags: -bench
+  benchmarks: False
 
 source-repository-package
   type: git
