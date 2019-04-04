@@ -323,7 +323,7 @@ newtype AssertionError = AssertionError T.Text
 data Event n a where
     -- | An direct action performed by a wallet. Usually represents a "user action", as it is
     -- triggered externally.
-    WalletAction :: Wallet -> n () -> Event n [Tx]
+    WalletAction :: Wallet -> n a -> Event n ([Tx], Either WalletAPIError a)
     -- | A wallet receiving some notifications, and reacting to them.
     WalletRecvNotification :: Wallet -> [Notification] -> Event n [Tx]
     -- | The blockchain processing pending transactions, producing a new block
@@ -331,7 +331,6 @@ data Event n a where
     BlockchainProcessPending :: Event n Block
     -- | An assertion in the event stream, which can inspect the current state.
     Assertion :: Assertion -> Event n ()
-
 
 -- Program is like Free, except it makes the Functor for us so we can have a nice GADT
 -- | A series of 'Event's.
@@ -457,7 +456,7 @@ evalEmulated = \case
     WalletAction wallet action -> do
         (txns, result) <- liftMockWallet wallet action
         case result of
-            Right _ -> pure txns
+            Right a -> pure (txns, a)
             Left err -> do
                 _ <- modifying emulatorLog (WalletError wallet err :)
                 pure txns
@@ -533,7 +532,7 @@ processEmulated :: (MonadEmulator m) => Trace MockWallet a -> m a
 processEmulated = interpretWithMonad evalEmulated
 
 -- | Perform a wallet action as the given 'Wallet'.
-walletAction :: Wallet -> m () -> Trace m [Tx]
+walletAction :: Wallet -> m a -> Trace m ([Tx], a)
 walletAction w = Op.singleton . WalletAction w
 
 -- | Notify the given 'Wallet' of some blockchain events.
