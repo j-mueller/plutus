@@ -41,6 +41,7 @@ library
     Language.PlutusTx.Coordination.Contracts.CrowdFunding
     Language.PlutusTx.Coordination.Contracts.Future
     Language.PlutusTx.Coordination.Contracts.Game
+    Language.PlutusTx.Coordination.Contracts.MultiSig
     Language.PlutusTx.Coordination.Contracts.Vesting
     Language.PlutusTx.Coordination.Contracts.Swap
   ghc-options:
@@ -57,6 +58,7 @@ test-suite plutus-use-cases-test
       Spec.Crowdfunding
       Spec.Future
       Spec.Game
+      Spec.MultiSig
       Spec.Vesting
     build-depends:
         base >=4.9 && <5,
