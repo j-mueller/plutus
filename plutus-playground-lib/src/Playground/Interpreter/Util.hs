@@ -47,8 +47,7 @@ runTrace wallets actions =
             Right actions' ->
                 let notifyAll =
                         processPending >>=
-                        walletsNotifyBlock (Wallet <$> [1 .. length wallets])
-                        --walletsNotifyBlock (simulatorWalletWallet <$> wallets)
+                        walletsNotifyBlock (simulatorWalletWallet <$> wallets)
                     action = notifyAll >> sequence actions'
                     (initialTx, _) =
                         Gen.genInitialTransaction $
