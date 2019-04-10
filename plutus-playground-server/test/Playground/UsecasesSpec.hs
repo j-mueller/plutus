@@ -24,7 +24,7 @@ import           Playground.API               (CompilationResult (CompilationRes
                                                Expression (Action, Wait), Fn (Fn), FunctionSchema (FunctionSchema),
                                                KnownCurrency (KnownCurrency), PlaygroundError,
                                                SimpleArgumentSchema (SimpleArraySchema, SimpleIntSchema, SimpleObjectSchema, SimpleStringSchema, SimpleTupleSchema, ValueSchema),
-                                               SimulatorWallet (SimulatorWallet), TokenId (TokenId), argumentSchema,
+                                               SimulatorWallet (SimulatorWallet), TokenId (TokenId), adaCurrency, argumentSchema,
                                                functionName, isSupportedByFrontend, simulatorWalletBalance,
                                                simulatorWalletWallet)
 import qualified Playground.Interpreter       as PI
@@ -446,8 +446,8 @@ knownCurrencySpec =
             , "myCurrency = KnownCurrency (ValidatorHash \"\") \"MyCurrency\" (TokenId \"MyToken\" :| [])"
             , "$(mkKnownCurrencies ['myCurrency])"
             ]
-    hasKnownCurrency (Right (InterpreterResult _ (CompilationResult _ [KnownCurrency (ValidatorHash "") "MyCurrency" (TokenId "MyToken" :| [])]))) =
-        True
+    hasKnownCurrency (Right (InterpreterResult _ (CompilationResult _ [cur1, cur2]))) =
+        cur1 == adaCurrency && cur2 == KnownCurrency (ValidatorHash "") "MyCurrency" (TokenId "MyToken" :| [])
     hasKnownCurrency _ = False
 
 sourceCode :: BSC.ByteString -> SourceCode
