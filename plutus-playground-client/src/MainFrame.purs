@@ -93,7 +93,7 @@ mkInitialValue currencies initialBalance = Value { getValue: value }
                  map (\(TokenName tokenId) ->
                          LedgerMap [ (CurrencySymbol { unCurrencySymbol: hash })
                                      /\
-                                     LedgerMap [ TokenName { unTokenName: tokenId } /\ initialBalance ]])
+                                     LedgerMap [ TokenName tokenId /\ initialBalance ]])
                  $ Array.fromFoldable knownTokens)
         currencies
 
