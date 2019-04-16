@@ -211,12 +211,12 @@ vestingSpec =
             [ "vestingTranche1" .=
               object
                   [ "vestingTrancheDate" .= object ["getSlot" .= mkI 1]
-                  , "vestingTrancheAmount" .= object ["getAda" .= mkI 1]
+                  , "vestingTrancheAmount" .= JSON.toJSON (Ada.adaValueOf 1)
                   ]
             , "vestingTranche2" .=
               object
                   [ "vestingTrancheDate" .= object ["getSlot" .= mkI 1]
-                  , "vestingTrancheAmount" .= object ["getAda" .= mkI 1]
+                  , "vestingTrancheAmount" .= JSON.toJSON (Ada.adaValueOf 1)
                   ]
             , "vestingOwner" .= JSON.toJSON (walletPubKey w1)
             ]
@@ -297,7 +297,7 @@ gameSpec =
             , Action
                   (Fn "lock")
                   w2
-                  [twoAda]
+                  [JSON.String "\"abcde\"", twoAda]
             , Action (Fn "guess") w1 [JSON.String "\"ade\""]
             ]
             (sourceCode game)
@@ -313,7 +313,7 @@ gameSpec =
             , Action
                   (Fn "lock")
                   w2
-                  [twoAda]
+                  [JSON.String "\"abcde\"", twoAda]
             , Action (Fn "guess") w1 [JSON.String "\"abcde\""]
             ]
             (sourceCode game)
