@@ -62,7 +62,7 @@ data Vesting = Vesting {
 
 P.makeLift ''Vesting
 
--- | The total amount of Ada locked by a vesting scheme
+-- | The total value locked by a vesting scheme
 totalVested :: Vesting -> Value
 totalVested (Vesting l r _) = Value.plus (vestingTrancheAmount l) (vestingTrancheAmount r)
 
@@ -104,8 +104,8 @@ vestingValidator v = ValidatorScript val where
             -- at the contract address.
             ownHash = $$(V.ownHash) p
 
-            -- The total amount of Ada that has been vested:
-            totalAmount :: Ada
+            -- The total value that has been vested:
+            totalAmount :: Value
             totalAmount = $$(Value.TH.plus) a1 a2
 
             -- It will be useful to know the amount of money that has been 
@@ -118,7 +118,7 @@ vestingValidator v = ValidatorScript val where
             --
             -- We can think of 'd1' as an interval as well: It is 
             -- the open-ended interval starting with slot 'd1'. At any point 
-            -- during this interval we may take out up to 'a1' Ada.
+            -- during this interval we may take out up to a value of 'a1'.
             d1Intvl = $$(Interval.from) d1
 
             -- Likewise for 'd2'
@@ -162,7 +162,7 @@ vestingValidator v = ValidatorScript val where
 
             -- con1 is true if the amount that remains locked in the contract 
             -- is greater than or equal to 'unreleased'. We use the 
-            -- `adaLockedBy` function to get the amount of Ada paid by pending
+            -- `valueLockedBy` function to get the value paid by pending
             -- transaction 'p' to the script address 'ownHash'. 
             con1 :: Bool
             con1 = 
