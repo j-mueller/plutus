@@ -272,7 +272,7 @@ mkInitialValueTests =
                                       ] })
         (mkInitialValue
            [ KnownCurrency { hash: "", friendlyName: "Ada", knownTokens: pure (TokenName { unTokenName : "" }) }
-           , KnownCurrency { hash: "Currency", friendlyName: "Currencies", knownTokens: NonEmptyList ((TokenName { unTokenName: "USDToken" }) :| (Cons (TokenName { unTokenName:  "EURToken" }) Nil) }
+           , KnownCurrency { hash: "Currency", friendlyName: "Currencies", knownTokens: NonEmptyList ((TokenName { unTokenName: "USDToken" }) :| (Cons (TokenName { unTokenName:  "EURToken" }) Nil)) }
            ]
            10)
 
