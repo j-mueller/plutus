@@ -79,6 +79,11 @@ jsonHandlingTests = do
         assertEncodesTo
           aValue
           "test/value1.json"
+      test "Encode Ada." do
+        let aValue = Value { getValue: LedgerMap [ Tuple (CurrencySymbol { unCurrencySymbol: ""}) (LedgerMap [ Tuple (TokenName { unTokenName: "" }) 50 ])]}
+        assertEncodesTo
+          aValue
+          "test/value_ada.json"
       suite "Roundtrips" do
         testRoundTrip "CurrencySymbol" arbitraryCurrencySymbol
         testRoundTrip "TokenName" arbitraryTokenName
