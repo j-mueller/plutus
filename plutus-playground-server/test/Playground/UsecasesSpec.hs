@@ -401,7 +401,7 @@ crowdfundingSpec =
             , SimulatorWallet
                   {simulatorWalletWallet = w3, simulatorWalletBalance = ten}
             ]
-            [ Action (Fn "scheduleCollection") w1 [theCampaign]
+            [ Action (Fn "scheduleCollection") w1 [theDeadline, theTarget, theCollectionDeadline, theWallet]
             , Action (Fn "contribute") w2 [theDeadline, theTarget, theCollectionDeadline, theWallet, theContribution]
             , Wait 20
             ]
