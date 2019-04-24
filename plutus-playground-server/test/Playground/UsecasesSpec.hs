@@ -424,7 +424,7 @@ crowdfundingSpec =
             (sourceCode crowdfunding)
             []
     theDeadline = toJSONString (object ["getSlot" .= mkI 10])
-    theTarget   = toJSONString (Ada.adaValueOf 8)
+    theTarget   = toJSONString (Ada.adaValueOf 10)
     theCollectionDeadline = toJSONString (object ["getSlot" .= mkI 20])
     theWallet = toJSONString w1
     theContribution = toJSONString $ Ada.adaValueOf 8
