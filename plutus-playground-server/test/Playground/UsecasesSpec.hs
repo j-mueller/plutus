@@ -427,7 +427,7 @@ crowdfundingSpec =
     theTarget   = toJSONString (Ada.adaValueOf 8)
     theCollectionDeadline = toJSONString (object ["getSlot" .= mkI 20])
     theWallet = toJSONString w1
-    theContribution = toJSONString $ Ada.adaValueOf 10
+    theContribution = toJSONString $ Ada.adaValueOf 8
 
 knownCurrencySpec :: Spec
 knownCurrencySpec =
