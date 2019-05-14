@@ -14,11 +14,8 @@ module Ledger.Interval(
     , always
     ) where
 
-import           Data.Semigroup                           (Min(..), Max(..), Semigroup((<>)))
-
 import qualified Ledger.Interval.TH                       as TH
 import           Ledger.Interval.TH (Interval(..))
-import           Language.PlutusTx.Lift                   (makeLift)
 
 -- | An 'Interval' that covers every slot.
 always :: Interval a
