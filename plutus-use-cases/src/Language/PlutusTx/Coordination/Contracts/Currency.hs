@@ -23,6 +23,7 @@ import qualified Data.Text                 as Text
 import qualified Language.PlutusTx         as P
 
 import qualified Ledger.Ada                as Ada
+import qualified Ledger.Interval           as Interval
 import qualified Ledger.Map                as LMap
 import           Ledger.Scripts            (ValidatorScript(..))
 import qualified Ledger.Validation         as V
@@ -117,7 +118,7 @@ forge amounts = do
         theCurrency = mkCurrency (txInRef refTxIn) amounts
         curAddr     = Ledger.scriptAddress (curValidator theCurrency)
         forgedVal   = forgedValue theCurrency
-        oneOrMore   = WAPI.intervalFrom $ Ada.adaValueOf 1
+        oneOrMore   = Interval.from $ Ada.adaValueOf 1
 
         -- trg1 fires when 'refTxIn' can be spent by our forging transaction
         trg1 = fundsAtAddressT refAddr oneOrMore

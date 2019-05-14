@@ -25,6 +25,7 @@ import qualified Language.PlutusTx            as PlutusTx
 import qualified Language.PlutusTx.Prelude    as P
 import           Ledger                       hiding (to)
 import qualified Ledger.Ada                   as Ada
+import qualified Ledger.Interval              as Interval
 import           Ledger.Value                 (TokenName)
 import qualified Ledger.Value.TH              as V
 import qualified Ledger.Validation            as Validation
@@ -186,7 +187,7 @@ lock initialWord adaVl = do
 
     -- 2. Define a trigger that fires when the first transaction (1.) is
     --    placed on the chain.
-    let oneOrMore   = WAPI.intervalFrom $ Ada.adaValueOf 1
+    let oneOrMore   = Interval.from $ Ada.adaValueOf 1
         trg1        = fundsAtAddressT addr oneOrMore
 
     -- 3. Define a forge_ action that creates the token by and puts the contract

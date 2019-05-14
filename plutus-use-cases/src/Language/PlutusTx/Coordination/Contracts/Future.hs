@@ -31,13 +31,13 @@ import           GHC.Generics                 (Generic)
 import qualified Language.PlutusTx            as PlutusTx
 import           Ledger                       (DataScript (..), Slot(..), PubKey, TxOutRef, ValidatorScript (..), scriptTxIn, scriptTxOut)
 import qualified Ledger                       as Ledger
+import qualified Ledger.Interval              as Interval
 import qualified Ledger.Slot                  as Slot
 import           Ledger.Validation            (OracleValue (..), PendingTx (..), PendingTxIn(..), PendingTxOut (..),
                                               PendingTxOutType (..))
 import qualified Ledger.Validation            as Validation
 import qualified Ledger.Ada.TH                as Ada
 import           Ledger.Ada.TH                (Ada)
-import qualified Wallet                       as W
 import           Wallet                       (WalletAPI (..), WalletAPIError, throwOtherError, createTxAndSubmit, defaultSlotRange)
 
 import           Prelude                      hiding ((&&), (||))
@@ -115,7 +115,7 @@ settle refs ft fd ov = do
             Ledger.pubKeyTxOut shortOut (futureDataShort fd)
             ]
         inp = (\r -> scriptTxIn r (validatorScript ft) red) <$> refs
-        range = W.intervalFrom delDate
+        range = Interval.from delDate
     void $ createTxAndSubmit range (Set.fromList inp) outs
 
 -- | Settle the position early if a margin payment has been missed.

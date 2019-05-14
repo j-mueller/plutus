@@ -6,6 +6,7 @@
 -- this contract on the blockchain.
 import qualified Language.PlutusTx            as PlutusTx
 import qualified Ledger.Interval              as Interval
+import qualified Ledger.Interval.TH           as ITH
 import           Ledger.Slot                  (SlotRange)
 import qualified Ledger.Slot                  as Slot
 import qualified Language.PlutusTx.Prelude    as P
@@ -47,12 +48,12 @@ mkCampaign ddl target collectionDdl ownerWallet =
 -- | The 'SlotRange' during which the funds can be collected
 collectionRange :: Campaign -> SlotRange
 collectionRange cmp = 
-    W.interval (campaignDeadline cmp) (campaignCollectionDeadline cmp)
+    Interval.interval (campaignDeadline cmp) (campaignCollectionDeadline cmp)
 
 -- | The 'SlotRange' during which a refund may be claimed
 refundRange :: Campaign -> SlotRange
 refundRange cmp =
-    W.intervalFrom (campaignCollectionDeadline cmp)
+    Interval.from (campaignCollectionDeadline cmp)
 
 -- | Action that can be taken by the participants in this contract. A value of
 --   `CampaignAction` is provided as the redeemer. The validator script then
@@ -158,7 +159,7 @@ contribute deadline target collectionDeadline ownerWallet value = do
     let cmp = mkCampaign deadline target collectionDeadline ownerWallet
     ownPK <- ownPubKey
     let ds = DataScript (Ledger.lifted ownPK)
-        range = W.interval 1 (campaignDeadline cmp)
+        range = Interval.interval 1 (campaignDeadline cmp)
 
     -- `payToScript` is a function of the wallet API. It takes a campaign
     -- address, value, and data script, and generates a transaction that
@@ -193,13 +194,13 @@ scheduleCollection deadline target collectionDeadline ownerWallet = do
 -- | An event trigger that fires when a refund of campaign contributions can be claimed
 refundTrigger :: Value -> Campaign -> EventTrigger
 refundTrigger vl c = andT
-    (fundsAtAddressT (campaignAddress c) (W.intervalFrom vl))
+    (fundsAtAddressT (campaignAddress c) (Interval.from vl))
     (slotRangeT (refundRange c))
 
 -- | An event trigger that fires when the funds for a campaign can be collected
 collectFundsTrigger :: Campaign -> EventTrigger
 collectFundsTrigger c = andT
-    (fundsAtAddressT (campaignAddress c) (W.intervalFrom (campaignTarget c)))
+    (fundsAtAddressT (campaignAddress c) (Interval.from (campaignTarget c)))
     (slotRangeT (collectionRange c))
 
 -- | Claim a refund of our campaign contribution

@@ -27,6 +27,7 @@ import           Ledger.Ada                (Ada)
 import qualified Ledger.Ada                as Ada
 import qualified Ledger.Ada.TH             as ATH
 import qualified Ledger.Interval           as Interval
+import qualified Ledger.Interval.TH        as Interval.TH
 import qualified Ledger.Slot               as Slot
 import qualified Ledger.Validation         as V
 import qualified Ledger.Value              as Value
@@ -141,10 +142,10 @@ vestingValidator v = ValidatorScript val where
             -- We can think of 'd1' as an interval as well: It is 
             -- the open-ended interval starting with slot 'd1'. At any point 
             -- during this interval we may take out up to 'a1' Ada.
-            d1Intvl = $$(Interval.from) d1
+            d1Intvl = $$(Interval.TH.from) d1
 
             -- Likewise for 'd2'
-            d2Intvl = $$(Interval.from) d2
+            d2Intvl = $$(Interval.TH.from) d2
 
             -- Now we can compare the validity range 'range' against our two 
             -- intervals. If 'range' is completely contained in 'd1Intvl', then 
@@ -251,7 +252,7 @@ withdraw vst vl = do
 
     -- The transaction's validity range should begin with the current slot and 
     -- last indefinitely.
-    range <- fmap WAPI.intervalFrom WAPI.slot
+    range <- fmap Interval.from WAPI.slot
 
     -- The input should be the UTXO of the vesting scheme. We can get the 
     -- outputs at an address (as far as they are known by the wallet) with

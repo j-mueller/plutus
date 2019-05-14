@@ -27,10 +27,10 @@ import qualified Language.PlutusTx            as PlutusTx
 import           Ledger                       (DataScript (..), Slot(..), PubKey (..), TxOutRef, ValidatorScript (..), scriptTxIn, scriptTxOut)
 import qualified Ledger                       as Ledger
 import qualified Ledger.Interval              as Interval
+import qualified Ledger.Interval.TH           as ITH
 import qualified Ledger.Slot                  as Slot
 import qualified Ledger.Validation            as Validation
 import           Prelude                      hiding ((&&))
-import qualified Wallet                       as W
 import           Wallet                       (WalletAPI (..), WalletAPIError, throwOtherError, ownPubKeyTxOut, createTxAndSubmit, defaultSlotRange)
 import           Ledger.Ada                   (Ada)
 import qualified Ledger.Ada.TH                as Ada
@@ -106,7 +106,7 @@ retrieveFunds vs vd r anow = do
         remaining = $$(Ada.toValue) (totalAmount vs - anow)
         vd' = vd {vestingDataPaidOut = anow + vestingDataPaidOut vd }
         inp = scriptTxIn r val Ledger.unitRedeemer
-        range = W.intervalFrom currentSlot
+        range = Interval.from currentSlot
     _ <- createTxAndSubmit range (Set.singleton inp) [oo, o]
     pure vd'
 
@@ -147,8 +147,8 @@ validatorScript v = ValidatorScript val where
 
             -- Value that has been released so far under the scheme
             currentThreshold =
-                if $$(Slot.contains) ($$(Interval.from) d1) range
-                then if $$(Slot.contains) ($$(Interval.from) d2) range
+                if $$(Slot.contains) ($$(ITH.from) d1) range
+                then if $$(Slot.contains) ($$(ITH.from) d2) range
                     -- everything can be spent
                      then $$(Ada.plus) a1 a2
                      -- only the first tranche can be spent (we are between d1 and d2)

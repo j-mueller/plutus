@@ -212,13 +212,13 @@ refundHandler txid cmp = EventHandler (\_ -> do
     W.logMsg "Claiming refund"
     currentSlot <- W.slot
     let redeemer  = mkRedeemer Refund
-        range     = W.intervalFrom currentSlot
+        range     = Interval.from currentSlot
     W.collectFromScriptTxn range (mkValidatorScript cmp) redeemer txid)
 
 refundTrigger :: Campaign -> EventTrigger
 refundTrigger c = W.andT
-    (W.fundsAtAddressT (campaignAddress c) (W.intervalFrom ($$(Ada.toValue) 1)))
-    (W.slotRangeT (W.intervalFrom (collectionDeadline c)))
+    (W.fundsAtAddressT (campaignAddress c) (Interval.from ($$(Ada.toValue) 1)))
+    (W.slotRangeT (Interval.from (collectionDeadline c)))
 
 contribute :: MonadWallet m => Campaign -> Ada -> m ()
 contribute cmp adaAmount = do
@@ -248,23 +248,23 @@ contribute cmp adaAmount = do
 -}
 mkCollectTrigger :: Address -> Slot -> Ada -> EventTrigger
 mkCollectTrigger addr sl target = W.andT
-    -- We use `W.intervalFrom` to create an open-ended interval that starts 
+    -- We use `Interval.from` to create an open-ended interval that starts 
     -- at the funding target.
-    (W.fundsAtAddressT addr (W.intervalFrom ($$(Ada.toValue) target)))
-    -- With `W.intervalTo` we create an interval from now to the target slot 'sl'
-    (W.slotRangeT (W.intervalTo sl))
+    (W.fundsAtAddressT addr (Interval.from ($$(Ada.toValue) target)))
+    -- With `Interval.to` we create an interval from now to the target slot 'sl'
+    (W.slotRangeT (Interval.to sl))
 
 {- 
     Each '(Slot, Ada)' entry in 'fundingTargets' also gets its own handler. In 
     the handler we create a transaction that must be validated before the slot,
-    using 'W.interval'
+    using 'Interval.interval'
 -}
 collectionHandler :: MonadWallet m => Campaign -> Slot -> EventHandler m
 collectionHandler cmp targetSlot = EventHandler (\_ -> do
     W.logMsg "Collecting funds"
     currentSlot <- W.slot
     let redeemerScript = mkRedeemer Collect
-        range          = W.interval currentSlot targetSlot
+        range          = Interval.interval currentSlot targetSlot
     W.collectFromScript range (mkValidatorScript cmp) redeemerScript)
 
 scheduleCollection :: MonadWallet m => Campaign -> m ()

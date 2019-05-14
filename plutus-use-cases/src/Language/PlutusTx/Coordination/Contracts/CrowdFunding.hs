@@ -25,6 +25,7 @@ module Language.PlutusTx.Coordination.Contracts.CrowdFunding (
 
 import qualified Language.PlutusTx           as PlutusTx
 import qualified Ledger.Interval             as Interval
+import qualified Ledger.Interval.TH          as Interval.TH
 import           Ledger.Slot                 (SlotRange)
 import qualified Ledger.Slot                 as Slot
 import qualified Language.PlutusTx.Prelude   as P
@@ -32,7 +33,7 @@ import           Ledger
 import           Ledger.Validation           as V
 import           Ledger.Value                (Value)
 import qualified Ledger.Value.TH             as VTH
-import           Wallet                      as W
+import           Wallet
 import qualified Wallet.Emulator             as EM
 import           Wallet.Emulator             (Wallet)
 
@@ -68,12 +69,12 @@ mkCampaign ddl target collectionDdl ownerWallet =
 -- | The 'SlotRange' during which the funds can be collected
 collectionRange :: Campaign -> SlotRange
 collectionRange cmp = 
-    W.interval (campaignDeadline cmp) (campaignCollectionDeadline cmp)
+    Interval.interval (campaignDeadline cmp) (campaignCollectionDeadline cmp)
 
 -- | The 'SlotRange' during which a refund may be claimed
 refundRange :: Campaign -> SlotRange
 refundRange cmp =
-    W.intervalFrom (campaignCollectionDeadline cmp)
+    Interval.from (campaignCollectionDeadline cmp)
 
 -- | Action that can be taken by the participants in this contract. A value of
 --   `CampaignAction` is provided as the redeemer. The validator script then
@@ -104,10 +105,10 @@ contributionScript cmp  = ValidatorScript val where
                 PendingTx ps outs _ _ _ range _ _ = p
 
                 collRange :: SlotRange
-                collRange = $$(Interval.interval) campaignDeadline campaignCollectionDeadline
+                collRange = $$(Interval.TH.interval) campaignDeadline campaignCollectionDeadline
     
                 refndRange :: SlotRange
-                refndRange = $$(Interval.from) campaignCollectionDeadline
+                refndRange = $$(Interval.TH.from) campaignCollectionDeadline
 
                 totalInputs :: Value
                 totalInputs =
@@ -151,7 +152,7 @@ contribute deadline target collectionDeadline ownerWallet contribution = do
     let cmp = mkCampaign deadline target collectionDeadline ownerWallet
     ownPK <- ownPubKey
     let ds = DataScript (Ledger.lifted ownPK)
-        range = W.interval 1 (campaignDeadline cmp)
+        range = Interval.interval 1 (campaignDeadline cmp)
     tx <- payToScript range (campaignAddress cmp) contribution ds
     logMsg "Submitted contribution"
 
@@ -172,13 +173,13 @@ scheduleCollection deadline target collectionDeadline ownerWallet = do
 -- | An event trigger that fires when a refund of campaign contributions can be claimed
 refundTrigger :: Value -> Campaign -> EventTrigger
 refundTrigger vl c = andT
-    (fundsAtAddressT (campaignAddress c) (W.intervalFrom vl))
+    (fundsAtAddressT (campaignAddress c) (Interval.from vl))
     (slotRangeT (refundRange c))
 
 -- | An event trigger that fires when the funds for a campaign can be collected
 collectFundsTrigger :: Campaign -> EventTrigger
 collectFundsTrigger c = andT
-    (fundsAtAddressT (campaignAddress c) (W.intervalFrom (campaignTarget c)))
+    (fundsAtAddressT (campaignAddress c) (Interval.from (campaignTarget c)))
     (slotRangeT (collectionRange c))
 
 -- | Claim a refund of our campaign contribution

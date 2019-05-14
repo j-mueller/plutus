@@ -67,6 +67,7 @@ library
         Ledger.Validation,
         Ledger.Index,
         Ledger.Interval,
+        Ledger.Interval.TH,
         Ledger.Value,
         Ledger.Value.TH,
         LedgerBytes
@@ -114,6 +115,7 @@ library plutus-ledger
         Ledger.Validation
         Ledger.Index
         Ledger.Interval
+        Ledger.Interval.TH
         Ledger.Value
         Ledger.Value.TH
         LedgerBytes

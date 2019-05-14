@@ -1,8 +1,5 @@
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE RecordWildCards  #-}
-{-# LANGUAGE TemplateHaskell  #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE OverloadedStrings #-}
 -- | Generators for constructing blockchains and transactions for use in property-based testing.
 module Wallet.Generators(
     -- * Mockchain
@@ -33,26 +30,25 @@ module Wallet.Generators(
     signAll
     ) where
 
-import           Data.Bifunctor  (Bifunctor (..))
-import qualified Data.ByteString.Lazy as BSL
-import           Data.Foldable   (fold, foldl')
-import           Data.Map        (Map)
-import qualified Data.Map        as Map
-import           Data.Maybe      (catMaybes, isNothing)
-import           Data.Set        (Set)
-import qualified Data.Set        as Set
-import           GHC.Stack       (HasCallStack)
+import           Data.Bifunctor            (Bifunctor (..))
+import qualified Data.ByteString.Lazy      as BSL
+import           Data.Foldable             (fold, foldl')
+import           Data.Map                  (Map)
+import qualified Data.Map                  as Map
+import           Data.Maybe                (catMaybes, isNothing)
+import           Data.Set                  (Set)
+import qualified Data.Set                  as Set
+import           GHC.Stack                 (HasCallStack)
 import           Hedgehog
-import qualified Hedgehog.Gen    as Gen
-import qualified Hedgehog.Range  as Range
-import qualified Language.PlutusTx.Prelude    as P
-import qualified Ledger.Ada      as Ada
-import qualified Ledger.Index    as Index
-import qualified Ledger.Interval as Interval
-import qualified Ledger.Value    as Value
+import qualified Hedgehog.Gen              as Gen
+import qualified Hedgehog.Range            as Range
+import qualified Language.PlutusTx.Prelude as P
+import qualified Ledger.Ada                as Ada
+import qualified Ledger.Index              as Index
+import qualified Ledger.Interval           as Interval
+import qualified Ledger.Value              as Value
 
 import           Ledger
-import qualified Wallet.API      as W
 
 -- | Attach signatures of all known private keys to a transaction.
 signAll :: Tx -> Tx
@@ -132,7 +128,7 @@ genInitialTransaction GeneratorModel{..} =
         txOutputs = o,
         txForge = t,
         txFee = 0,
-        txValidRange = W.intervalFrom 0,
+        txValidRange = Interval.from 0,
         txSignatures = Map.empty
         }, o)
 
@@ -162,7 +158,7 @@ genValidTransaction' g f (Mockchain bc ops) = do
                     <$> (catMaybes
                         $ traverse (pubKeyTxo [bc]) . (di . fst) <$> inUTXO)
         inUTXO = take nUtxo $ Map.toList ops
-        totalVal = foldl' (+) 0 $ (map (Ada.fromValue . txOutValue . snd) inUTXO)
+        totalVal = foldl' (+) 0 (map (Ada.fromValue . txOutValue . snd) inUTXO)
         di a = (a, a)
     genValidTransactionSpending' g f ins totalVal
 
@@ -190,7 +186,7 @@ genValidTransactionSpending' g f ins totalVal = do
                         , txOutputs = uncurry pubKeyTxOut <$> zip outVals (Set.toList $ gmPubKeys g)
                         , txForge = Value.zero
                         , txFee = fee
-                        , txValidRange = $$(Interval.always)
+                        , txValidRange = Interval.always
                         , txSignatures = Map.empty
                         }
 
@@ -220,13 +216,13 @@ genValue' valueRange = do
         -- currency symbol is either a validator hash (bytestring of length 32)
         -- or the ada symbol (empty bytestring).
         currency = Gen.choice
-                    [ Value.currencySymbol <$> (genSizedByteStringExact 32)
+                    [ Value.currencySymbol <$> genSizedByteStringExact 32
                     , pure Ada.adaSymbol
                     ]
 
         -- token is either an arbitrary bytestring or the ada token name
         token   = Gen.choice
-                    [ Value.tokenName <$> (genSizedByteString 32)
+                    [ Value.tokenName <$> genSizedByteString 32
                     , pure Ada.adaToken
                     ]
         sngl      = Value.singleton <$> currency <*> token <*> Gen.int valueRange

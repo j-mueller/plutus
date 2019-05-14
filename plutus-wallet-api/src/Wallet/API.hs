@@ -36,12 +36,8 @@ module Wallet.API(
     Interval(..),
     SlotRange,
     defaultSlotRange,
-    interval,
-    intervalFrom,
-    intervalTo,
     singleton,
     empty,
-    always,
     member,
     width,
     before,
@@ -453,19 +449,7 @@ signTxAndSubmit_ = void . signTxAndSubmit
 
 -- | The default slot validity range for transactions.
 defaultSlotRange :: SlotRange
-defaultSlotRange = always
-
--- | See 'Interval.interval'.
-interval :: a -> a -> Interval a
-interval = $$(Interval.interval)
-
--- | See 'Interval.from'.
-intervalFrom :: a -> Interval a
-intervalFrom = $$(Interval.from)
-
--- | See 'Interval.to'.
-intervalTo :: a -> Interval a
-intervalTo = $$(Interval.to)
+defaultSlotRange = Interval.always
 
 -- | See 'Slot.singleton'.
 singleton :: Slot -> SlotRange
@@ -474,10 +458,6 @@ singleton = $$(Slot.singleton)
 -- | See 'Slot.empty'.
 empty :: SlotRange -> Bool
 empty = $$(Slot.empty)
-
--- | See 'Interval.always'.
-always :: Interval a
-always = $$(Interval.always)
 
 -- | See 'Slot.width'.
 width :: SlotRange -> Maybe Int
