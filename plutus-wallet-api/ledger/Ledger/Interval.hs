@@ -17,6 +17,7 @@ module Ledger.Interval(
 import           Codec.Serialise.Class                    (Serialise)
 import           Data.Aeson                               (FromJSON, ToJSON)
 import           Data.Swagger.Internal.Schema             (ToSchema)
+import           Data.Semigroup                           (Min(..), Max(..), Semigroup((<>)))
 import           GHC.Generics                             (Generic)
 import           Language.Haskell.TH
 
@@ -32,6 +33,11 @@ data Interval a = Interval { ivFrom :: Maybe a, ivTo :: Maybe a }
     deriving anyclass (ToSchema, FromJSON, ToJSON, Serialise)
 
 makeLift ''Interval
+
+instance Ord a => Semigroup (Interval a) where
+    l <> r = Interval fr t where
+        fr = fmap getMin $ (Min <$> ivFrom l) <> (Min <$> ivFrom r)
+        t = fmap getMax $ (Max <$> ivTo l) <> (Max <$> ivTo r)
 
 {- note [Definition of Interval]
 
