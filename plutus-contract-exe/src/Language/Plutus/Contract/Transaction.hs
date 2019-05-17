@@ -6,7 +6,6 @@ module Language.Plutus.Contract.Transaction(
     , unbalancedTx
     ) where
 
-
 import qualified Data.Aeson   as Aeson
 import           GHC.Generics (Generic)
 
@@ -31,7 +30,6 @@ data UnbalancedTx = UnbalancedTx
 -- | Make an unbalanced transaction that does not forge any value.
 unbalancedTx :: [L.TxIn] -> [L.TxOut] -> UnbalancedTx
 unbalancedTx ins outs = UnbalancedTx ins outs V.zero [] I.always
-
 
 {- note [Unbalanced transactions]
 
