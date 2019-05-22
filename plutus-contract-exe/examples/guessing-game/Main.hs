@@ -15,7 +15,7 @@ import           Data.Maybe                                    (fromMaybe)
 import           GHC.Generics                                  (Generic)
 import           Network.Wai.Handler.Warp                      (run)
 
-import           Language.Plutus.Contract                      (PlutusContract, emit, endpoint, watchAddress)
+import           Language.Plutus.Contract                      (PlutusContract, writeTx, endpoint, watchAddress)
 import           Language.Plutus.Contract.Servant              (contractApp)
 import           Language.Plutus.Contract.Transaction          (unbalancedTx)
 import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress, gameDataScript, gameRedeemerScript,
@@ -64,7 +64,7 @@ guess = do
     redeemer = gameRedeemerScript theGuess
     inp      = (\o -> L.scriptTxIn o gameValidator redeemer) <$> outputs
     tx       = unbalancedTx inp []
-  emit tx
+  writeTx tx
 
 lock :: PlutusContract ()
 lock = do
@@ -74,7 +74,7 @@ lock = do
     dataScript = gameDataScript secret
     output = L.TxOutOf gameAddress vl (L.PayToScript dataScript)
     tx     = unbalancedTx [] [output]
-  emit tx
+  writeTx tx
 
 game :: PlutusContract ()
 game = guess <> lock
