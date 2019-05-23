@@ -12,6 +12,9 @@ module Language.Plutus.Contract.Contract(
     , await
     , result
     , loopM
+    , firstOf
+    , select
+    , both
     ) where
 
 import           Control.Applicative (liftA2)
@@ -47,6 +50,21 @@ instance Monad (Contract i o) where
 
 instance Semigroup a => Semigroup (Contract i o a) where
     (<>) = liftA2 (<>)
+
+-- | Run both contracts and return the first one that finishes
+select :: Contract i o a -> Contract i o a -> Contract i o a
+select l r = 
+    case l of
+        Pure a -> Pure a
+        Emit _ c -> select c r
+        Waiting f -> 
+            go r where
+                go = \case
+                    Pure a -> Pure a
+                    Emit _ c -> go c
+                    Waiting f' -> 
+                        Waiting $ \i -> select (f i) (f' i)
+
 
 emit :: o -> Contract i o ()
 emit t = Emit t (pure ())
@@ -104,3 +122,9 @@ await a f = do
     case f i of
         Nothing -> await a f
         Just i' -> pure i'
+
+both :: Contract i o a -> Contract i o b -> Contract i o (a, b)
+both = liftA2 (,)
+
+firstOf :: Contract i o a -> Contract i o b -> Contract i o (Either a b)
+firstOf l r = select (Left <$> l) (Right <$> r)
