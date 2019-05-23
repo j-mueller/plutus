@@ -6,9 +6,14 @@ module Language.Plutus.Contract(
     , writeTx
     , fundsAtAddressGt
     , emit
+    , slotGeq
+    , firstOf
+    , select
+    , both
+    , until
     ) where
 
-import           Control.Lens
+import           Control.Lens                         hiding (both, firstOf)
 import           Control.Monad                        ((>=>))
 import           Data.Aeson                           (FromJSON)
 import qualified Data.Aeson                           as Aeson
@@ -20,9 +25,12 @@ import           Language.Plutus.Contract.Transaction as Transaction
 
 import           Ledger.AddressMap                    (AddressMap)
 import qualified Ledger.AddressMap                    as AM
+import           Ledger.Slot                          (Slot)
 import           Ledger.Tx                            (Address, Tx)
 import           Ledger.Value                         (Value)
 import qualified Ledger.Value                         as V
+
+import           Prelude                              hiding (until)
 
 type PlutusContract a = Contract Event Step a
 
@@ -59,3 +67,14 @@ fundsAtAddressGt addr' vl = loopM go mempty where
             presentVal = fromMaybe mempty (AM.values cur' ^. at addr')
         if presentVal `V.gt` vl
         then pure (Left cur') else pure (Right cur')
+
+-- | Wait until a slot number has been reached
+slotGeq :: Slot -> PlutusContract Slot
+slotGeq sl = await (Event.slot sl) (slotChange >=> go) where
+    go sl'
+        | sl' >= sl = Just sl'
+        | otherwise = Nothing
+
+-- | Run a contract until the given slot has been reached.
+until :: PlutusContract a -> Slot -> PlutusContract (Maybe a)
+until c sl = fmap (either (const Nothing) Just) (firstOf (slotGeq sl) c)

@@ -8,8 +8,9 @@ module Main where
 import           Control.Lens                                          ((&), (.~))
 import           Network.Wai.Handler.Warp                              (run)
 
-import           Language.Plutus.Contract                              (PlutusContract, endpoint, fundsAtAddressGt,
-                                                                        writeTx)
+import           Language.Plutus.Contract                              (PlutusContract, both, endpoint,
+                                                                        fundsAtAddressGt, slotGeq, writeTx)
+import qualified Language.Plutus.Contract                              as C
 import           Language.Plutus.Contract.Servant                      (contractApp)
 import           Language.Plutus.Contract.Transaction                  (payToScript, validityRange)
 import           Language.PlutusTx.Coordination.Contracts.CrowdFunding (Campaign (..))
@@ -47,5 +48,10 @@ contribute cmp = do
 scheduleCollection :: Campaign -> PlutusContract ()
 scheduleCollection cmp = do
     () <- endpoint "schedule collection"
-    inputs <- fundsAtAddressGt (CF.campaignAddress cmp) (campaignTarget cmp)
-    pure ()
+    let trg = fst <$> both
+                (fundsAtAddressGt (CF.campaignAddress cmp) (campaignTarget cmp) )
+                (slotGeq (CF.campaignDeadline cmp))
+    result <- trg `C.until` CF.campaignCollectionDeadline cmp
+    case result of
+        Nothing     -> pure ()
+        Just inputs -> pure () -- TODO: Produce the collecting transaction
