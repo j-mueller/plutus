@@ -24,7 +24,7 @@ import           Ledger.Tx                            (Address, Tx)
 import           Ledger.Value                         (Value)
 import qualified Ledger.Value                         as V
 
-type PlutusContract a = Contract Step Event a
+type PlutusContract a = Contract Event Step a
 
 -- | Watch an 'Address', returning the next transaction that changes it
 watchAddress :: Address -> PlutusContract Tx
