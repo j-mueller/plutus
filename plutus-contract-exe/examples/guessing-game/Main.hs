@@ -56,25 +56,25 @@ initialState = GameState mempty
 
 guess :: PlutusContract ()
 guess = do
-  st <- watchAddress gameAddress
-  let mp = AM.fromTxOutputs st
-  GuessParams theGuess <- endpoint "guess"
-  let
-    outputs  = fmap fst . Map.toList . fromMaybe Map.empty $ mp ^. at gameAddress
-    redeemer = gameRedeemerScript theGuess
-    inp      = (\o -> L.scriptTxIn o gameValidator redeemer) <$> outputs
-    tx       = unbalancedTx inp []
-  writeTx tx
+    st <- watchAddress gameAddress
+    let mp = AM.fromTxOutputs st
+    GuessParams theGuess <- endpoint "guess"
+    let
+        outputs  = fmap fst . Map.toList . fromMaybe Map.empty $ mp ^. at gameAddress
+        redeemer = gameRedeemerScript theGuess
+        inp      = (\o -> L.scriptTxIn o gameValidator redeemer) <$> outputs
+        tx       = unbalancedTx inp []
+    writeTx tx
 
 lock :: PlutusContract ()
 lock = do
-  LockParams secret amt <- endpoint "lock"
-  let
-    vl         = Ada.toValue amt
-    dataScript = gameDataScript secret
-    output = L.TxOutOf gameAddress vl (L.PayToScript dataScript)
-    tx     = unbalancedTx [] [output]
-  writeTx tx
+    LockParams secret amt <- endpoint "lock"
+    let
+        vl         = Ada.toValue amt
+        dataScript = gameDataScript secret
+        output = L.TxOutOf gameAddress vl (L.PayToScript dataScript)
+        tx     = unbalancedTx [] [output]
+    writeTx tx
 
 game :: PlutusContract ()
 game = guess <> lock
