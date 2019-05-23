@@ -3,14 +3,12 @@
 {-# LANGUAGE TypeFamilies      #-}
 module Language.Plutus.Contract.Contract(
       Contract
-    , done
     , emit
     , waiting
     , applyInput
     , applyInputs
     , drain
     , outputs
-    , isDone
     , await
     , result
     , loopM
@@ -21,46 +19,39 @@ import           Control.Monad       ((>=>))
 import           Data.Bifunctor      (first)
 import           Data.List           (foldl')
 
-data Contract t i a =
-    Waiting (i -> Contract t i a)
-    | Done
-    | Emit t (Contract t i a) -- produce a 't' value
+data Contract i o a =
+    Waiting (i -> Contract i o a)
+    | Emit o (Contract i o a) -- produce a 't' value
     | Pure a
     deriving (Functor)
 
 -- The applicative instance parallelises the 'Waiting' operations
-instance Applicative (Contract t i) where
+instance Applicative (Contract i o) where
     pure = Pure
     cf <*> ca = case cf of
-        Done -> Done
         Emit t c -> Emit t (c <*> ca)
         Pure f -> fmap f ca
         Waiting f ->
             case ca of
-                Done -> Done
                 Emit t c -> Emit t (Waiting f <*> c)
                 Pure a' -> Waiting $ \i' -> fmap (\f' -> f' a') (f i')
                 Waiting f' ->
                     Waiting $ \i' -> f i' <*> f' i'
 
 -- The monad instance sequentialises the 'Waiting' operations
-instance Monad (Contract t i) where
+instance Monad (Contract i o) where
     c >>= f = case c of
         Waiting f' -> Waiting (f' >=> f)
-        Done       -> Done
         Pure a     -> f a
         Emit t c'  -> Emit t (c' >>= f)
 
-instance Semigroup a => Semigroup (Contract t i a) where
+instance Semigroup a => Semigroup (Contract i o a) where
     (<>) = liftA2 (<>)
 
-done :: Contract t i a
-done = Done
-
-emit :: t -> Contract t i ()
+emit :: o -> Contract i o ()
 emit t = Emit t (pure ())
 
-waiting :: Contract t i i
+waiting :: Contract i o i
 waiting = Waiting pure
 
 -- https://hackage.haskell.org/package/extra-1.6.15/docs/src/Control.Monad.Extra.html#loopM
@@ -77,41 +68,36 @@ loopM act x = do
 -- | Apply an input to a contract, collecting as much output data
 --   't' as posible until the contract is blocked on inputs
 applyInput
-    :: Monoid t
+    :: Monoid o
     => i
-    -> Contract t i a
-    -> (t, Contract t i a)
+    -> Contract i o a
+    -> (o, Contract i o a)
 applyInput ip = \case
     Waiting f -> drain (f ip)
-    Done -> (mempty, Done)
     Pure a -> (mempty, Pure a)
     Emit t c -> first (t <>) (applyInput ip c)
 
 applyInputs
-    :: Monoid t
-    => Contract t i a
+    :: Monoid o
+    => Contract i o a
     -> [i]
-    -> ([t], Contract t i a)
+    -> ([o], Contract i o a)
 applyInputs c = foldl' go (first return (drain c)) where
     go (ts, c') i = first (:ts) (applyInput i c')
 
-drain :: Monoid t => Contract t i a -> (t, Contract t i a)
+drain :: Monoid o => Contract i o a -> (o, Contract i o a)
 drain = \case
     Waiting f -> (mempty, Waiting f)
-    Done -> (mempty, Done)
     Pure a -> (mempty, Pure a)
     Emit t c -> first (t <>) (drain c)
 
-outputs :: Monoid t => Contract t i a -> t
+outputs :: Monoid o => Contract i o a -> o
 outputs = fst . drain
 
-result :: Monoid t => Contract t i a -> Maybe a
+result :: Monoid o => Contract i o a -> Maybe a
 result = (\case { Pure b -> Just b; _ -> Nothing }) . snd . drain
 
-isDone :: Monoid t => Contract t i a -> Bool
-isDone = (\case { Done -> True; _ -> False }) . snd . drain
-
-await :: t -> (i -> Maybe a) -> Contract t i a
+await :: o -> (i -> Maybe a) -> Contract i o a
 await a f = do
     emit a
     i <- waiting
