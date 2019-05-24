@@ -12,43 +12,94 @@ module Language.Plutus.Contract.Transaction(
     , forge
     , requiredSignatures
     , validityRange
+    , mergeWith
+    -- * Constructing transactions
     , unbalancedTx
     , payToScript
+    , collectFromScript
+    , collectFromScriptFilter
     ) where
 
-import qualified Control.Lens.TH as Lens.TH
-import qualified Data.Aeson      as Aeson
-import           GHC.Generics    (Generic)
+import           Control.Lens      (at, (^.))
+import qualified Control.Lens.TH   as Lens.TH
+import qualified Data.Aeson        as Aeson
+import qualified Data.Map          as Map
+import           Data.Maybe        (fromMaybe)
+import           GHC.Generics      (Generic)
 
-import           Ledger          (Address, DataScript, PubKey)
-import qualified Ledger          as L
-import qualified Ledger.Interval as I
-import           Ledger.Slot     (SlotRange)
-import qualified Ledger.Tx       as Tx
-import           Ledger.Value    as V
+import           Ledger            (Address, DataScript, PubKey, RedeemerScript, TxOut, TxOutRef, ValidatorScript)
+import qualified Ledger            as L
+import           Ledger.AddressMap (AddressMap)
+import qualified Ledger.Interval   as I
+import           Ledger.Slot       (SlotRange)
+import qualified Ledger.Tx         as Tx
+import           Ledger.Value      as V
 
 -- | An unsigned and potentially unbalanced transaction, as produced by
 --   a contract endpoint. See note [Unbalanced transactions]
 data UnbalancedTx = UnbalancedTx
-        { unbalancedTxInputs             :: [L.TxIn]
-        , unbalancedTxOutputs            :: [L.TxOut]
-        , unbalancedTxForge              :: V.Value
-        , unbalancedTxRequiredSignatures :: [PubKey]
-        , unbalancedTxValidityRange      :: SlotRange
+        { _Inputs             :: [L.TxIn]
+        , _Outputs            :: [L.TxOut]
+        , _Forge              :: V.Value
+        , _RequiredSignatures :: [PubKey]
+        , _ValidityRange      :: SlotRange
         }
         deriving stock (Eq, Show, Generic)
         deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
-Lens.TH.makeLensesWith Lens.TH.camelCaseFields ''UnbalancedTx
+Lens.TH.makeLenses ''UnbalancedTx
+
+-- | Combine two unbalanced transactions by appending their respective inputs,
+--   outputs, and signatures, adding their forged values, and applying the
+--   given function to their two validity ranges.
+mergeWith
+    :: (SlotRange -> SlotRange -> SlotRange)
+    -> UnbalancedTx
+    -> UnbalancedTx
+    -> UnbalancedTx
+mergeWith f l r = UnbalancedTx
+        { _Inputs = _Inputs l <> _Inputs r
+        , _Outputs = _Outputs l <> _Outputs r
+        , _Forge = _Forge l `V.plus` _Forge r
+        , _RequiredSignatures = _RequiredSignatures l <> _RequiredSignatures r
+        , _ValidityRange = f (_ValidityRange l) (_ValidityRange r)
+        }
 
 -- | Make an unbalanced transaction that does not forge any value.
 unbalancedTx :: [L.TxIn] -> [L.TxOut] -> UnbalancedTx
 unbalancedTx ins outs = UnbalancedTx ins outs V.zero [] I.always
 
--- | Create an `UnbalancedTx` that pay money to a script address.
+-- | Create an `UnbalancedTx` that pays money to a script address.
 payToScript :: Value -> Address -> DataScript -> UnbalancedTx
 payToScript v a ds = unbalancedTx [] [outp] where
     outp = Tx.scriptTxOut' v a ds
+
+-- | Create an `UnbalancedTx` that collects script outputs from the
+--   address of the given validator script, using the same redeemer script
+--   for all outputs. See 'Wallet.API.collectFromScript'
+collectFromScript
+    :: AddressMap
+    -> ValidatorScript
+    -> RedeemerScript
+    -> UnbalancedTx
+collectFromScript = collectFromScriptFilter (\_ -> const True)
+
+-- | See 'Wallet.API.collectFromScriptFilter'
+collectFromScriptFilter
+    :: (TxOutRef -> TxOut -> Bool)
+    -> AddressMap
+    -> ValidatorScript
+    -> RedeemerScript
+    -> UnbalancedTx
+collectFromScriptFilter flt am vls red =
+    let utxo    = fromMaybe Map.empty $ am ^. at (Tx.scriptAddress vls)
+        ourUtxo = Map.toList $ Map.filterWithKey flt utxo
+        mkTxIn ref   = Tx.scriptTxIn ref vls red
+        txInputs  = mkTxIn . fst <$> ourUtxo
+    in
+    unbalancedTx txInputs []
+
+
 
 {- note [Unbalanced transactions]
 
