@@ -12,6 +12,7 @@ module Language.Plutus.Contract.Contract(
     , await
     , result
     , loopM
+    , foldMaybe
     , firstOf
     , select
     , both
@@ -82,6 +83,17 @@ loopM act x = do
     case res of
         Left x' -> loopM act x'
         Right v -> return v
+
+-- | Repeatedly evaluate the action until it yields 'Nothing',
+--   then return the aggregated result.
+foldMaybe 
+    :: Monad m 
+    => (a -> b -> b) 
+    -> b 
+    -> m (Maybe a) 
+    -> m b
+foldMaybe f b con = loopM go b where
+    go b' = maybe (Left b') (Right . flip f b') <$> con
 
 -- | Apply an input to a contract, collecting as much output data
 --   't' as posible until the contract is blocked on inputs
