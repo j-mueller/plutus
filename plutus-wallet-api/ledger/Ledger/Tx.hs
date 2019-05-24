@@ -60,7 +60,7 @@ module Ledger.Tx(
 
 import qualified Codec.CBOR.Write             as Write
 import           Codec.Serialise.Class        (Serialise, encode)
-import           Control.Lens                 hiding (lifted)
+import           Control.Lens
 import           Crypto.Hash                  (Digest, SHA256, hash)
 import           Data.Aeson                   (FromJSON, FromJSONKey (..), ToJSON, ToJSONKey (..))
 import qualified Data.ByteArray               as BA
