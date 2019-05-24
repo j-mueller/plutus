@@ -7,6 +7,7 @@
 {-# LANGUAGE TemplateHaskell        #-}
 module Language.Plutus.Contract.Transaction(
       UnbalancedTx
+    , computeBalance
     , inputs
     , outputs
     , forge
@@ -20,7 +21,7 @@ module Language.Plutus.Contract.Transaction(
     , collectFromScriptFilter
     ) where
 
-import           Control.Lens      (at, (^.))
+import           Control.Lens      (at, view, (^.))
 import qualified Control.Lens.TH   as Lens.TH
 import qualified Data.Aeson        as Aeson
 import qualified Data.Map          as Map
@@ -38,7 +39,7 @@ import           Ledger.Value      as V
 -- | An unsigned and potentially unbalanced transaction, as produced by
 --   a contract endpoint. See note [Unbalanced transactions]
 data UnbalancedTx = UnbalancedTx
-        { _Inputs             :: [L.TxIn]
+        { _Inputs             :: [(L.TxIn, V.Value)]
         , _Outputs            :: [L.TxOut]
         , _Forge              :: V.Value
         , _RequiredSignatures :: [PubKey]
@@ -48,6 +49,14 @@ data UnbalancedTx = UnbalancedTx
         deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 Lens.TH.makeLenses ''UnbalancedTx
+
+-- | Compute the difference between the value of the inputs consumed and the
+--   value of the outputs produced by the transaction. If the result is zero
+--   then the transaction is balanced.
+computeBalance :: UnbalancedTx -> V.Value
+computeBalance utx = V.negate left `V.plus` right where
+    left = (utx ^. forge) `V.plus` foldMap snd (utx ^. inputs)
+    right = foldMap (view Tx.outValue) (utx ^. outputs)
 
 -- | Combine two unbalanced transactions by appending their respective inputs,
 --   outputs, and signatures, adding their forged values, and applying the
@@ -66,7 +75,7 @@ mergeWith f l r = UnbalancedTx
         }
 
 -- | Make an unbalanced transaction that does not forge any value.
-unbalancedTx :: [L.TxIn] -> [L.TxOut] -> UnbalancedTx
+unbalancedTx :: [(L.TxIn, Value)] -> [L.TxOut] -> UnbalancedTx
 unbalancedTx ins outs = UnbalancedTx ins outs V.zero [] I.always
 
 -- | Create an `UnbalancedTx` that pays money to a script address.
@@ -94,8 +103,8 @@ collectFromScriptFilter
 collectFromScriptFilter flt am vls red =
     let utxo    = fromMaybe Map.empty $ am ^. at (Tx.scriptAddress vls)
         ourUtxo = Map.toList $ Map.filterWithKey flt utxo
-        mkTxIn ref   = Tx.scriptTxIn ref vls red
-        txInputs  = mkTxIn . fst <$> ourUtxo
+        mkTxIn (ref, txo)   = (Tx.scriptTxIn ref vls red, view Tx.outValue txo)
+        txInputs  = mkTxIn <$> ourUtxo
     in
     unbalancedTx txInputs []
 
