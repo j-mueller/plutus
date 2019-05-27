@@ -19,4 +19,4 @@ balance
     -> m Tx
 balance utx = do
     let b = T.computeBalance utx
-    
+    undefined

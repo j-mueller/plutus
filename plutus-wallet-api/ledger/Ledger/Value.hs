@@ -42,6 +42,7 @@ module Ledger.Value(
     , eq
       -- * Etc.
     , isZero
+    , split
     ) where
 
 import           Codec.Serialise.Class        (Serialise)
@@ -344,3 +345,17 @@ lt l r = not (isZero l && isZero r) && checkBinRel P.lt l r
 eq :: Value -> Value -> Bool
 -- If both are zero then checkBinRel will be vacuously true, but this is fine.
 eq = checkBinRel P.eq
+
+{-# INLINABLE split #-}
+-- | Split a value into its positive and negative parts. The first element of 
+--   the tuple contains the negative parts of the value, the second element
+--   contains the positive parts.
+--
+--   @negate (fst (split a)) `plus` (snd (split a)) == a@
+--
+split :: Value -> (Value, Value)
+split (Value mp) = (Value pos, Value neg) where
+  (pos, neg) = Map.mapThese splitIntl mp
+
+    splitIntl :: Map.
+    splitIntl 

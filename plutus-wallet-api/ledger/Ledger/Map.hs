@@ -27,6 +27,7 @@ module Ledger.Map(
     -- * These
     , These(..)
     , these
+    , mapThese
     ) where
 
 import           Codec.Serialise.Class        (Serialise)
@@ -121,6 +122,16 @@ all p (Map mps) =
             []              -> True
             (_ :: k, x):xs' -> p x && go xs'
     in go mps
+
+{-# INLINABLE mapEither #-}
+-- | A version of 'Data.Map.Lazy.mapEither' that works with 'These'.
+mapThese :: (v -> These a b) -> Map k v -> (Map k a, Map k b)
+mapThese f mp = P.foldr f' ([], []) mps' where
+    Map mps'  = map f mps
+    f' v (as, bs) = case v of
+        This a -> (a:as, bs)
+        That b -> (as, b:bs)
+        These a b -> (a:as, b:bas)
 
 {-# INLINABLE singleton #-}
 -- | A singleton map.
