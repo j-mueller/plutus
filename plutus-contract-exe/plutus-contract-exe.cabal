@@ -62,6 +62,7 @@ library
         servant -any,
         servant-server -any,
         mtl -any,
+        semigroupoids -any
 
 library examples
     import: lang
