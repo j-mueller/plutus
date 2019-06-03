@@ -18,7 +18,8 @@ import qualified Wallet.Emulator                               as EM
 
 import           Examples.Game                                 (GuessParams (..), LockParams (..), game)
 import           Language.Plutus.Contract.Contract             as Con
-import           Language.Plutus.Contract.Event                (Step (..))
+import           Language.Plutus.Contract.Step                 (Step (..))
+import qualified Language.Plutus.Contract.Step                 as Step
 import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress)
 
 import           Spec.HUnit                                    (assertEmulatorAction, assertEndpoint,
@@ -55,7 +56,7 @@ lockTrace = do
         inp = Event.endpoint "lock" (Aeson.toJSON $ LockParams "secret" 10)
         (step', rest') = Con.applyInput inp game
 
-    block <- run' w1 (traverse_ Wallet.handleTx (Event.stepTransactions step'))
+    block <- run' w1 (traverse_ Wallet.handleTx (Step.stepTransactions step'))
     idx <- gets (AM.fromUtxoIndex . view EM.index)
 
     let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block
@@ -72,7 +73,7 @@ unlockTrace = do
         inp = Event.endpoint "lock" (Aeson.toJSON $ LockParams "secret" 10)
         (step1, rest1) = Con.applyInput inp game
 
-    block <- run' w1 (traverse_ Wallet.handleTx (Event.stepTransactions step1))
+    block <- run' w1 (traverse_ Wallet.handleTx (Step.stepTransactions step1))
     idx <- gets (AM.fromUtxoIndex . view EM.index)
 
     let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block
@@ -80,7 +81,7 @@ unlockTrace = do
         input2 = Event.endpoint "guess" (Aeson.toJSON $ GuessParams "secret")
         (step3, _) = Con.applyInput input2 rest2
 
-    _ <- run' w2 (traverse_ Wallet.handleTx (Event.stepTransactions step3))
+    _ <- run' w2 (traverse_ Wallet.handleTx (Step.stepTransactions step3))
     EM.ownFundsEqual w2 (Ada.adaValueOf 10)
 
 -- | A mockchain trace that submits the 'lock' transaction to the blockchain

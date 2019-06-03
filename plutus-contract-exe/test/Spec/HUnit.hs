@@ -13,7 +13,7 @@ import           Control.Monad                        (void)
 import           Data.Bifunctor                       (Bifunctor (..))
 import qualified Data.Map                             as Map
 import qualified Data.Set                             as Set
-import           Language.Plutus.Contract.Event       (Step (..))
+import           Language.Plutus.Contract.Step        (Step (..))
 import           Language.Plutus.Contract.Transaction (UnbalancedTx)
 import           Ledger.Ada                           (Ada)
 import qualified Ledger.Ada                           as Ada

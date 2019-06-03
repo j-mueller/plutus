@@ -26,6 +26,7 @@ import           Data.Maybe                           (fromMaybe)
 
 import           Language.Plutus.Contract.Contract    as Contract
 import           Language.Plutus.Contract.Event       as Event hiding (endpoint)
+import           Language.Plutus.Contract.Step        as Step
 import           Language.Plutus.Contract.Transaction as Transaction
 
 import           Ledger.AddressMap                    (AddressMap)
@@ -41,7 +42,7 @@ type PlutusContract a = Contract Event Step a
 
 -- | Watch an 'Address', returning the next transaction that changes it
 nextTransactionAt :: Address -> PlutusContract Tx
-nextTransactionAt a = await (Event.addr a) (ledgerUpdate >=> check) where
+nextTransactionAt a = await (Step.addr a) (ledgerUpdate >=> check) where
     check (a', t)
         | a == a' = Just t
         | otherwise = Nothing
@@ -53,7 +54,7 @@ watchAddressUntil a = collectUntil AM.updateAddresses (AM.addAddress a mempty) (
 
 -- | Expose an endpoint, returning the data that was entered
 endpoint :: forall a. FromJSON a => String -> PlutusContract a
-endpoint nm = await (Event.endpointName nm) (endpointEvent >=> uncurry dec) where
+endpoint nm = await (Step.endpointName nm) (endpointEvent >=> uncurry dec) where
     dec :: String -> Aeson.Value -> Maybe a
     dec nm' vl
         | nm' == nm =
@@ -64,7 +65,7 @@ endpoint nm = await (Event.endpointName nm) (endpointEvent >=> uncurry dec) wher
 
 -- | Produce an unbalanced transaction
 writeTx :: UnbalancedTx -> PlutusContract ()
-writeTx = emit . Event.tx
+writeTx = emit . Step.tx
 
 -- | Watch an address for changes, and return the outputs
 --   at that address when the total value at the address
@@ -80,7 +81,7 @@ fundsAtAddressGt addr' vl = loopM go mempty where
 
 -- | Wait until a slot number has been reached
 slotGeq :: Slot -> PlutusContract Slot
-slotGeq sl = await (Event.slot sl) (slotChange >=> go) where
+slotGeq sl = await (Step.slot sl) (slotChange >=> go) where
     go sl'
         | sl' >= sl = Just sl'
         | otherwise = Nothing

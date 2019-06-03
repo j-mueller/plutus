@@ -13,7 +13,8 @@ import           Servant.Server                    (Application, Server, serve)
 
 import           Language.Plutus.Contract          (PlutusContract)
 import           Language.Plutus.Contract.Contract (applyInputs)
-import           Language.Plutus.Contract.Event    (Event, Step)
+import           Language.Plutus.Contract.Event    (Event)
+import           Language.Plutus.Contract.Step     (Step)
 
 type ContractAPI =
        "initialise" :> Get '[JSON] Step
