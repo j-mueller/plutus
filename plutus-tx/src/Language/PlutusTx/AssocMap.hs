@@ -127,7 +127,6 @@ all p (Map mps) =
             (_ :: k, x):xs' -> p x && go xs'
     in go mps
 
-{-# INLINABLE mapThese #-}
 -- | A version of 'Data.Map.Lazy.mapEither' that works with 'These'.
 mapThese :: (v -> These a b) -> Map k v -> (Map k a, Map k b)
 mapThese f mps = (Map mpl, Map mpr)  where
@@ -138,7 +137,6 @@ mapThese f mps = (Map mpl, Map mpr)  where
         That b -> (as, (k, b):bs)
         These a b -> ((k, a):as, (k, b):bs)
 
-{-# INLINABLE singleton #-}
 -- | A singleton map.
 singleton :: k -> v -> Map k v
 singleton c i = Map [(c, i)]
