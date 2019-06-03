@@ -14,6 +14,7 @@ module Language.Plutus.Contract.Transaction(
     , requiredSignatures
     , validityRange
     , mergeWith
+    , toLedgerTx
     -- * Constructing transactions
     , unbalancedTx
     , payToScript
@@ -26,6 +27,7 @@ import qualified Control.Lens.TH   as Lens.TH
 import qualified Data.Aeson        as Aeson
 import qualified Data.Map          as Map
 import           Data.Maybe        (fromMaybe)
+import qualified Data.Set          as Set
 import           GHC.Generics      (Generic)
 
 import           Ledger            (Address, DataScript, PubKey, RedeemerScript, TxOut, TxOutRef, ValidatorScript)
@@ -49,6 +51,19 @@ data UnbalancedTx = UnbalancedTx
         deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 Lens.TH.makeLenses ''UnbalancedTx
+
+-- | The ledger transaction of the 'UnbalancedTx'. Note that the result
+--   does not have any signatures, and is potentially unbalanced (ie. invalid).
+--   To produce a balanced 'Tx', use 'Language.Plutus.Contract.Wallet.balance'.
+toLedgerTx :: UnbalancedTx -> L.Tx
+toLedgerTx utx = L.Tx
+            { L.txInputs = Set.fromList (fst <$> _Inputs utx)
+            , L.txOutputs = _Outputs utx
+            , L.txForge = _Forge utx
+            , L.txFee = 0
+            , L.txValidRange = _ValidityRange utx
+            , L.txSignatures = Map.empty
+            }
 
 -- | Compute the difference between the value of the inputs consumed and the
 --   value of the outputs produced by the transaction. If the result is zero
@@ -107,8 +122,6 @@ collectFromScriptFilter flt am vls red =
         txInputs  = mkTxIn <$> ourUtxo
     in
     unbalancedTx txInputs []
-
-
 
 {- note [Unbalanced transactions]
 

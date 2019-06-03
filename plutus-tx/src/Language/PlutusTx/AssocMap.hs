@@ -127,15 +127,16 @@ all p (Map mps) =
             (_ :: k, x):xs' -> p x && go xs'
     in go mps
 
-{-# INLINABLE mapEither #-}
+{-# INLINABLE mapThese #-}
 -- | A version of 'Data.Map.Lazy.mapEither' that works with 'These'.
 mapThese :: (v -> These a b) -> Map k v -> (Map k a, Map k b)
-mapThese f mp = P.foldr f' ([], []) mps' where
-    Map mps'  = map f mps
-    f' v (as, bs) = case v of
-        This a -> (a:as, bs)
-        That b -> (as, b:bs)
-        These a b -> (a:as, b:bas)
+mapThese f mps = (Map mpl, Map mpr)  where
+    (mpl, mpr) = P.foldr f' ([], []) mps'
+    Map mps'  = fmap f mps
+    f' (k, v) (as, bs) = case v of
+        This a -> ((k, a):as, bs)
+        That b -> (as, (k, b):bs)
+        These a b -> ((k, a):as, (k, b):bs)
 
 {-# INLINABLE singleton #-}
 -- | A singleton map.
