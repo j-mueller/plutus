@@ -6,28 +6,26 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeOperators              #-}
 -- | Contract interface for the guessing game
-module Main where
+module Examples.Game(
+      game
+    , LockParams(..)
+    , GuessParams(..)
+    ) where
 
 import           Control.Lens                                  (at, (^.))
 import qualified Data.Aeson                                    as Aeson
 import qualified Data.Map                                      as Map
 import           Data.Maybe                                    (fromMaybe)
 import           GHC.Generics                                  (Generic)
-import           Network.Wai.Handler.Warp                      (run)
 
-import           Language.Plutus.Contract                      (PlutusContract, writeTx, endpoint, watchAddress)
-import           Language.Plutus.Contract.Servant              (contractApp)
+import           Language.Plutus.Contract                      (PlutusContract, endpoint, nextTransactionAt, writeTx)
 import           Language.Plutus.Contract.Transaction          (unbalancedTx)
 import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress, gameDataScript, gameRedeemerScript,
                                                                 gameValidator)
-
 import qualified Ledger                                        as L
 import           Ledger.Ada                                    (Ada)
 import qualified Ledger.Ada                                    as Ada
 import qualified Ledger.AddressMap                             as AM
-
-main :: IO ()
-main = run 8080 (contractApp game)
 
 -- | Parameters for the "lock" endpoint
 data LockParams = LockParams
@@ -44,25 +42,15 @@ newtype GuessParams = GuessParams
     deriving stock (Eq, Ord, Show, Generic)
     deriving newtype (Aeson.FromJSON, Aeson.ToJSON)
 
--- | State
-newtype GameState = GameState
-    { interestingAddresses :: AM.AddressMap
-    }
-    deriving stock (Show, Generic)
-    deriving newtype (Aeson.FromJSON, Aeson.ToJSON)
-
-initialState :: GameState
-initialState = GameState mempty
-
 guess :: PlutusContract ()
 guess = do
-    st <- watchAddress gameAddress
+    st <- nextTransactionAt gameAddress
     let mp = AM.fromTxOutputs st
     GuessParams theGuess <- endpoint "guess"
     let
-        outputs  = fmap fst . Map.toList . fromMaybe Map.empty $ mp ^. at gameAddress
+        outputs  = Map.toList . fromMaybe Map.empty $ mp ^. at gameAddress
         redeemer = gameRedeemerScript theGuess
-        inp      = (\o -> L.scriptTxIn o gameValidator redeemer) <$> outputs
+        inp      = (\o -> (L.scriptTxIn (fst o) gameValidator redeemer, L.txOutValue (snd o))) <$> outputs
         tx       = unbalancedTx inp []
     writeTx tx
 

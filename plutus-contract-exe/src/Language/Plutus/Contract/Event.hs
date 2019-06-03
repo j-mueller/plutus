@@ -9,17 +9,27 @@ module Language.Plutus.Contract.Event(
     , slot
     , endpointName
     , Event(..)
+    -- * Produce events
+    , updateLedger
+    , changeSlot
+    , endpoint
+    , txEvents
+    -- * Consume events
     , ledgerUpdate
     , slotChange
     , endpointEvent
     ) where
 
 import qualified Data.Aeson                           as Aeson
+import           Data.Map                             (Map)
+import qualified Data.Map                             as Map
 import           Data.Semigroup                       (Min (..), Option (..))
 import qualified Data.Set                             as Set
 import           GHC.Generics                         (Generic)
 
 import           Language.Plutus.Contract.Transaction (UnbalancedTx)
+import           Ledger.AddressMap                    (AddressMap)
+import qualified Ledger.AddressMap                    as AM
 import           Ledger.Slot                          (Slot)
 import           Ledger.Tx                            (Address, Tx)
 
@@ -63,6 +73,18 @@ data Event =
     | Endpoint String Aeson.Value
     deriving stock (Eq, Show, Generic)
     deriving anyclass (Aeson.FromJSON, Aeson.ToJSON) -- TODO: Make sure this can be created easily by app platform
+
+txEvents :: AddressMap -> Tx -> Map Address Event
+txEvents utxo t = Map.fromSet (`updateLedger` t) (AM.addressesTouched utxo t)
+
+updateLedger :: Address -> Tx -> Event
+updateLedger = LedgerUpdate
+
+changeSlot :: Slot -> Event
+changeSlot = SlotChange
+
+endpoint :: String -> Aeson.Value -> Event
+endpoint = Endpoint
 
 ledgerUpdate :: Event -> Maybe (Address, Tx)
 ledgerUpdate = \case

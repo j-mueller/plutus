@@ -3,17 +3,15 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE TypeOperators      #-}
 -- | Contract interface for the crowdfunding contract
-module Main where
+module Examples.Crowdfunding(crowdfunding) where
 
 import           Control.Lens                                          ((&), (.~), (^.))
 import           Control.Monad                                         (void)
-import           Network.Wai.Handler.Warp                              (run)
 
 import           Language.Plutus.Contract                              (PlutusContract, both, endpoint,
                                                                         fundsAtAddressGt, slotGeq, watchAddressUntil,
                                                                         writeTx)
 import qualified Language.Plutus.Contract                              as C
-import           Language.Plutus.Contract.Servant                      (contractApp)
 import           Language.Plutus.Contract.Transaction                  (collectFromScript, collectFromScriptFilter,
                                                                         inputs, payToScript, validityRange)
 import           Language.PlutusTx.Coordination.Contracts.CrowdFunding (Campaign (..))
@@ -23,13 +21,11 @@ import           Ledger                                                (PubKey, 
 import qualified Ledger                                                as L
 import qualified Ledger.Ada                                            as Ada
 import           Ledger.Scripts                                        (DataScript (..))
+
 import qualified Wallet.Emulator                                       as Emulator
 
-main :: IO ()
-main = run 8080 (contractApp crowdfunding)
-
 crowdfunding :: PlutusContract ()
-crowdfunding = contribute theCampaign
+crowdfunding = contribute theCampaign <> scheduleCollection theCampaign
 
 theCampaign :: Campaign
 theCampaign = Campaign
@@ -59,7 +55,6 @@ contribute cmp = do
     if not . null $ tx' ^. inputs
     then writeTx tx'
     else pure ()
-
 
 scheduleCollection :: Campaign -> PlutusContract ()
 scheduleCollection cmp = do

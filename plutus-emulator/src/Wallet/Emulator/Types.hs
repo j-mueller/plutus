@@ -627,10 +627,11 @@ evalTraceTxPool pl = fst . runTraceTxPool pl
 execTraceTxPool :: TxPool -> Trace MockWallet a -> EmulatorState
 execTraceTxPool pl = snd . runTraceTxPool pl
 
--- | Run an action as a wallet, subsequently process any pending transactions and
--- notify wallets.
+-- | Run an action as a wallet, subsequently process any pending transactions 
+--   and notify wallets. Returns the new block.
 runWalletActionAndProcessPending :: [Wallet] -> Wallet -> m () -> Trace m [Tx]
 runWalletActionAndProcessPending allWallets wallet action = do
   _ <- walletAction wallet action
   block <- processPending
-  walletsNotifyBlock allWallets block
+  _ <- walletsNotifyBlock allWallets block
+  pure block

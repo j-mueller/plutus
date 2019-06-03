@@ -25,7 +25,7 @@ import qualified Data.Aeson                           as Aeson
 import           Data.Maybe                           (fromMaybe)
 
 import           Language.Plutus.Contract.Contract    as Contract
-import           Language.Plutus.Contract.Event       as Event
+import           Language.Plutus.Contract.Event       as Event hiding (endpoint)
 import           Language.Plutus.Contract.Transaction as Transaction
 
 import           Ledger.AddressMap                    (AddressMap)
@@ -49,7 +49,7 @@ nextTransactionAt a = await (Event.addr a) (ledgerUpdate >=> check) where
 -- | Watch an address until the given slot, then return all known outputs
 --   at the address.
 watchAddressUntil :: Address -> Slot -> PlutusContract AM.AddressMap
-watchAddressUntil a = collectUntil AM.updateAddresses mempty (nextTransactionAt a)
+watchAddressUntil a = collectUntil AM.updateAddresses (AM.addAddress a mempty) (nextTransactionAt a)
 
 -- | Expose an endpoint, returning the data that was entered
 endpoint :: forall a. FromJSON a => String -> PlutusContract a
@@ -103,7 +103,7 @@ timeout = flip until
 between :: Slot -> Slot -> PlutusContract a -> PlutusContract (Maybe a)
 between a b = timeout b . when a
 
--- | Repeatedly run a contract until the slot is reached, then 
+-- | Repeatedly run a contract until the slot is reached, then
 --   return the last result.
 collectUntil :: (a -> b -> b) -> b -> PlutusContract a -> Slot -> PlutusContract b
 collectUntil f b con s = foldMaybe f b (timeout s con)
