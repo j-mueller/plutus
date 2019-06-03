@@ -10,7 +10,7 @@ module Language.Plutus.Contract.Wallet(
 import           Control.Lens
 import           Control.Monad                        ((>=>))
 import           Control.Monad.Except
-import           Data.Bifunctor                       (second)
+import           Data.Bifunctor                       (first, second)
 import           Data.Map                             (Map)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe)
@@ -51,7 +51,7 @@ balanceTx
     -> m Tx
 balanceTx utxo pk tx =
     let (neg, pos) = Value.split (T.computeBalance tx)
-    in addInputs utxo pk neg (addOutputs pk pos (T.toLedgerTx tx))
+    in addInputs utxo pk pos (addOutputs pk neg (T.toLedgerTx tx))
 
 -- | @addInputs mp pk vl tx@ selects transaction outputs worth at least
 --   @vl@ from the UTXO map @mp@ and adds them as inputs to @tx@. A public

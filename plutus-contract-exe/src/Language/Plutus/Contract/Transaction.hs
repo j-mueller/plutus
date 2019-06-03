@@ -69,7 +69,7 @@ toLedgerTx utx = L.Tx
 --   value of the outputs produced by the transaction. If the result is zero
 --   then the transaction is balanced.
 computeBalance :: UnbalancedTx -> V.Value
-computeBalance utx = V.negate left `V.plus` right where
+computeBalance utx = right `V.minus` left where
     left = (utx ^. forge) `V.plus` foldMap snd (utx ^. inputs)
     right = foldMap (view Tx.outValue) (utx ^. outputs)
 

@@ -9,24 +9,29 @@ module Spec.HUnit(
     , assertTx
     ) where
 
-import           Data.Bifunctor                 (Bifunctor (..))
-import qualified Data.Map                       as Map
-import qualified Data.Set                       as Set
-import           Language.Plutus.Contract.Event (Step (..))
-import Language.Plutus.Contract.Transaction     (UnbalancedTx)
-import           Ledger.Ada                     (Ada)
-import qualified Ledger.Ada                     as Ada
-import           Ledger.Tx                      (Address, Tx)
-import qualified Test.Tasty.HUnit               as HUnit
-import           Wallet.Emulator                (AssertionError, EmulatorAction, EmulatorState, MonadEmulator, Wallet)
-import qualified Wallet.Emulator                as EM
+import           Control.Monad                        (void)
+import           Data.Bifunctor                       (Bifunctor (..))
+import qualified Data.Map                             as Map
+import qualified Data.Set                             as Set
+import           Language.Plutus.Contract.Event       (Step (..))
+import           Language.Plutus.Contract.Transaction (UnbalancedTx)
+import           Ledger.Ada                           (Ada)
+import qualified Ledger.Ada                           as Ada
+import           Ledger.Tx                            (Address, Tx)
+import qualified Test.Tasty.HUnit                     as HUnit
+import           Wallet.Emulator                      (AssertionError, EmulatorAction, EmulatorState, MonadEmulator,
+                                                       Wallet)
+import qualified Wallet.Emulator                      as EM
 
 -- | Run an 'EmulatorAction' on a blockchain with the given initial distribution
 --   of funds to wallets.
 withInitialDistribution :: [(Wallet, Ada)] -> EmulatorAction a -> (Either AssertionError a, EmulatorState)
-withInitialDistribution dist =
+withInitialDistribution dist action =
     let s = EM.emulatorStateInitialDist (Map.fromList (first EM.walletPubKey . second Ada.toValue <$> dist))
-    in EM.runEmulator s
+
+        -- make sure the wallets know about the initial transaction
+        notifyInitial = void (EM.addBlocksAndNotify (fst <$> dist) 1)
+    in EM.runEmulator s (EM.processEmulated notifyInitial >> action)
 
 -- | Run a wallet action in the context of the given wallet, notify the wallets,
 --   and return the list of new transactions
