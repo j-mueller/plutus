@@ -348,7 +348,6 @@ eq :: Value -> Value -> Bool
 -- If both are zero then checkBinRel will be vacuously true, but this is fine.
 eq = checkBinRel P.eq
 
-{-# INLINABLE split #-}
 -- | Split a value into its positive and negative parts. The first element of 
 --   the tuple contains the negative parts of the value, the second element
 --   contains the positive parts.
@@ -356,7 +355,7 @@ eq = checkBinRel P.eq
 --   @negate (fst (split a)) `plus` (snd (split a)) == a@
 --
 split :: Value -> (Value, Value)
-split (Value mp) = (Value neg, Value pos) where
+split (Value mp) = (negate (Value neg), Value pos) where
   (neg, pos) = Map.mapThese splitIntl mp
 
   splitIntl :: Map.Map TokenName Integer -> These (Map.Map TokenName Integer) (Map.Map TokenName Integer)

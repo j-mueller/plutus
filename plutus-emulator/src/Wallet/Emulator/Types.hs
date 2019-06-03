@@ -51,6 +51,7 @@ module Wallet.Emulator.Types(
     addBlocksAndNotify,
     assertion,
     assertOwnFundsEq,
+    ownFundsEqual,
     runEmulator,
     -- * Emulator internals
     MockWallet(..),
@@ -628,7 +629,7 @@ execTraceTxPool :: TxPool -> Trace MockWallet a -> EmulatorState
 execTraceTxPool pl = snd . runTraceTxPool pl
 
 -- | Run an action as a wallet, subsequently process any pending transactions 
---   and notify wallets. Returns the new block.
+--   and notify wallets. Returns the new block
 runWalletActionAndProcessPending :: [Wallet] -> Wallet -> m () -> Trace m [Tx]
 runWalletActionAndProcessPending allWallets wallet action = do
   _ <- walletAction wallet action
