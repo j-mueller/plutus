@@ -22,12 +22,16 @@ import           Control.Applicative (liftA2)
 import           Control.Monad       ((>=>))
 import           Data.Bifunctor      (first)
 import           Data.List           (foldl')
+import           Data.Functor.Alt
 
 data Contract i o a =
     Waiting (i -> Contract i o a)
     | Emit o (Contract i o a) -- produce a 't' value
     | Pure a
     deriving (Functor)
+
+instance Alt (Contract i o) where
+    (<!>) = select
 
 -- The applicative instance parallelises the 'Waiting' operations
 instance Applicative (Contract i o) where
