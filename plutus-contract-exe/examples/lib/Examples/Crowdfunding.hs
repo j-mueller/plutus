@@ -30,7 +30,7 @@ crowdfunding = contribute theCampaign <> scheduleCollection theCampaign
 theCampaign :: Campaign
 theCampaign = Campaign
     { campaignDeadline = 20
-    , campaignTarget   = Ada.adaValueOf 100
+    , campaignTarget   = Ada.adaValueOf 20
     , campaignCollectionDeadline = 30
     , campaignOwner = Emulator.walletPubKey (Emulator.Wallet 1)
     }

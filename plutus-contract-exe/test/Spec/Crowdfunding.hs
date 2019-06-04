@@ -1,25 +1,30 @@
 module Spec.Crowdfunding(tests) where
 
-import           Control.Monad                                 (void)
-import           Data.Either                                   (isRight)
-import           Data.Foldable                                 (traverse_)
-import qualified Data.Map                                      as Map
-
-import           Hedgehog                                      (Property, forAll, property)
-import qualified Hedgehog
+import           Data.Foldable                                 (fold)
 import           Test.Tasty
-import           Test.Tasty.Hedgehog                           (testProperty)
-import qualified Test.Tasty.HUnit                              as HUnit
 
-import qualified Ledger
 import qualified Ledger.Ada                                    as Ada
-import qualified Ledger.Value                                  as Value
-import           Wallet.Emulator
-import qualified Wallet.Emulator.Generators                    as Gen
-import qualified Wallet.Generators                             as Gen
+import qualified Wallet.Emulator                               as EM
+
+import           Examples.Crowdfunding
+import           Language.Plutus.Contract.Contract             as Con
+
+import           Spec.HUnit
 
 tests :: TestTree
 tests = testGroup "crowdfunding" [
-    HUnit.testCase "contribute" (pure ())
+    checkPredicate "Expose 'contribute' and 'scheduleCollection' endpoints"
+        (endpointAvailable "contribute" <> endpointAvailable "schedule collection")
+        $ pure (fst (Con.drain crowdfunding))
+
+    , checkPredicate "'contribute' endpoint submits a transaction" anyTx $
+        let key = EM.walletPubKey w1
+            contribution = Ada.adaValueOf 10
+        in fold . fst <$> callEndpoint w1 "contribute" (key, contribution) crowdfunding
     ]
-  
+
+
+w1, w2 :: EM.Wallet
+w1 = EM.Wallet 1
+w2 = EM.Wallet 2
+    

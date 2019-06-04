@@ -10,7 +10,7 @@ module Language.Plutus.Contract.Wallet(
 import           Control.Lens
 import           Control.Monad                        ((>=>))
 import           Control.Monad.Except
-import           Data.Bifunctor                       (first, second)
+import           Data.Bifunctor                       (second)
 import           Data.Map                             (Map)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe)
