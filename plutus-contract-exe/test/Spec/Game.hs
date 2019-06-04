@@ -1,80 +1,39 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Spec.Game where
 
-import           Control.Lens                                  (view)
-import           Control.Monad.State                           (gets)
 import qualified Data.Aeson                                    as Aeson
-import           Data.Foldable                                 (fold, traverse_)
-import qualified Data.Map                                      as Map
-
+import           Data.Foldable                                 (fold)
 import           Test.Tasty
-import qualified Test.Tasty.HUnit                              as HUnit
 
 import qualified Language.Plutus.Contract.Event                as Event
-import qualified Language.Plutus.Contract.Wallet               as Wallet
 import qualified Ledger.Ada                                    as Ada
-import qualified Ledger.AddressMap                             as AM
 import qualified Wallet.Emulator                               as EM
 
 import           Examples.Game                                 (GuessParams (..), LockParams (..), game)
 import           Language.Plutus.Contract.Contract             as Con
-import           Language.Plutus.Contract.Step                 (Step (..))
-import qualified Language.Plutus.Contract.Step                 as Step
 import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress)
 
-import           Spec.HUnit                                    (assertEmulatorAction, assertEndpoint,
-                                                                assertInterestingAddress, assertTx, callEndpoint, run)
-
+import           Spec.HUnit
 
 tests :: TestTree
 tests = testGroup "game"
-    [ HUnit.testCaseSteps "'lock' endpoint is available" $
-        \lg -> assertEmulatorAction [(w1, 10)] initialTrace (assertEndpoint lg "lock")
-    , HUnit.testCaseSteps "game address" $
-        \lg -> assertEmulatorAction [(w1, 10)] initialTrace (assertInterestingAddress lg gameAddress)
-    , HUnit.testCaseSteps "submit locking transaction" $
-        \lg -> assertEmulatorAction [(w1, 10)] submitTrace (assertTx lg (const True))
-    , HUnit.testCaseSteps "'guess' endpoint is available" $
-        \lg -> assertEmulatorAction [(w1, 100)] lockTrace (assertEndpoint lg "guess")
-    , HUnit.testCase "unlock funds" $
-        assertEmulatorAction [(w1, 100)] unlockTrace (\_ -> pure ())
-    ]
+    [ checkPredicate "Expose 'lock' endpoint and watch game address"
+        (endpointAvailable "lock" <> interestingAddress gameAddress)
+        $ pure (fst (Con.drain game))
 
--- | A mockchain trace that submits the 'lock' transaction to the blockchain
-submitTrace :: EM.MonadEmulator m => m Step
-submitTrace =
-    let
-        inp = Event.endpoint "lock" (Aeson.toJSON $ LockParams "secret" 10)
-    in
-        pure (fst $ Con.applyInput inp game)
+    , checkPredicate "'lock' endpoint submits a transaction" anyTx $
+        let e = Event.endpoint "lock" (Aeson.toJSON $ LockParams "secret" 10)
+        in pure (fst $ Con.applyInput e game)
 
--- | A mockchain trace that submits the 'lock' transaction to the blockchain
-lockTrace :: EM.MonadEmulator m => m Step
-lockTrace = do
-    let
-        run' = run [w1, w2]
+    , checkPredicate "'guess' endpoint is available after locking funds" 
+        (endpointAvailable "guess")
+        $ fold . fst <$> callEndpoint w1 "lock" (LockParams "secret" 10) game
 
-        inp = Event.endpoint "lock" (Aeson.toJSON $ LockParams "secret" 10)
-        (step', rest') = Con.applyInput inp game
-
-    block <- run' w1 (traverse_ Wallet.handleTx (Step.stepTransactions step'))
-    idx <- gets (AM.fromUtxoIndex . view EM.index)
-
-    let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block
-        (step'', _) = Con.applyInputs rest' events
-
-    pure (fold step'')
-
--- | A mockchain trace that submits the 'lock' transaction to the blockchain
-unlockTrace :: EM.MonadEmulator m => m ()
-unlockTrace = do
-    _ <- callEndpoint w1 "lock" (LockParams "secret" 10) game
+    , checkPredicate "unlock funds" 
+        (walletFundsChange w2 (Ada.adaValueOf 10))
+        $ callEndpoint w1 "lock" (LockParams "secret" 10) game
             >>= callEndpoint w2 "guess" (GuessParams "secret") . snd
-    EM.ownFundsEqual w2 (Ada.adaValueOf 10)
-
--- | A mockchain trace that submits the 'lock' transaction to the blockchain
-initialTrace :: EM.MonadEmulator m => m Step
-initialTrace = pure (fst $ Con.drain game)
+    ]
 
 w1, w2 :: EM.Wallet
 w1 = EM.Wallet 1
