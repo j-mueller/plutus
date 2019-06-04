@@ -4,17 +4,13 @@
 module Language.Plutus.Contract.Step where
 
 import qualified Data.Aeson                           as Aeson
-import           Data.Map                             (Map)
-import qualified Data.Map                             as Map
 import           Data.Semigroup                       (Min (..), Option (..))
 import qualified Data.Set                             as Set
 import           GHC.Generics                         (Generic)
 
 import           Language.Plutus.Contract.Transaction (UnbalancedTx)
-import           Ledger.AddressMap                    (AddressMap)
-import qualified Ledger.AddressMap                    as AM
 import           Ledger.Slot                          (Slot)
-import           Ledger.Tx                            (Address, Tx)
+import           Ledger.Tx                            (Address)
 
 data Step =
     Step

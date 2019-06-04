@@ -93,7 +93,7 @@ executable contract-exe-guessing-game
         base >=4.7 && <5,
         warp -any
 
-executable contract-exe-Crowdfunding
+executable contract-exe-crowdfunding
     default-language: Haskell2010
     main-is: Main.hs
     hs-source-dirs: examples/exe/crowdfunding
