@@ -1,9 +1,15 @@
 {-# LANGUAGE ApplicativeDo      #-}
+{-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE TypeOperators      #-}
 -- | Contract interface for the crowdfunding contract
-module Examples.Crowdfunding(crowdfunding) where
+module Examples.Crowdfunding(
+      Campaign(..)
+    , crowdfunding
+    , theCampaign
+    , CF.campaignAddress
+    ) where
 
 import           Control.Lens                                          ((&), (.~), (^.))
 import           Control.Monad                                         (void)

@@ -17,14 +17,17 @@ tests = testGroup "crowdfunding" [
         (endpointAvailable "contribute" <> endpointAvailable "schedule collection")
         $ pure (fst (Con.drain crowdfunding))
 
-    , checkPredicate "'contribute' endpoint submits a transaction" anyTx $
+    , checkPredicate "'contribute' endpoint submits a transaction" 
+        (anyTx  <> interestingAddress (campaignAddress theCampaign)) $
         let key = EM.walletPubKey w1
             contribution = Ada.adaValueOf 10
         in fold . fst <$> callEndpoint w1 "contribute" (key, contribution) crowdfunding
-    ]
 
+    , checkPredicate "'scheduleCollection' starts watching campaign address and waits for deadline"
+        (waitingForSlot (campaignDeadline theCampaign) <> interestingAddress (campaignAddress theCampaign))
+        (fold . fst <$> callEndpoint w1 "schedule collection" () crowdfunding)
+    ]
 
 w1, w2 :: EM.Wallet
 w1 = EM.Wallet 1
 w2 = EM.Wallet 2
-    
