@@ -104,7 +104,7 @@ executable contract-exe-crowdfunding
         base >=4.7 && <5,
         warp -any
 
-test-suite plutus-use-cases-test
+test-suite plutus-contract-exe-test
     import: lang
     type: exitcode-stdio-1.0
     main-is: Spec.hs

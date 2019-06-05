@@ -10,6 +10,7 @@ module Spec.HUnit(
     , tx
     , anyTx
     , walletFundsChange
+    , waitingForSlot
     -- * Checking predicates
     , checkPredicate
     -- * Constructing 'MonadEmulator' actions
@@ -48,6 +49,7 @@ import qualified Language.Plutus.Contract.Wallet      as Wallet
 import           Ledger.Ada                           (Ada)
 import qualified Ledger.Ada                           as Ada
 import qualified Ledger.AddressMap                    as AM
+import           Ledger.Slot                          (Slot)
 import           Ledger.Tx                            (Address, Tx)
 import           Ledger.Value                         (Value)
 import qualified Ledger.Value                         as V
@@ -95,6 +97,11 @@ tx :: (UnbalancedTx -> Bool) -> TracePredicate Step
 tx flt _ = Predicate $ \case
     (Left _, _) -> False
     (Right stp, _) -> any flt (stepTransactions stp)
+
+waitingForSlot :: Slot -> TracePredicate Step
+waitingForSlot sl _ = Predicate $ \case
+    (Left _, _) -> False
+    (Right stp, _) -> Just sl == stepNextSlot stp
 
 anyTx :: TracePredicate Step
 anyTx = tx (const True)
@@ -147,4 +154,4 @@ handleInputs wllt ins contract = do
     block <- run' wllt (traverse_ Wallet.handleTx (Step.stepTransactions $ fold step1))
     idx <- gets (AM.fromUtxoIndex . view EM.index)
     let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block
-    pure (Con.applyInputs rest1 events)
+    pure $ Con.applyInputs rest1 events)

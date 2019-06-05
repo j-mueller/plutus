@@ -30,7 +30,7 @@ tests = testGroup "game"
         $ fold . fst <$> callEndpoint w1 "lock" (LockParams "secret" 10) game
 
     , checkPredicate "unlock funds" 
-        (walletFundsChange w2 (Ada.adaValueOf 10))
+        (walletFundsChange w2 (Ada.adaValueOf 10) <> walletFundsChange w1 (Ada.adaValueOf (-10)))
         $ callEndpoint w1 "lock" (LockParams "secret" 10) game
             >>= callEndpoint w2 "guess" (GuessParams "secret") . snd
     ]
