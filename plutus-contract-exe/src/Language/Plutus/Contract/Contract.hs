@@ -58,18 +58,12 @@ instance Semigroup a => Semigroup (Contract i o a) where
 
 -- | Run both contracts and return the first one that finishes
 select :: Contract i o a -> Contract i o a -> Contract i o a
-select l r = 
-    case l of
-        Pure a -> Pure a
-        Emit e c -> Emit e (select c r)
-        Waiting f -> 
-            go r where
-                go = \case
-                    Pure a -> Pure a
-                    Emit e c -> Emit e (go c)
-                    Waiting f' -> 
-                        Waiting $ \i -> select (f i) (f' i)
-
+select (Emit e c) r = Emit e (select c r)
+select l (Emit e c) = Emit e (select l c)
+select (Pure a)   _ = Pure a
+select _   (Pure a) = Pure a
+select (Waiting f) (Waiting f') =
+    Waiting $ \i -> select (f i) (f' i)
 
 emit :: o -> Contract i o ()
 emit t = Emit t (pure ())
