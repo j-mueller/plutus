@@ -8,7 +8,7 @@ module Language.Plutus.Contract(
     , fundsAtAddressGt
     , emit
     , slotGeq
-    , firstOf
+    , selectEither
     , select
     , both
     , until
@@ -18,7 +18,7 @@ module Language.Plutus.Contract(
     , collectUntil
     ) where
 
-import           Control.Lens                         hiding (both, firstOf)
+import           Control.Lens                         hiding (both)
 import           Control.Monad                        ((>=>))
 import           Data.Aeson                           (FromJSON)
 import qualified Data.Aeson                           as Aeson
@@ -88,7 +88,7 @@ slotGeq sl = await (Step.slot sl) (slotChange >=> go) where
 
 -- | Run a contract until the given slot has been reached.
 until :: PlutusContract a -> Slot -> PlutusContract (Maybe a)
-until c sl = fmap (either (const Nothing) Just) (firstOf (slotGeq sl) c)
+until c sl = fmap (either (const Nothing) Just) (selectEither (slotGeq sl) c)
 
 -- | Run a contract when the given slot has been reached.
 when :: Slot -> PlutusContract a -> PlutusContract a

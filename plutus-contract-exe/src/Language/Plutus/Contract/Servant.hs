@@ -25,7 +25,7 @@ contractServer c = initialise :<|> run where
     initialise = run []
     run []     = pure (fst (drain c))
     run (e:es) =
-      let c' = applyInputs c es in
+      let c' = applyInputs es c in
       pure $ fst $ drain $ applyInput e c'
 
 -- | A servant 'Application' that serves a Plutus contract

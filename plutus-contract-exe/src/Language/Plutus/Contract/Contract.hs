@@ -13,7 +13,7 @@ module Language.Plutus.Contract.Contract(
     , result
     , loopM
     , foldMaybe
-    , firstOf
+    , selectEither
     , select
     , both
     ) where
@@ -110,10 +110,10 @@ applyInput ip = \case
     Emit t c -> Emit t (applyInput ip c)
 
 applyInputs
-    :: Contract i o a
-    -> [i]
+    :: [i]
     -> Contract i o a
-applyInputs = foldl' (flip applyInput)
+    -> Contract i o a
+applyInputs is c = foldl' (flip applyInput) c is
 
 drain :: Monoid o => Contract i o a -> (o, Contract i o a)
 drain = \case
@@ -138,5 +138,5 @@ await a f = do
 both :: Contract i o a -> Contract i o b -> Contract i o (a, b)
 both = liftA2 (,)
 
-firstOf :: Contract i o a -> Contract i o b -> Contract i o (Either a b)
-firstOf l r = select (Left <$> l) (Right <$> r)
+selectEither :: Contract i o a -> Contract i o b -> Contract i o (Either a b)
+selectEither l r = select (Left <$> l) (Right <$> r)
