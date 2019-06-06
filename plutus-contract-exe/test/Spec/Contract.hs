@@ -51,7 +51,7 @@ tests = testGroup "contracts"
   , checkPredicate "call endpoint (2)"
       (endpointAvailable "2" <> not (endpointAvailable "1"))
       (let con =
-            Con.applyInput
+            Con.offer
                 (Event.endpoint "1" (Aeson.toJSON (1 :: Int)))
                 (snd $ Con.drain $ endpoint @Int "1" >> endpoint @Int "2")
       in fst <$> initContract con)

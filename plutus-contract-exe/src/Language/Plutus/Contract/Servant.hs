@@ -11,7 +11,7 @@ import           Servant                           ((:<|>) ((:<|>)), (:>), Get, 
 import           Servant.Server                    (Application, Server, serve)
 
 import           Language.Plutus.Contract          (PlutusContract)
-import           Language.Plutus.Contract.Contract (drain, applyInput, applyInputs)
+import           Language.Plutus.Contract.Contract (drain, offer, applyInputs)
 import           Language.Plutus.Contract.Event    (Event)
 import           Language.Plutus.Contract.Step     (Step)
 
@@ -26,7 +26,7 @@ contractServer c = initialise :<|> run where
     run []     = pure (fst (drain c))
     run (e:es) =
       let c' = applyInputs es c in
-      pure $ fst $ drain $ applyInput e c'
+      pure $ fst $ drain $ offer e c'
 
 -- | A servant 'Application' that serves a Plutus contract
 contractApp :: PlutusContract () -> Application

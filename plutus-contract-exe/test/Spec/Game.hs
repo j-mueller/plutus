@@ -22,7 +22,7 @@ tests = testGroup "game"
 
     , checkPredicate "'lock' endpoint submits a transaction" anyTx $
         let e = Event.endpoint "lock" (Aeson.toJSON $ LockParams "secret" 10)
-        in pure (fst $ Con.drain $ Con.applyInput e game)
+        in pure (fst $ Con.drain $ Con.offer e game)
 
     , checkPredicate "'guess' endpoint is available after locking funds" 
         (endpointAvailable "guess")
