@@ -1,6 +1,5 @@
 module Spec.Crowdfunding(tests) where
 
-import           Data.Foldable                                 (fold)
 import           Test.Tasty
 
 import qualified Ledger.Ada                                    as Ada
@@ -11,6 +10,8 @@ import           Language.Plutus.Contract.Contract             as Con
 
 import           Spec.HUnit
 
+import qualified Debug.Trace as Trace
+
 tests :: TestTree
 tests = testGroup "crowdfunding" [
     checkPredicate "Expose 'contribute' and 'scheduleCollection' endpoints"
@@ -18,14 +19,14 @@ tests = testGroup "crowdfunding" [
         $ pure (fst (Con.drain crowdfunding))
 
     , checkPredicate "'contribute' endpoint submits a transaction" 
-        (anyTx  <> interestingAddress (campaignAddress theCampaign)) $
+        (anyTx <> interestingAddress (campaignAddress theCampaign)) $
         let key = EM.walletPubKey w1
             contribution = Ada.adaValueOf 10
-        in fold . fst <$> callEndpoint w1 "contribute" (key, contribution) crowdfunding
+        in fst <$> callEndpoint w1 "contribute" (key, contribution) crowdfunding
 
     , checkPredicate "'scheduleCollection' starts watching campaign address and waits for deadline"
         (waitingForSlot (campaignDeadline theCampaign) <> interestingAddress (campaignAddress theCampaign))
-        (fold . fst <$> callEndpoint w1 "schedule collection" () crowdfunding)
+        (fst <$> callEndpoint w1 "schedule collection" () crowdfunding)
     ]
 
 w1, w2 :: EM.Wallet

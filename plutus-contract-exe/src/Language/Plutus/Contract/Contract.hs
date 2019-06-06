@@ -61,12 +61,12 @@ select :: Contract i o a -> Contract i o a -> Contract i o a
 select l r = 
     case l of
         Pure a -> Pure a
-        Emit _ c -> select c r
+        Emit e c -> Emit e (select c r)
         Waiting f -> 
             go r where
                 go = \case
                     Pure a -> Pure a
-                    Emit _ c -> go c
+                    Emit e c -> Emit e (go c)
                     Waiting f' -> 
                         Waiting $ \i -> select (f i) (f' i)
 
@@ -99,25 +99,21 @@ foldMaybe
 foldMaybe f b con = loopM go b where
     go b' = maybe (Left b') (Right . flip f b') <$> con
 
--- | Apply an input to a contract, collecting as much output data
---   't' as posible until the contract is blocked on inputs
+-- | Apply an input to a contract
 applyInput
-    :: Monoid o
-    => i
+    :: i
     -> Contract i o a
-    -> (o, Contract i o a)
+    -> Contract i o a
 applyInput ip = \case
-    Waiting f -> drain (f ip)
-    Pure a -> (mempty, Pure a)
-    Emit t c -> first (t <>) (applyInput ip c)
+    Waiting f -> f ip
+    Pure a -> Pure a -- ??
+    Emit t c -> Emit t (applyInput ip c)
 
 applyInputs
-    :: Monoid o
-    => Contract i o a
+    :: Contract i o a
     -> [i]
-    -> ([o], Contract i o a)
-applyInputs c = foldl' go (first return (drain c)) where
-    go (ts, c') i = first (:ts) (applyInput i c')
+    -> Contract i o a
+applyInputs = foldl' (flip applyInput)
 
 drain :: Monoid o => Contract i o a -> (o, Contract i o a)
 drain = \case

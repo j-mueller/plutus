@@ -1,5 +1,4 @@
 {-# LANGUAGE ApplicativeDo      #-}
-{-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE TypeOperators      #-}

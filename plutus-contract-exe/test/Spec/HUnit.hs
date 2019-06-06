@@ -4,6 +4,7 @@
 module Spec.HUnit(
     -- * Making assertions about 'Step' values
       TracePredicate
+    , Spec.HUnit.not
     , MockchainResult
     , endpointAvailable
     , interestingAddress
@@ -14,6 +15,7 @@ module Spec.HUnit(
     -- * Checking predicates
     , checkPredicate
     -- * Constructing 'MonadEmulator' actions
+    , initContract
     , runWallet
     , handleInputs
     , callEndpoint
@@ -29,7 +31,7 @@ import           Control.Monad                        (void)
 import           Control.Monad.State                  (gets)
 import qualified Data.Aeson                           as Aeson
 import           Data.Bifunctor                       (Bifunctor (..))
-import           Data.Foldable                        (fold, traverse_)
+import           Data.Foldable                        (traverse_)
 import           Data.Functor.Contravariant           (Predicate (..))
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe)
@@ -62,6 +64,9 @@ type InitialDistribution = [(Wallet, Ada)]
 type MockchainResult a = (Either AssertionError a, EmulatorState)
 
 type TracePredicate a = InitialDistribution -> Predicate (MockchainResult a)
+
+not :: TracePredicate a -> TracePredicate a
+not p a = Predicate $ \b -> Prelude.not (getPredicate (p a) b)
 
 checkPredicate :: String -> TracePredicate a -> EmulatorAction a -> TestTree
 checkPredicate nm predicate action =
@@ -124,6 +129,11 @@ assertEmulatorAction' = assertEmulatorAction defaultDist
 defaultDist :: [(Wallet, Ada)]
 defaultDist = [(EM.Wallet x, 100) | x <- [1..10]]
 
+-- TODO: MonadState (PlutusContract a)
+
+initContract :: Monad m => PlutusContract a -> m (Step, PlutusContract a)
+initContract = pure . drain
+
 -- | Call the endpoint on the contract, submit all transactions
 --   to the mockchain in the context of the given wallet, and
 --   return the new contract together with the list of steps.
@@ -134,7 +144,7 @@ callEndpoint
     -> String
     -> b
     -> PlutusContract a
-    -> m ([Step], PlutusContract a)
+    -> m (Step, PlutusContract a)
 callEndpoint w nm vl =
     handleInputs w [Event.endpoint nm (Aeson.toJSON vl)]
 
@@ -147,11 +157,20 @@ handleInputs
     => Wallet
     -> [Event]
     -> PlutusContract a
-    -> m ([Step], PlutusContract a)
+    -> m (Step, PlutusContract a)
 handleInputs wllt ins contract = do
-    let (step1, rest1) = Con.applyInputs contract ins
+    let (step1, rest1) = Con.drain $ Con.applyInputs (snd $ Con.drain contract) ins
         run' = runWallet (EM.Wallet <$> [1..10])
-    block <- run' wllt (traverse_ Wallet.handleTx (Step.stepTransactions $ fold step1))
-    idx <- gets (AM.fromUtxoIndex . view EM.index)
-    let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block
-    pure $ Con.applyInputs rest1 events)
+        txns = Step.stepTransactions step1
+
+    -- FIXME: This is ugly. But if there are no transactions, and we call 
+    --        'drain' on 'rest1' again then we get 'mempty' (dropping any
+    --        endpoints etc.)
+    --        To fix this we need to add inverses to the `Step` type.
+    if null txns
+    then pure (step1, rest1)
+    else do
+        block <- run' wllt (traverse_ Wallet.handleTx txns)
+        idx <- gets (AM.fromUtxoIndex . view EM.index)
+        let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block
+        pure $ Con.drain $ Con.applyInputs rest1 events
