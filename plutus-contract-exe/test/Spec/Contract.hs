@@ -20,9 +20,9 @@ tests = testGroup "contracts"
       (waitingForSlot 10)
       (fst <$> initContract (slotGeq 10))
 
-  , checkPredicate "firstOf"
+  , checkPredicate "selectEither"
       (waitingForSlot 5)
-      (fst <$> initContract (firstOf (slotGeq 10) (slotGeq 5)))
+      (fst <$> initContract (selectEither (slotGeq 10) (slotGeq 5)))
 
   , checkPredicate "until"
       (waitingForSlot 5)

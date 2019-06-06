@@ -10,8 +10,6 @@ import           Language.Plutus.Contract.Contract             as Con
 
 import           Spec.HUnit
 
-import qualified Debug.Trace as Trace
-
 tests :: TestTree
 tests = testGroup "crowdfunding" [
     checkPredicate "Expose 'contribute' and 'scheduleCollection' endpoints"

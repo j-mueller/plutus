@@ -159,7 +159,7 @@ handleInputs
     -> PlutusContract a
     -> m (Step, PlutusContract a)
 handleInputs wllt ins contract = do
-    let (step1, rest1) = Con.drain $ Con.applyInputs (snd $ Con.drain contract) ins
+    let (step1, rest1) = Con.drain $ Con.applyInputs ins (snd $ Con.drain contract)
         run' = runWallet (EM.Wallet <$> [1..10])
         txns = Step.stepTransactions step1
 
@@ -173,4 +173,4 @@ handleInputs wllt ins contract = do
         block <- run' wllt (traverse_ Wallet.handleTx txns)
         idx <- gets (AM.fromUtxoIndex . view EM.index)
         let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block
-        pure $ Con.drain $ Con.applyInputs rest1 events
+        pure $ Con.drain $ Con.applyInputs events rest1
