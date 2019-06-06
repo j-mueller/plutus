@@ -2,6 +2,7 @@
 module Main(main) where
 
 import qualified Spec.Crowdfunding
+import qualified Spec.Contract
 import qualified Spec.Game
 import           Test.Tasty
 
@@ -11,5 +12,6 @@ main = defaultMain tests
 tests :: TestTree
 tests = testGroup "plutus-contract-exe" [
     Spec.Crowdfunding.tests,
+    Spec.Contract.tests,
     Spec.Game.tests
     ]

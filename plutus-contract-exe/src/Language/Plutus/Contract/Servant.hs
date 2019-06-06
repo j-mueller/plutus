@@ -6,13 +6,12 @@ module Language.Plutus.Contract.Servant(
     , contractApp
     ) where
 
-import           Data.Maybe                        (fromMaybe, listToMaybe)
 import           Data.Proxy                        (Proxy (..))
 import           Servant                           ((:<|>) ((:<|>)), (:>), Get, JSON, Post, ReqBody)
 import           Servant.Server                    (Application, Server, serve)
 
 import           Language.Plutus.Contract          (PlutusContract)
-import           Language.Plutus.Contract.Contract (applyInputs)
+import           Language.Plutus.Contract.Contract (drain, applyInput, applyInputs)
 import           Language.Plutus.Contract.Event    (Event)
 import           Language.Plutus.Contract.Step     (Step)
 
@@ -24,7 +23,10 @@ type ContractAPI =
 contractServer :: PlutusContract () -> Server ContractAPI
 contractServer c = initialise :<|> run where
     initialise = run []
-    run = pure . fromMaybe mempty . listToMaybe . fst . applyInputs c
+    run []     = pure (fst (drain c))
+    run (e:es) =
+      let c' = applyInputs c es in
+      pure $ fst $ drain $ applyInput e c'
 
 -- | A servant 'Application' that serves a Plutus contract
 contractApp :: PlutusContract () -> Application

@@ -19,15 +19,15 @@ tests :: TestTree
 tests = testGroup "game"
     [ checkPredicate "Expose 'lock' endpoint and watch game address"
         (endpointAvailable "lock" <> interestingAddress gameAddress)
-        $ pure (fst (Con.drain game))
+        (fst <$> initContract game)
 
     , checkPredicate "'lock' endpoint submits a transaction" anyTx $
         let e = Event.endpoint "lock" (Aeson.toJSON $ LockParams "secret" 10)
-        in pure (fst $ Con.applyInput e game)
+        in pure (fst $ Con.drain $ Con.applyInput e game)
 
     , checkPredicate "'guess' endpoint is available after locking funds" 
         (endpointAvailable "guess")
-        $ fold . fst <$> callEndpoint w1 "lock" (LockParams "secret" 10) game
+        $ fst <$> callEndpoint w1 "lock" (LockParams "secret" 10) game
 
     , checkPredicate "unlock funds" 
         (walletFundsChange w2 (Ada.adaValueOf 10) <> walletFundsChange w1 (Ada.adaValueOf (-10)))

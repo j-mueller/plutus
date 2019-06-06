@@ -10,6 +10,7 @@ module Examples.Game(
       game
     , LockParams(..)
     , GuessParams(..)
+    , gameAddress
     ) where
 
 import           Control.Lens                                  (at, (^.))
