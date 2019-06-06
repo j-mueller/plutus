@@ -4,8 +4,8 @@
 module Language.Plutus.Contract.Contract(
       Contract
     , emit
+    , offer
     , waiting
-    , applyInput
     , applyInputs
     , drain
     , outputs
@@ -36,15 +36,15 @@ instance Alt (Contract i o) where
 -- The applicative instance parallelises the 'Waiting' operations
 instance Applicative (Contract i o) where
     pure = Pure
-    cf <*> ca = case cf of
-        Emit t c -> Emit t (c <*> ca)
-        Pure f -> fmap f ca
-        Waiting f ->
-            case ca of
-                Emit t c -> Emit t (Waiting f <*> c)
-                Pure a' -> Waiting $ \i' -> fmap (\f' -> f' a') (f i')
-                Waiting f' ->
-                    Waiting $ \i' -> f i' <*> f' i'
+    Emit t c  <*> ca       = Emit t (c <*> ca)
+    cf        <*> Emit t c = Emit t (cf <*> c)
+    Pure f    <*> ca       = f <$> ca
+    Waiting f <*> ca       = Waiting $ \i -> f i <*> offer i ca
+
+offer :: i -> Contract i o a -> Contract i o a
+offer i (Waiting f) = f i
+offer i (Emit t c)  = Emit t (offer i c)
+offer _ c           = c
 
 -- The monad instance sequentialises the 'Waiting' operations
 instance Monad (Contract i o) where
@@ -99,21 +99,11 @@ foldMaybe
 foldMaybe f b con = loopM go b where
     go b' = maybe (Left b') (Right . flip f b') <$> con
 
--- | Apply an input to a contract
-applyInput
-    :: i
-    -> Contract i o a
-    -> Contract i o a
-applyInput ip = \case
-    Waiting f -> f ip
-    Pure a -> Pure a -- ??
-    Emit t c -> Emit t (applyInput ip c)
-
 applyInputs
     :: [i]
     -> Contract i o a
     -> Contract i o a
-applyInputs is c = foldl' (flip applyInput) c is
+applyInputs is c = foldl' (flip offer) c is
 
 drain :: Monoid o => Contract i o a -> (o, Contract i o a)
 drain = \case
