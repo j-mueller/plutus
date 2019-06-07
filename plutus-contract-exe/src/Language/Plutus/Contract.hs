@@ -38,11 +38,15 @@ import qualified Ledger.Value                         as V
 
 import           Prelude                              hiding (until)
 
-type PlutusContract a = Contract Event Step a
+type PlutusContract a = Contract Event BalancedStep a
 
 -- | Watch an 'Address', returning the next transaction that changes it
 nextTransactionAt :: Address -> PlutusContract Tx
-nextTransactionAt a = await (Step.addr a) (ledgerUpdate >=> check) where
+nextTransactionAt a = do
+    r <- await (Step.addr a) (ledgerUpdate >=> check) 
+    _ <- emit (Step.closeAddr a)
+    pure r
+    where
     check (a', t)
         | a == a' = Just t
         | otherwise = Nothing
@@ -54,14 +58,18 @@ watchAddressUntil a = collectUntil AM.updateAddresses (AM.addAddress a mempty) (
 
 -- | Expose an endpoint, returning the data that was entered
 endpoint :: forall a. FromJSON a => String -> PlutusContract a
-endpoint nm = await (Step.endpointName nm) (endpointEvent >=> uncurry dec) where
-    dec :: String -> Aeson.Value -> Maybe a
-    dec nm' vl
-        | nm' == nm =
-            case Aeson.fromJSON vl of
-                Aeson.Success r -> Just r
-                _               -> Nothing
-        | otherwise = Nothing
+endpoint nm = do
+    r <- await (Step.endpointName nm) (endpointEvent >=> uncurry dec) 
+    _ <- emit (Step.closeEndpoint nm)
+    pure r
+    where
+        dec :: String -> Aeson.Value -> Maybe a
+        dec nm' vl
+            | nm' == nm =
+                case Aeson.fromJSON vl of
+                    Aeson.Success r -> Just r
+                    _               -> Nothing
+            | otherwise = Nothing
 
 -- | Produce an unbalanced transaction
 writeTx :: UnbalancedTx -> PlutusContract ()
