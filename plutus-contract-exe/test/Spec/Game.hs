@@ -10,6 +10,7 @@ import qualified Wallet.Emulator                               as EM
 
 import           Examples.Game                                 (GuessParams (..), LockParams (..), game)
 import           Language.Plutus.Contract.Contract             as Con
+import qualified Language.Plutus.Contract.Step                 as Step
 import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress)
 
 import           Spec.HUnit
@@ -22,13 +23,13 @@ tests = testGroup "game"
 
     , checkPredicate "'lock' endpoint submits a transaction" anyTx $
         let e = Event.endpoint "lock" (Aeson.toJSON $ LockParams "secret" 10)
-        in pure (fst $ Con.drain $ Con.offer e game)
+        in pure (Step.step . fst . Con.drain $ Con.offer e game)
 
-    , checkPredicate "'guess' endpoint is available after locking funds" 
+    , checkPredicate "'guess' endpoint is available after locking funds"
         (endpointAvailable "guess")
         $ fst <$> callEndpoint w1 "lock" (LockParams "secret" 10) game
 
-    , checkPredicate "unlock funds" 
+    , checkPredicate "unlock funds"
         (walletFundsChange w2 (Ada.adaValueOf 10) <> walletFundsChange w1 (Ada.adaValueOf (-10)))
         $ callEndpoint w1 "lock" (LockParams "secret" 10) game
             >>= callEndpoint w2 "guess" (GuessParams "secret") . snd

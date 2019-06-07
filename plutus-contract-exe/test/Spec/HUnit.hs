@@ -28,7 +28,7 @@ module Spec.HUnit(
 
 import           Control.Lens                         (at, view, (^.))
 import           Control.Monad                        (void)
-import           Control.Monad.State                  (gets)
+import           Control.Monad.State                  (MonadState(..), gets)
 import qualified Data.Aeson                           as Aeson
 import           Data.Bifunctor                       (Bifunctor (..))
 import           Data.Foldable                        (traverse_)
@@ -58,6 +58,8 @@ import qualified Ledger.Value                         as V
 import           Wallet.Emulator                      (AssertionError, EmulatorAction, EmulatorState, MonadEmulator,
                                                        Wallet)
 import qualified Wallet.Emulator                      as EM
+
+import qualified Debug.Trace as Trace
 
 type InitialDistribution = [(Wallet, Ada)]
 
@@ -132,7 +134,7 @@ defaultDist = [(EM.Wallet x, 100) | x <- [1..10]]
 -- TODO: MonadState (PlutusContract a)
 
 initContract :: Monad m => PlutusContract a -> m (Step, PlutusContract a)
-initContract = pure . drain
+initContract = pure . first Step.step . drain
 
 -- | Call the endpoint on the contract, submit all transactions
 --   to the mockchain in the context of the given wallet, and
@@ -159,18 +161,12 @@ handleInputs
     -> PlutusContract a
     -> m (Step, PlutusContract a)
 handleInputs wllt ins contract = do
-    let (step1, rest1) = Con.drain $ Con.applyInputs ins (snd $ Con.drain contract)
+    let (step1, rest1) = Con.drain $ Con.applyInputs ins contract
         run' = runWallet (EM.Wallet <$> [1..10])
-        txns = Step.stepTransactions step1
+        txns = Step.stepTransactions (Step.step step1)
+    block <- run' wllt (traverse_ Wallet.handleTx txns)
+    idx <- gets (AM.fromUtxoIndex . view EM.index)
 
-    -- FIXME: This is ugly. But if there are no transactions, and we call 
-    --        'drain' on 'rest1' again then we get 'mempty' (dropping any
-    --        endpoints etc.)
-    --        To fix this we need to add inverses to the `Step` type.
-    if null txns
-    then pure (step1, rest1)
-    else do
-        block <- run' wllt (traverse_ Wallet.handleTx txns)
-        idx <- gets (AM.fromUtxoIndex . view EM.index)
-        let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block
-        pure $ Con.drain $ Con.applyInputs events rest1
+    let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block
+
+    pure . first Step.step . Con.drain $ Con.applyInputs (ins ++ events) contract

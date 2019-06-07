@@ -21,7 +21,6 @@ module Language.Plutus.Contract.Contract(
 import           Control.Applicative (liftA2)
 import           Control.Monad       ((>=>))
 import           Data.Bifunctor      (first)
-import           Data.List           (foldl')
 import           Data.Functor.Alt
 
 data Contract i o a =
@@ -97,7 +96,7 @@ applyInputs
     :: [i]
     -> Contract i o a
     -> Contract i o a
-applyInputs is c = foldl' (flip offer) c is
+applyInputs is c = foldr offer c is
 
 drain :: Monoid o => Contract i o a -> (o, Contract i o a)
 drain = \case
