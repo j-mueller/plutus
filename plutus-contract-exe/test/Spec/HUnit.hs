@@ -1,11 +1,17 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase       #-}
+{-# LANGUAGE TemplateHaskell  #-}
 -- | Testing contracts with HUnit
 module Spec.HUnit(
     -- * Making assertions about 'Step' values
-      TracePredicate
+      ContractTraceState
+    , ctsEvents
+    , ctsStep
+    , ctsContract
+    , ContractTestResult
+    , ctrEmulatorState
+    , ctrTraceState
+    , TracePredicate
     , Spec.HUnit.not
-    , MockchainResult
     , endpointAvailable
     , interestingAddress
     , tx
@@ -17,24 +23,27 @@ module Spec.HUnit(
     -- * Constructing 'MonadEmulator' actions
     , initContract
     , runWallet
+    , event_
+    , drain_
     , handleInputs
     , callEndpoint
     -- * Running 'MonadEmulator' actions
     , InitialDistribution
     , withInitialDistribution
-    , assertEmulatorAction
-    , assertEmulatorAction'
     ) where
 
-import           Control.Lens                         (at, view, (^.))
+import           Control.Lens                         (at, makeLenses, use, view, (.=), (<>=), (^.))
 import           Control.Monad                        (void)
-import           Control.Monad.State                  (MonadState(..), gets)
+import           Control.Monad.State                  (StateT, gets, runStateT)
+import           Control.Monad.Trans.Class            (MonadTrans (..))
 import qualified Data.Aeson                           as Aeson
 import           Data.Bifunctor                       (Bifunctor (..))
 import           Data.Foldable                        (traverse_)
 import           Data.Functor.Contravariant           (Predicate (..))
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe)
+import           Data.Sequence                        (Seq)
+import qualified Data.Sequence                        as Seq
 import qualified Data.Set                             as Set
 import qualified Test.Tasty.HUnit                     as HUnit
 import           Test.Tasty.Providers                 (TestTree)
@@ -43,7 +52,7 @@ import           Language.Plutus.Contract             (PlutusContract)
 import           Language.Plutus.Contract.Contract    as Con
 import           Language.Plutus.Contract.Event       (Event)
 import qualified Language.Plutus.Contract.Event       as Event
-import           Language.Plutus.Contract.Step        (Step (..))
+import           Language.Plutus.Contract.Step        (BalancedStep (..), Step (..))
 import qualified Language.Plutus.Contract.Step        as Step
 import           Language.Plutus.Contract.Transaction (UnbalancedTx)
 import qualified Language.Plutus.Contract.Wallet      as Wallet
@@ -59,25 +68,60 @@ import           Wallet.Emulator                      (AssertionError, EmulatorA
                                                        Wallet)
 import qualified Wallet.Emulator                      as EM
 
-import qualified Debug.Trace as Trace
-
 type InitialDistribution = [(Wallet, Ada)]
 
-type MockchainResult a = (Either AssertionError a, EmulatorState)
+data ContractTraceState a =
+    ContractTraceState
+        { _ctsEvents   :: Seq Event
+        -- ^ Events that were fed to the contract
+        , _ctsStep     :: BalancedStep
+        -- ^ Accumulated 'BalancedStep' value
+        , _ctsContract :: PlutusContract a
+        -- ^ Current state of the contract
+        }
 
-type TracePredicate a = InitialDistribution -> Predicate (MockchainResult a)
+makeLenses ''ContractTraceState
+
+data ContractTestResult a =
+    ContractTestResult
+        { _ctrEmulatorState :: EmulatorState
+        -- ^ The emulator state at the end of the test
+        , _ctrTraceState    :: ContractTraceState a
+        -- ^ Final 'ContractTraceState'
+        }
+
+makeLenses ''ContractTestResult
+
+type TracePredicate a = InitialDistribution -> Predicate (ContractTestResult a)
+
+type ContractTrace m a b = StateT (ContractTraceState a) m b
+
+mkState :: PlutusContract a -> ContractTraceState a
+mkState = ContractTraceState mempty mempty
+
+step :: ContractTestResult a -> Step
+step = Step.fromBalanced . _ctsStep . _ctrTraceState
 
 not :: TracePredicate a -> TracePredicate a
 not p a = Predicate $ \b -> Prelude.not (getPredicate (p a) b)
 
-checkPredicate :: String -> TracePredicate a -> EmulatorAction a -> TestTree
-checkPredicate nm predicate action =
+checkPredicate
+    :: String
+    -> PlutusContract a
+    -> TracePredicate a
+    -> ContractTrace EmulatorAction a ()
+    -> TestTree
+checkPredicate nm con predicate action =
     HUnit.testCase nm $
-        HUnit.assertBool nm (getPredicate (predicate defaultDist) (withInitialDistribution defaultDist action))
+        case withInitialDistribution defaultDist (runStateT action (mkState con)) of
+            (Left err, _) -> HUnit.assertFailure $ "EmulatorAction failed. " ++ show err
+            (Right (_, st), ms) ->
+                let dt = ContractTestResult ms st in
+                HUnit.assertBool nm (getPredicate (predicate defaultDist) dt)
 
 -- | Run an 'EmulatorAction' on a blockchain with the given initial distribution
 --   of funds to wallets.
-withInitialDistribution :: [(Wallet, Ada)] -> EmulatorAction a -> MockchainResult a
+withInitialDistribution :: [(Wallet, Ada)] -> EmulatorAction a -> (Either AssertionError a, EmulatorState)
 withInitialDistribution dist action =
     let s = EM.emulatorStateInitialDist (Map.fromList (first EM.walletPubKey . second Ada.toValue <$> dist))
 
@@ -90,51 +134,52 @@ withInitialDistribution dist action =
 runWallet :: MonadEmulator m => [Wallet] -> Wallet -> EM.MockWallet () -> m [Tx]
 runWallet ws w = EM.processEmulated . EM.runWalletActionAndProcessPending ws w
 
-endpointAvailable :: String -> TracePredicate Step
-endpointAvailable nm _ = Predicate $ \case
-    (Left _, _) -> False
-    (Right stp, _) -> nm `Set.member` stepEndpoints stp
+endpointAvailable :: String -> TracePredicate a
+endpointAvailable nm _ = Predicate $ \r ->
+    nm `Set.member` stepEndpoints (step r)
 
-interestingAddress :: Address -> TracePredicate Step
-interestingAddress addr _ = Predicate $ \case
-    (Left _, _) -> False
-    (Right stp, _) -> addr `Set.member` stepAddresses stp
+interestingAddress :: Address -> TracePredicate a
+interestingAddress addr _ = Predicate $ \r ->
+        addr `Set.member` stepAddresses (step r)
 
-tx :: (UnbalancedTx -> Bool) -> TracePredicate Step
-tx flt _ = Predicate $ \case
-    (Left _, _) -> False
-    (Right stp, _) -> any flt (stepTransactions stp)
+tx :: (UnbalancedTx -> Bool) -> TracePredicate a
+tx flt _ = Predicate $ \r ->
+    any flt (stepTransactions (step r))
 
-waitingForSlot :: Slot -> TracePredicate Step
-waitingForSlot sl _ = Predicate $ \case
-    (Left _, _) -> False
-    (Right stp, _) -> Just sl == stepNextSlot stp
+waitingForSlot :: Slot -> TracePredicate a
+waitingForSlot sl _ = Predicate $ \r ->
+    Just sl == stepNextSlot (step r)
 
-anyTx :: TracePredicate Step
+anyTx :: TracePredicate a
 anyTx = tx (const True)
 
 walletFundsChange :: Wallet -> Value -> TracePredicate a
-walletFundsChange w dlt initialDist = Predicate $ \(_, st) ->
-    let initialValue = foldMap Ada.toValue (Map.fromList initialDist ^. at w)
-        finalValue   = fromMaybe mempty (EM.fundsDistribution st ^. at w)
-    in initialValue `V.plus` dlt == finalValue
-
-assertEmulatorAction :: [(Wallet, Ada)] -> EmulatorAction a -> (a -> HUnit.Assertion) -> HUnit.Assertion
-assertEmulatorAction dist trace assertion = do
-    let (r, _) = withInitialDistribution dist trace
-    either (HUnit.assertFailure . show) assertion r
-
-assertEmulatorAction' :: EmulatorAction a -> (a -> HUnit.Assertion) -> HUnit.Assertion
-assertEmulatorAction' = assertEmulatorAction defaultDist
+walletFundsChange w dlt initialDist = Predicate $
+    \ContractTestResult{_ctrEmulatorState = st} ->
+        let initialValue = foldMap Ada.toValue (Map.fromList initialDist ^. at w)
+            finalValue   = fromMaybe mempty (EM.fundsDistribution st ^. at w)
+        in initialValue `V.plus` dlt == finalValue
 
 -- | Initial distribution of 100 Ada to each wallet.
 defaultDist :: [(Wallet, Ada)]
 defaultDist = [(EM.Wallet x, 100) | x <- [1..10]]
 
--- TODO: MonadState (PlutusContract a)
-
 initContract :: Monad m => PlutusContract a -> m (Step, PlutusContract a)
-initContract = pure . first Step.step . drain
+initContract = pure . first Step.fromBalanced . drain
+
+event_ :: Monad m => Event -> ContractTrace m a ()
+event_ e = do
+    contract <- use ctsContract
+    ctsEvents <>= Seq.singleton e
+    ctsContract .= Con.offer e contract
+
+drain_ :: Monad m => ContractTrace m a BalancedStep
+drain_ = do
+    contract <- use ctsContract
+    let (stp, rest) = Con.drain contract
+    ctsContract .= rest
+    ctsStep <>= stp
+    return stp
 
 -- | Call the endpoint on the contract, submit all transactions
 --   to the mockchain in the context of the given wallet, and
@@ -145,10 +190,8 @@ callEndpoint
     => Wallet
     -> String
     -> b
-    -> PlutusContract a
-    -> m (Step, PlutusContract a)
-callEndpoint w nm vl =
-    handleInputs w [Event.endpoint nm (Aeson.toJSON vl)]
+    -> ContractTrace m a ()
+callEndpoint w nm vl = handleInputs w [Event.endpoint nm (Aeson.toJSON vl)]
 
 -- | Apply the contract to the list of events, submit
 --   all transactions that come out to the mockchain
@@ -158,15 +201,15 @@ handleInputs
     :: ( MonadEmulator m )
     => Wallet
     -> [Event]
-    -> PlutusContract a
-    -> m (Step, PlutusContract a)
-handleInputs wllt ins contract = do
-    let (step1, rest1) = Con.drain $ Con.applyInputs ins contract
-        run' = runWallet (EM.Wallet <$> [1..10])
-        txns = Step.stepTransactions (Step.step step1)
-    block <- run' wllt (traverse_ Wallet.handleTx txns)
-    idx <- gets (AM.fromUtxoIndex . view EM.index)
+    -> ContractTrace m a ()
+handleInputs wllt ins = do
+    _ <- traverse_ event_ ins
+    step1 <- drain_
+    let run' = runWallet (EM.Wallet <$> [1..10])
+        txns = Step.stepTransactions (Step.fromBalanced step1)
+    
+    block <- lift (run' wllt (traverse_ Wallet.handleTx txns))
+    idx <- lift (gets (AM.fromUtxoIndex . view EM.index))
 
     let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block
-
-    pure . first Step.step . Con.drain $ Con.applyInputs (ins ++ events) contract
+    traverse_ event_ events

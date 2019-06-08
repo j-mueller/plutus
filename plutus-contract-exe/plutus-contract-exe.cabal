@@ -130,4 +130,5 @@ test-suite plutus-contract-exe-test
         text -any,
         mtl -any,
         aeson -any,
-        lens -any
+        lens -any,
+        transformers -any
