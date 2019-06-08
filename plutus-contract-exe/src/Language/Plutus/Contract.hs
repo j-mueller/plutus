@@ -56,12 +56,16 @@ nextTransactionAt a = do
 watchAddressUntil :: Address -> Slot -> PlutusContract AM.AddressMap
 watchAddressUntil a = collectUntil AM.updateAddresses (AM.addAddress a mempty) (nextTransactionAt a)
 
+-- | Monadic version of `<*`
+finally :: Monad m => m a -> m b -> m a
+finally a b = do
+    a' <- a
+    _ <- b
+    return a'
+
 -- | Expose an endpoint, returning the data that was entered
 endpoint :: forall a. FromJSON a => String -> PlutusContract a
-endpoint nm = do
-    r <- await (Step.endpointName nm) (endpointEvent >=> uncurry dec) 
-    _ <- emit (Step.closeEndpoint nm)
-    pure r
+endpoint nm = await (Step.endpointName nm) (endpointEvent >=> uncurry dec) `finally` emit (Step.closeEndpoint nm)
     where
         dec :: String -> Aeson.Value -> Maybe a
         dec nm' vl

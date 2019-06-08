@@ -92,8 +92,8 @@ instance Semigroup BalancedStep where
 instance Monoid BalancedStep where
     mempty = BalancedStep mempty Map.empty Nothing Map.empty
 
-step :: BalancedStep -> Step
-step bs = 
+fromBalanced :: BalancedStep -> Step
+fromBalanced bs = 
     Step
         { stepTransactions = bStepTransactions bs
         , stepAddresses = openKeys (bStepAddresses bs)
