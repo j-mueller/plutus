@@ -107,8 +107,10 @@ drain = \case
 outputs :: Monoid o => Contract i o a -> o
 outputs = fst . drain
 
-result :: Monoid o => Contract i o a -> Maybe a
-result = (\case { Pure b -> Just b; _ -> Nothing }) . snd . drain
+result :: Monoid o => Contract i o a -> Either o a
+result = \case
+    Pure a -> Right a
+    c'     -> Left (fst (drain c'))
 
 await :: o -> (i -> Maybe a) -> Contract i o a
 await a f = do
