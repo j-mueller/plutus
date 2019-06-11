@@ -2,10 +2,10 @@
 {-# LANGUAGE TemplateHaskell  #-}
 -- | Testing contracts with HUnit
 module Spec.HUnit(
-    -- * Making assertions about 'Step' values
+    -- * Making assertions about 'Hooks' values
       ContractTraceState
     , ctsEvents
-    , ctsStep
+    , ctsHooks
     , ctsContract
     , ContractTestResult
     , ctrEmulatorState
@@ -52,8 +52,8 @@ import           Language.Plutus.Contract             (PlutusContract)
 import           Language.Plutus.Contract.Contract    as Con
 import           Language.Plutus.Contract.Event       (Event)
 import qualified Language.Plutus.Contract.Event       as Event
-import           Language.Plutus.Contract.Step        (BalancedStep (..), Step (..))
-import qualified Language.Plutus.Contract.Step        as Step
+import           Language.Plutus.Contract.Hooks       (BalancedHooks (..), Hooks (..))
+import qualified Language.Plutus.Contract.Hooks       as Hooks
 import           Language.Plutus.Contract.Transaction (UnbalancedTx)
 import qualified Language.Plutus.Contract.Wallet      as Wallet
 
@@ -74,8 +74,8 @@ data ContractTraceState a =
     ContractTraceState
         { _ctsEvents   :: Seq Event
         -- ^ Events that were fed to the contract
-        , _ctsStep     :: BalancedStep
-        -- ^ Accumulated 'BalancedStep' value
+        , _ctsHooks    :: BalancedHooks
+        -- ^ Accumulated 'BalancedHooks' value
         , _ctsContract :: PlutusContract a
         -- ^ Current state of the contract
         }
@@ -99,8 +99,8 @@ type ContractTrace m a b = StateT (ContractTraceState a) m b
 mkState :: PlutusContract a -> ContractTraceState a
 mkState = ContractTraceState mempty mempty
 
-step :: ContractTestResult a -> Step
-step = Step.fromBalanced . _ctsStep . _ctrTraceState
+hooks :: ContractTestResult a -> Hooks
+hooks = Hooks.fromBalanced . _ctsHooks . _ctrTraceState
 
 not :: TracePredicate a -> TracePredicate a
 not p a = Predicate $ \b -> Prelude.not (getPredicate (p a) b)
@@ -136,19 +136,19 @@ runWallet ws w = EM.processEmulated . EM.runWalletActionAndProcessPending ws w
 
 endpointAvailable :: String -> TracePredicate a
 endpointAvailable nm _ = Predicate $ \r ->
-    nm `Set.member` stepEndpoints (step r)
+    nm `Set.member` _endpoints (hooks r)
 
 interestingAddress :: Address -> TracePredicate a
 interestingAddress addr _ = Predicate $ \r ->
-        addr `Set.member` stepAddresses (step r)
+        addr `Set.member` _addresses (hooks r)
 
 tx :: (UnbalancedTx -> Bool) -> TracePredicate a
 tx flt _ = Predicate $ \r ->
-    any flt (stepTransactions (step r))
+    any flt (_transactions (hooks r))
 
 waitingForSlot :: Slot -> TracePredicate a
 waitingForSlot sl _ = Predicate $ \r ->
-    Just sl == stepNextSlot (step r)
+    Just sl == _nextSlot (hooks r)
 
 anyTx :: TracePredicate a
 anyTx = tx (const True)
@@ -164,8 +164,8 @@ walletFundsChange w dlt initialDist = Predicate $
 defaultDist :: [(Wallet, Ada)]
 defaultDist = [(EM.Wallet x, 100) | x <- [1..10]]
 
-initContract :: Monad m => PlutusContract a -> m (Step, PlutusContract a)
-initContract = pure . first Step.fromBalanced . drain
+initContract :: Monad m => PlutusContract a -> m (Hooks, PlutusContract a)
+initContract = pure . first Hooks.fromBalanced . drain
 
 event_ :: Monad m => Event -> ContractTrace m a ()
 event_ e = do
@@ -173,12 +173,12 @@ event_ e = do
     ctsEvents <>= Seq.singleton e
     ctsContract .= Con.offer e contract
 
-drain_ :: Monad m => ContractTrace m a BalancedStep
+drain_ :: Monad m => ContractTrace m a BalancedHooks
 drain_ = do
     contract <- use ctsContract
     let (stp, rest) = Con.drain contract
     ctsContract .= rest
-    ctsStep <>= stp
+    ctsHooks <>= stp
     return stp
 
 -- | Call the endpoint on the contract, submit all transactions
@@ -206,8 +206,8 @@ handleInputs wllt ins = do
     _ <- traverse_ event_ ins
     step1 <- drain_
     let run' = runWallet (EM.Wallet <$> [1..10])
-        txns = Step.stepTransactions (Step.fromBalanced step1)
-    
+        txns = Hooks._transactions (Hooks.fromBalanced step1)
+
     block <- lift (run' wllt (traverse_ Wallet.handleTx txns))
     idx <- lift (gets (AM.fromUtxoIndex . view EM.index))
 

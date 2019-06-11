@@ -26,7 +26,7 @@ import           Data.Maybe                           (fromMaybe)
 
 import           Language.Plutus.Contract.Contract    as Contract
 import           Language.Plutus.Contract.Event       as Event hiding (endpoint)
-import           Language.Plutus.Contract.Step        as Step
+import           Language.Plutus.Contract.Hooks        as Hooks
 import           Language.Plutus.Contract.Transaction as Transaction
 
 import           Ledger.AddressMap                    (AddressMap)
@@ -38,13 +38,13 @@ import qualified Ledger.Value                         as V
 
 import           Prelude                              hiding (until)
 
-type PlutusContract a = Contract Event BalancedStep a
+type PlutusContract a = Contract Event BalancedHooks a
 
 -- | Watch an 'Address', returning the next transaction that changes it
 nextTransactionAt :: Address -> PlutusContract Tx
 nextTransactionAt a = do
-    r <- await (Step.addr a) (ledgerUpdate >=> check) 
-    _ <- emit (Step.closeAddr a)
+    r <- await (Hooks.addr a) (ledgerUpdate >=> check) 
+    _ <- emit (Hooks.closeAddr a)
     pure r
     where
     check (a', t)
@@ -65,7 +65,7 @@ finally a b = do
 
 -- | Expose an endpoint, returning the data that was entered
 endpoint :: forall a. FromJSON a => String -> PlutusContract a
-endpoint nm = await (Step.endpointName nm) (endpointEvent >=> uncurry dec) `finally` emit (Step.closeEndpoint nm)
+endpoint nm = await (Hooks.endpointName nm) (endpointEvent >=> uncurry dec) `finally` emit (Hooks.closeEndpoint nm)
     where
         dec :: String -> Aeson.Value -> Maybe a
         dec nm' vl
@@ -77,7 +77,7 @@ endpoint nm = await (Step.endpointName nm) (endpointEvent >=> uncurry dec) `fina
 
 -- | Produce an unbalanced transaction
 writeTx :: UnbalancedTx -> PlutusContract ()
-writeTx = emit . Step.tx
+writeTx = emit . Hooks.tx
 
 -- | Watch an address for changes, and return the outputs
 --   at that address when the total value at the address
@@ -93,7 +93,7 @@ fundsAtAddressGt addr' vl = loopM go mempty where
 
 -- | Wait until a slot number has been reached
 slotGeq :: Slot -> PlutusContract Slot
-slotGeq sl = await (Step.slot sl) (slotChange >=> go) where
+slotGeq sl = await (Hooks.slot sl) (slotChange >=> go) where
     go sl'
         | sl' >= sl = Just sl'
         | otherwise = Nothing

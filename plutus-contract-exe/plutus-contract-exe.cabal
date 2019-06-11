@@ -45,7 +45,7 @@ library
         Language.Plutus.Contract.Contract
         Language.Plutus.Contract.Event
         Language.Plutus.Contract.Servant
-        Language.Plutus.Contract.Step
+        Language.Plutus.Contract.Hooks
         Language.Plutus.Contract.Transaction
         Language.Plutus.Contract.Wallet
     hs-source-dirs: src

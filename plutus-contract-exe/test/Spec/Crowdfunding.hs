@@ -8,7 +8,7 @@ import qualified Wallet.Emulator                   as EM
 
 import           Examples.Crowdfunding
 import           Language.Plutus.Contract.Contract as Con
-import qualified Language.Plutus.Contract.Step     as Step
+import qualified Language.Plutus.Contract.Hooks     as Hooks
 
 import           Spec.HUnit
 
