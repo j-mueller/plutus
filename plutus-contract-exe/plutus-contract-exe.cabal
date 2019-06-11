@@ -43,6 +43,7 @@ library
     exposed-modules:
         Language.Plutus.Contract
         Language.Plutus.Contract.Balanced
+        Language.Plutus.Contract.Class
         Language.Plutus.Contract.Contract
         Language.Plutus.Contract.Event
         Language.Plutus.Contract.Hooks
@@ -64,7 +65,8 @@ library
         servant -any,
         servant-server -any,
         mtl -any,
-        semigroupoids -any
+        semigroupoids -any,
+        profunctors -any
 
 library examples
     import: lang
