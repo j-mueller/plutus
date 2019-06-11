@@ -13,11 +13,11 @@ import           Servant.Server                    (Application, Server, serve)
 import           Language.Plutus.Contract          (PlutusContract)
 import           Language.Plutus.Contract.Contract (drain, applyInputs)
 import           Language.Plutus.Contract.Event    (Event)
-import           Language.Plutus.Contract.Step     (Step, fromBalanced)
+import           Language.Plutus.Contract.Hooks     (Hooks, fromBalanced)
 
 type ContractAPI =
-       "initialise" :> Get '[JSON] Step
-  :<|> "run" :> ReqBody '[JSON] [Event] :> Post '[JSON] Step
+       "initialise" :> Get '[JSON] Hooks
+  :<|> "run" :> ReqBody '[JSON] [Event] :> Post '[JSON] Hooks
 
 -- | Serve a 'PlutusContract' via the contract API
 contractServer :: PlutusContract () -> Server ContractAPI
