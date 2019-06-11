@@ -1,27 +1,31 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies          #-}
 module Language.Plutus.Contract.Contract(
       Contract(..)
     , emit
     , offer
     , waiting
     , applyInputs
-    , drain
-    , outputs
     , await
-    , result
     , loopM
     , foldMaybe
     , selectEither
     , select
     , both
+    -- * Feed events to the contract and look at the outputs
+    , drain
+    , outputs
+    , result
     ) where
 
-import           Control.Applicative (liftA2)
-import           Control.Monad       ((>=>))
-import           Data.Bifunctor      (first)
+import           Control.Applicative            (liftA2)
+import           Control.Monad                  ((>=>))
+import           Data.Bifunctor                 (first)
 import           Data.Functor.Alt
+
+import           Language.Plutus.Contract.Class
 
 data Contract i o a =
     Waiting (i -> Contract i o a)
@@ -40,10 +44,20 @@ instance Applicative (Contract i o) where
     Pure f    <*> ca       = f <$> ca
     Waiting f <*> ca       = Waiting $ \i -> f i <*> offer i ca
 
-offer :: i -> Contract i o a -> Contract i o a
-offer i (Waiting f) = f i
-offer i (Emit t c)  = Emit t (offer i c)
-offer _ c           = c
+instance MonadContract i o (Contract i o) where
+    emit t = Emit t (pure ())
+    waiting = Waiting pure
+
+    select (Emit e c) r = Emit e (select c r)
+    select l (Emit e c) = Emit e (select l c)
+    select (Pure a)   _ = Pure a
+    select _   (Pure a) = Pure a
+    select (Waiting f) (Waiting f') =
+        Waiting $ \i -> select (f i) (f' i)
+
+    offer i (Waiting f) = f i
+    offer i (Emit t c)  = Emit t (offer i c)
+    offer _ c           = c
 
 -- The monad instance sequentialises the 'Waiting' operations
 instance Monad (Contract i o) where
@@ -54,49 +68,6 @@ instance Monad (Contract i o) where
 
 instance Semigroup a => Semigroup (Contract i o a) where
     (<>) = liftA2 (<>)
-
--- | Run both contracts and return the first one that finishes
-select :: Contract i o a -> Contract i o a -> Contract i o a
-select (Emit e c) r = Emit e (select c r)
-select l (Emit e c) = Emit e (select l c)
-select (Pure a)   _ = Pure a
-select _   (Pure a) = Pure a
-select (Waiting f) (Waiting f') =
-    Waiting $ \i -> select (f i) (f' i)
-
-emit :: o -> Contract i o ()
-emit t = Emit t (pure ())
-
-waiting :: Contract i o i
-waiting = Waiting pure
-
--- https://hackage.haskell.org/package/extra-1.6.15/docs/src/Control.Monad.Extra.html#loopM
-
--- | A monadic version of 'loop', where the predicate returns 'Left' as a seed for the next loop
---   or 'Right' to abort the loop.
-loopM :: Monad m => (a -> m (Either a b)) -> a -> m b
-loopM act x = do
-    res <- act x
-    case res of
-        Left x' -> loopM act x'
-        Right v -> return v
-
--- | Repeatedly evaluate the action until it yields 'Nothing',
---   then return the aggregated result.
-foldMaybe
-    :: Monad m
-    => (a -> b -> b)
-    -> b
-    -> m (Maybe a)
-    -> m b
-foldMaybe f b con = loopM go b where
-    go b' = maybe (Left b') (Right . flip f b') <$> con
-
-applyInputs
-    :: [i]
-    -> Contract i o a
-    -> Contract i o a
-applyInputs is c = foldr offer c is
 
 drain :: Monoid o => Contract i o a -> (o, Contract i o a)
 drain = \case
@@ -111,17 +82,3 @@ result :: Monoid o => Contract i o a -> Either o a
 result = \case
     Pure a -> Right a
     c'     -> Left (fst (drain c'))
-
-await :: o -> (i -> Maybe a) -> Contract i o a
-await a f = do
-    emit a
-    i <- waiting
-    case f i of
-        Nothing -> await a f
-        Just i' -> pure i'
-
-both :: Contract i o a -> Contract i o b -> Contract i o (a, b)
-both = liftA2 (,)
-
-selectEither :: Contract i o a -> Contract i o b -> Contract i o (Either a b)
-selectEither l r = select (Left <$> l) (Right <$> r)
