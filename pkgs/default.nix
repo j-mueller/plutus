@@ -53611,15 +53611,24 @@ license = stdenv.lib.licenses.asl20;
   mkDerivation
 , aeson
 , base
+, bytestring
 , containers
+, fingertree
+, hedgehog
 , lens
+, mtl
 , plutus-emulator
 , plutus-use-cases
 , plutus-wallet-api
+, semigroupoids
 , servant
 , servant-server
 , stdenv
+, tasty
+, tasty-hedgehog
+, tasty-hunit
 , text
+, transformers
 , warp
 }:
 mkDerivation {
@@ -53632,21 +53641,38 @@ isExecutable = true;
 libraryHaskellDepends = [
 aeson
 base
-plutus-emulator
-plutus-wallet-api
-text
-];
-executableHaskellDepends = [
-aeson
-base
+bytestring
 containers
+fingertree
 lens
+mtl
+plutus-emulator
 plutus-use-cases
 plutus-wallet-api
+semigroupoids
 servant
 servant-server
 text
+];
+executableHaskellDepends = [
+base
 warp
+];
+testHaskellDepends = [
+aeson
+base
+containers
+hedgehog
+lens
+mtl
+plutus-emulator
+plutus-use-cases
+plutus-wallet-api
+tasty
+tasty-hedgehog
+tasty-hunit
+text
+transformers
 ];
 doHaddock = false;
 homepage = "https://github.com/iohk/plutus#readme";
