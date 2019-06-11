@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Language.Plutus.Contract(
-    PlutusContract
+    PlutusContract(..)
     , nextTransactionAt
     , watchAddressUntil
     , endpoint

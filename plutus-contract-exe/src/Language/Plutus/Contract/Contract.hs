@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE TypeFamilies      #-}
 module Language.Plutus.Contract.Contract(
-      Contract
+      Contract(..)
     , emit
     , offer
     , waiting
@@ -83,11 +83,11 @@ loopM act x = do
 
 -- | Repeatedly evaluate the action until it yields 'Nothing',
 --   then return the aggregated result.
-foldMaybe 
-    :: Monad m 
-    => (a -> b -> b) 
-    -> b 
-    -> m (Maybe a) 
+foldMaybe
+    :: Monad m
+    => (a -> b -> b)
+    -> b
+    -> m (Maybe a)
     -> m b
 foldMaybe f b con = loopM go b where
     go b' = maybe (Left b') (Right . flip f b') <$> con
