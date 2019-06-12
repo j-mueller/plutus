@@ -55,9 +55,16 @@ instance MonadContract i o (Contract i o) where
     select (Waiting f) (Waiting f') =
         Waiting $ \i -> select (f i) (f' i)
 
-    offer i (Waiting f) = f i
-    offer i (Emit t c)  = Emit t (offer i c)
-    offer _ c           = c
+offer :: i -> Contract i o a -> Contract i o a
+offer i (Waiting f) = f i
+offer i (Emit t c)  = Emit t (offer i c)
+offer _ c           = c
+
+applyInputs
+    :: [i]
+    -> Contract i o a
+    -> Contract i o a
+applyInputs is c = foldr offer c is
 
 -- The monad instance sequentialises the 'Waiting' operations
 instance Monad (Contract i o) where
