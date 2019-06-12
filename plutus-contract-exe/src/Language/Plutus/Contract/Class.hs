@@ -15,7 +15,7 @@ class Monad m => MonadContract i o m | m -> i, m -> o where
 
     -- | Feed an input to the contract
     --   @offer i (pure a) == pure a@
-    offer :: i -> m a -> m a
+    -- offer :: i -> m a -> m a
 
 -- | A monadic version of 'loop', where the predicate returns 'Left' as a seed 
 --   for the next loop or 'Right' to abort the loop.
@@ -38,13 +38,6 @@ foldMaybe
     -> m b
 foldMaybe f b con = loopM go b where
     go b' = maybe (Left b') (Right . flip f b') <$> con
-
-applyInputs
-    :: MonadContract i o m
-    => [i]
-    -> m a
-    -> m a
-applyInputs is c = foldr offer c is
 
 await :: MonadContract i o m => o -> (i -> Maybe a) -> m a
 await a f = do
