@@ -13,10 +13,6 @@ class Monad m => MonadContract i o m | m -> i, m -> o where
     --   @fmap f (select a b) == select (fmap f a) (fmap f b)@
     select :: m a -> m a -> m a
 
-    -- | Feed an input to the contract
-    --   @offer i (pure a) == pure a@
-    -- offer :: i -> m a -> m a
-
 -- | A monadic version of 'loop', where the predicate returns 'Left' as a seed 
 --   for the next loop or 'Right' to abort the loop.
 --

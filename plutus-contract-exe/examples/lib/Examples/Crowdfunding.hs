@@ -1,6 +1,7 @@
 {-# LANGUAGE ApplicativeDo      #-}
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE TypeOperators      #-}
 -- | Contract interface for the crowdfunding contract
 module Examples.Crowdfunding(
@@ -29,7 +30,7 @@ import           Ledger.Scripts                                        (DataScri
 
 import qualified Wallet.Emulator                                       as Emulator
 
-crowdfunding :: PlutusContract ()
+crowdfunding :: (Semigroup (m ()), PlutusContract m) => m ()
 crowdfunding = contribute theCampaign <> scheduleCollection theCampaign
 
 theCampaign :: Campaign
@@ -40,7 +41,7 @@ theCampaign = Campaign
     , campaignOwner = Emulator.walletPubKey (Emulator.Wallet 1)
     }
 
-contribute :: Campaign -> PlutusContract ()
+contribute :: PlutusContract m => Campaign -> m ()
 contribute cmp = do
     (ownPK :: PubKey, contribution :: Value) <- endpoint "contribute"
     let ds = DataScript (L.lifted ownPK)
@@ -61,7 +62,7 @@ contribute cmp = do
     then writeTx tx'
     else pure ()
 
-scheduleCollection :: Campaign -> PlutusContract ()
+scheduleCollection :: PlutusContract m => Campaign -> m ()
 scheduleCollection cmp = do
     () <- endpoint "schedule collection"
     let trg = fst <$> both

@@ -9,59 +9,80 @@
 --   writes checkpoints
 module Language.Plutus.Contract.State where
 
-import           Control.Applicative               (Alternative (..))
 import           Control.Lens
 import           Data.Aeson                        (Value)
 import qualified Data.Aeson                        as Aeson
 import qualified Data.Aeson.Types                  as Aeson
 import           Data.Bifunctor                    (Bifunctor (..))
 import           Data.Foldable                     (toList)
-import           Data.Maybe                        (fromJust, fromMaybe)
-import           Data.Profunctor                   (Profunctor (..))
 import           Data.Sequence                     (Seq)
-import qualified Data.Sequence                     as Seq
 import           GHC.Generics                      (Generic)
 
 import           Language.Plutus.Contract.Class
 import qualified Language.Plutus.Contract.Contract as C
 
-data StatefulContract i o a where
-    CEmit :: o -> StatefulContract i o a -> StatefulContract i o a
-    CWaiting :: (i -> StatefulContract i o a) -> StatefulContract i o a
+import qualified Debug.Trace                       as Trace
 
+data StatefulContract i o a where
     CMap :: (a' -> a) -> StatefulContract i o a' -> StatefulContract i o a
     CAp :: StatefulContract i o (a' -> a) -> StatefulContract i o a' -> StatefulContract i o a
     CBind :: StatefulContract i o a' -> (a' -> StatefulContract i o a) -> StatefulContract i o a
-    CSelect :: StatefulContract i o a -> StatefulContract i o a -> StatefulContract i o a
 
-    CFinished :: a -> StatefulContract i o a
+    CContract :: C.Contract i o a -> StatefulContract i o a
     CJSONCheckpoint :: (Aeson.FromJSON a, Aeson.ToJSON a, Aeson.FromJSON o, Aeson.ToJSON o) => StatefulContract i o a -> StatefulContract i o a
 
+initialise :: StatefulContract i o a -> OpenRecord i o
+initialise = \case
+    CMap _ c' -> initialise c'
+    CAp l r -> OpenBoth (initialise l) (initialise r)
+    CBind l _ -> initialise l
+    CContract _ -> OpenLeaf mempty
+    CJSONCheckpoint c' -> initialise c'
+
+checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a, Aeson.FromJSON o, Aeson.ToJSON o) => StatefulContract i o a -> StatefulContract i o a
+checkpoint = CJSONCheckpoint
+
+prtty :: StatefulContract i o a -> String
+prtty = \case
+    CMap _ c -> "cmap (" ++ prtty c ++ ")"
+    CAp l r -> "cap (" ++ prtty l ++ ") (" ++ prtty r ++ ")"
+    CBind l _ -> "cbind (" ++ prtty l ++  ") f"
+    CContract _ -> "ccontract"
+    CJSONCheckpoint j -> "json(" ++ prtty j ++ ")"
+
+result :: StatefulContract i o a -> Maybe a
+result = \case
+    CContract (C.Pure a) -> Just a
+    _ -> Nothing
 
 instance Functor (StatefulContract i o) where
     fmap f = \case
-        CEmit o e -> CEmit o (fmap f e)
-        CWaiting f' -> CWaiting $ \i -> fmap f (f' i)
-
         CMap f' c -> CMap (f . f') c
         CAp l r     -> CAp (fmap (fmap f) l) r
         CBind m f'  -> CBind m (fmap f . f')
-        CSelect l r  -> CSelect (fmap f l) (fmap f r)
 
-        CFinished a -> CFinished (f a)
+        CContract con -> CContract (fmap f con)
         CJSONCheckpoint c -> CMap f (CJSONCheckpoint c)
 
+lower :: StatefulContract i o a -> C.Contract i o a
+lower = \case
+    CMap f c' -> f <$> lower c'
+    CAp l r -> lower l <*> lower r
+    CBind c' f -> lower c' >>= fmap lower f
+    CContract c' -> c'
+    CJSONCheckpoint c' -> lower c'
+
 instance Applicative (StatefulContract i o) where
-    pure = CFinished
+    pure = CContract . C.Pure
     (<*>) = CAp
 
 instance Monad (StatefulContract i o) where
     (>>=) = CBind
 
 instance MonadContract i o (StatefulContract i o) where
-    emit o = CEmit o (CFinished ())
-    waiting = CWaiting pure
-    select = CSelect
+    emit o = CContract (emit o)
+    waiting = CContract waiting
+    select l r = CContract (select (lower l) (lower r))
 
 data BinTree a = Node (BinTree a) a (BinTree a) | Leaf a
     deriving stock (Eq, Show, Generic, Functor)
@@ -86,7 +107,7 @@ data ClosedRecord i o =
     deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data OpenRecord i o =
-      OpenLeaf i (OpenRecord i o)
+      OpenLeaf (Seq i)
     | OpenLeft (OpenRecord i o) (ClosedRecord i o)
     | OpenRight (ClosedRecord i o) (OpenRecord i o)
     | OpenBoth (OpenRecord i o) (OpenRecord i o)
@@ -99,36 +120,29 @@ jsonLeaf :: (Aeson.ToJSON a) => a -> o -> ClosedRecord i o
 jsonLeaf a o = ClosedLeaf (FinalJSON (Aeson.toJSON a) o)
 
 insert :: i -> Record i o -> Record i o
-insert i = undefined
-
-offerRec
-    :: Monoid o
-    => StatefulContract i o a
-    -> Record i o
-    -> i
-    -> Either String ((o, Record i o), Maybe a)
-offerRec con r i = updateRecord con (insert i r)
+insert i = bimap go id  where
+    go = \case
+        OpenLeaf s -> OpenLeaf (s |> i)
+        OpenLeft or cr -> OpenLeft (go or) cr
+        OpenRight cr or -> OpenRight cr (go or)
+        OpenBoth or or' -> OpenBoth (go or) (go or')
 
 offer :: i -> StatefulContract i o a -> StatefulContract i o a
 offer i = \case
-    CEmit o c' -> CEmit o (offer i c')
-    CWaiting f -> f i
-
     CMap f c' -> CMap f (offer i c')
     CAp l r -> CAp (offer i l) (offer i r)
-    CBind l f -> CBind (offer i l) f -- ?
-    CSelect l r -> CSelect (offer i l) (offer i r)
+    CBind l f -> 
+        case result l of
+            Just _ -> CBind l (offer i . f)
+            Nothing -> CBind (offer i l) f
 
-    CFinished a -> CFinished a
+    CContract c -> CContract (C.offer i c)
     CJSONCheckpoint c -> CJSONCheckpoint (offer i c)
 
 applyInputs is c = foldr offer c is
 
 drain :: Monoid o => StatefulContract i o a -> (o, Maybe a)
 drain = \case
-    CEmit o c' -> let (o', r) = drain c' in (o <> o', r)
-    CWaiting _ -> (mempty, Nothing)
-
     CMap f c' -> let (o, r) = drain c' in (o, fmap f r)
     CAp l r -> 
         let (ol, rl) = drain l
@@ -139,78 +153,133 @@ drain = \case
         in case r of
             Nothing -> (o, Nothing)
             Just a  -> let (o', r') = drain (f a) in (o <> o', r')
-    CSelect l r ->
-        let (ol, rl) = drain l
-            (or, rr) = drain r
-        in case (rl, rr) of
-            (Just a, _) -> (ol <> or, Just a) -- TODO: all of rr's hooks (ie, 'or') should be disabled?
-            (_, Just a) -> (ol <> or, Just a)
-            _ -> (ol <> or, Nothing)
-    CFinished a -> (mempty, Just a)
+    CContract c' -> second (result . CContract) (C.drain c')
     CJSONCheckpoint c' -> drain c'
 
 runClosed 
     :: Monoid o
     => StatefulContract i o a
     -> ClosedRecord i o
-    -> Either String (o, Maybe a)
+    -> Either String (o, a)
 runClosed con = \case
     ClosedLeaf (FinalEvents is) ->
         let con' = applyInputs (toList is) con
             (o, r) = drain con'
-        in pure (o, r)
+        in case r of
+            Nothing -> Left "Closed contract not finished"
+            Just a -> pure (o, a)
     ClosedLeaf (FinalJSON vl o) -> 
         case con of
             CJSONCheckpoint _ -> do
                 vl' <- Aeson.parseEither Aeson.parseJSON vl
-                pure (o, Just vl')
+                pure (o, vl')
             _ -> Left "Expected JSON checkpoint"
     ClosedBin l r ->
         case con of
+            CMap f con' -> fmap (second f) (runClosed con' (ClosedBin l r))
             CAp l' r' -> do
                 (lo, a) <- runClosed l' l
                 (ro, b) <- runClosed r' l
-                pure (lo <> ro, a <*> b)
+                pure (lo <> ro, a b)
             CBind l' f -> do
-                (lo, a') <- runClosed l' l
-                a <- maybe (Left "CBind") Right a'
+                (lo, a) <- runClosed l' l
                 (ro, b) <- runClosed (f a) r
                 pure (lo <> ro, b)
-            CSelect l' r' -> do
-                (lo, a) <- runClosed l' l
-                (ro, b) <- runClosed r' r
-                case (a, b) of
-                    (Just a', _) -> pure (lo <> ro, Just a')
-                    (_, Just b') -> pure (lo <> ro, Just b')
-                    _ -> pure (lo <> ro, Nothing) -- error?`
             _ -> Left "Right ClosedBin with wrong contract type"        
 
 runOpen
-    :: Monoid o
+    :: (Show i, Show o, Monoid o)
     => StatefulContract i o a
     -> OpenRecord i o
     -> Either String (o, Either (OpenRecord i o) (ClosedRecord i o, a))
 runOpen con or =
     case (con, or) of
-        (CEmit o con', _) -> do
-            (o', r) <- runOpen con' or
-            pure (o <> o', r)
-        (CWaiting f, OpenLeaf i or') -> 
-            runOpen (f i) or'
-            
+        (CMap f con', _) -> (fmap . fmap .fmap $ fmap f) (runOpen con' or)
+        (CAp l r, OpenLeft or cr) -> do
+            (ol, lr) <- runOpen l or
+            (or, rr) <- runClosed r cr
+            case lr of
+                Left or' -> pure (ol <> or, Left (OpenLeft or' cr))
+                Right (cr', a) -> pure (ol <> or, Right (ClosedBin cr' cr, a rr))
+        (CAp l r, OpenRight cr or) -> do
+            (ol, lr) <- runClosed l cr
+            (or, rr) <- runOpen r or
+            case rr of
+                Left or' -> pure (ol <> or, Left (OpenRight cr or'))
+                Right (cr', a) -> pure (ol <> or, Right (ClosedBin cr cr', lr a))
+        (CAp l r, OpenBoth orL orR) -> do
+            (ol, lr) <- runOpen l orL
+            (or, rr) <- runOpen r orR
+            case (lr, rr) of
+                (Right (crL, a), Right (crR, b)) -> 
+                    pure (ol <> or, Right (ClosedBin crL crR, a b))
+                (Right (crL, a), Left oR) ->
+                    pure (ol <> or, Left (OpenRight crL oR))
+                (Left oL, Right (cR, a)) ->
+                    pure (ol <> or, Left (OpenLeft oL cR))
+                (Left oL, Left oR) ->
+                    pure (ol <> or, Left (OpenBoth oL oR))
+        (CAp _ _, OpenLeaf _) -> Left "CAp OpenLeaf"
+        
+        (CBind c f, OpenLeaf is) -> do
+            (ol, lr) <- runOpen c or
+            case lr of
+                Left orL' -> pure (ol, Left orL')
+                Right (crL, a) -> do
+                    let con' = f a
+                        orR' = initialise con'
+                    (or, rr) <- runOpen con' orR'
+                    case rr of
+                        Left orR'' -> 
+                            pure (ol <> or, Left (OpenRight crL orR''))
+                        Right (crR, a) ->
+                            pure (ol <> or, Right (ClosedBin crL crR, a))
 
-updateRecord
-    :: Monoid o
+        (CBind c f, OpenRight cr or) -> do
+            (ol, lr) <- runClosed c cr
+            (or, rr) <- runOpen (f lr) or
+            case rr of
+                Left or' -> pure (ol <> or, Left (OpenRight cr or'))
+                Right (cr', a) -> pure (ol <> or, Right (ClosedBin cr cr', a))
+        (CBind _ _, _) -> Left $ "CBind " ++ show or
+
+        (CContract con, OpenLeaf is) ->
+            case C.drain (C.applyInputs (toList is) con) of
+                (o, C.Pure a) ->
+                    pure (o, Right (ClosedLeaf (FinalEvents is), a))
+                (o, _) -> pure (o, Left (OpenLeaf is))
+        (CContract _, _) -> Left $ "CContract non leaf " ++ show or
+
+        (CJSONCheckpoint con, or) -> do
+            (o, r) <- runOpen con or
+            case r of
+                Left or' -> pure (o, Left or')
+                Right (cr, a) ->
+                    let rec' = jsonLeaf a o in
+                    pure (o, Right (rec', a))
+        _ -> Left "runOpen"
+
+insertAndUpdate
+    :: (Show i, Show o, Monoid o)
     => StatefulContract i o a
     -> Record i o
-    -> Either String ((o, Record i o), Maybe a)
+    -> i
+    -> Either String (o, Record i o)
+insertAndUpdate con rc i =
+    updateRecord con (insert i rc)
+
+updateRecord
+    :: (Show i, Show o, Monoid o)
+    => StatefulContract i o a
+    -> Record i o
+    -> Either String (o, Record i o)
 updateRecord con rc = 
     case rc of
         Right cl -> do
-            (o, r) <- runClosed con cl
-            pure ((o, Right cl), r)
+            (o, _) <- runClosed con cl
+            pure (o, Right cl)
         Left cl -> do
             (o, result) <- runOpen con cl
             case result of
-                Left r' -> pure ((o, Left r'), Nothing)
-                Right (r', a) -> pure ((o, Right r'), Just a)
+                Left r' -> pure (o, Left r')
+                Right (r', a) -> pure (o, Right r')

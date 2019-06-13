@@ -118,6 +118,7 @@ test-suite plutus-contract-exe-test
         Spec.Contract
         Spec.Game
         Spec.HUnit
+        Spec.State
     build-depends:
         examples, 
         plutus-emulator -any,
