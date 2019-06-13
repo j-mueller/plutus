@@ -119,6 +119,10 @@ deriving newtype instance Serialise Address
 deriving anyclass instance ToJSON Address
 deriving anyclass instance FromJSON Address
 
+instance ToJSONKey Address where
+
+instance FromJSONKey Address where
+
 -- | A transaction, including witnesses for its inputs.
 data Tx = Tx {
     txInputs     :: Set.Set TxIn,
