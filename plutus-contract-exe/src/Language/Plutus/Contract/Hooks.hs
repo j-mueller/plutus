@@ -44,7 +44,13 @@ data BalancedHooks =
         , _bNextSlot     :: Map.Map Slot Balanced
         -- ^ List of slots that the contract is waiting for
         , _bEndpoints    :: Map.Map String Balanced
-        } deriving Show
+        } 
+        deriving stock (Eq, Show, Generic)
+        deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
+
+instance Aeson.FromJSONKey Address where
+
+instance Aeson.ToJSONKey Address where
 
 openKeys :: Map.Map k Balanced -> Set.Set k
 openKeys = Map.keysSet . Map.filter isOpen

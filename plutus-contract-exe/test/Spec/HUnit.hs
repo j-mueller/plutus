@@ -76,7 +76,7 @@ data ContractTraceState a =
         -- ^ Events that were fed to the contract
         , _ctsHooks    :: BalancedHooks
         -- ^ Accumulated 'BalancedHooks' value
-        , _ctsContract :: PlutusContract a
+        , _ctsContract :: Contract Event BalancedHooks a
         -- ^ Current state of the contract
         }
 
@@ -96,7 +96,7 @@ type TracePredicate a = InitialDistribution -> Predicate (ContractTestResult a)
 
 type ContractTrace m a b = StateT (ContractTraceState a) m b
 
-mkState :: PlutusContract a -> ContractTraceState a
+mkState :: Contract Event BalancedHooks a -> ContractTraceState a
 mkState = ContractTraceState mempty mempty
 
 hooks :: ContractTestResult a -> Hooks
@@ -107,7 +107,7 @@ not p a = Predicate $ \b -> Prelude.not (getPredicate (p a) b)
 
 checkPredicate
     :: String
-    -> PlutusContract a
+    -> Contract Event BalancedHooks a
     -> TracePredicate a
     -> ContractTrace EmulatorAction a ()
     -> TestTree
@@ -164,7 +164,7 @@ walletFundsChange w dlt initialDist = Predicate $
 defaultDist :: [(Wallet, Ada)]
 defaultDist = [(EM.Wallet x, 100) | x <- [1..10]]
 
-initContract :: Monad m => PlutusContract a -> m (Hooks, PlutusContract a)
+initContract :: Monad m => Contract Event BalancedHooks a -> m (Hooks, Contract Event BalancedHooks a)
 initContract = pure . first Hooks.fromBalanced . drain
 
 event_ :: Monad m => Event -> ContractTrace m a ()

@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeOperators              #-}
 -- | Contract interface for the guessing game
@@ -43,7 +44,7 @@ newtype GuessParams = GuessParams
     deriving stock (Eq, Ord, Show, Generic)
     deriving newtype (Aeson.FromJSON, Aeson.ToJSON)
 
-guess :: PlutusContract ()
+guess :: PlutusContract m => m ()
 guess = do
     st <- nextTransactionAt gameAddress
     let mp = AM.fromTxOutputs st
@@ -55,7 +56,7 @@ guess = do
         tx       = unbalancedTx inp []
     writeTx tx
 
-lock :: PlutusContract ()
+lock :: PlutusContract m => m ()
 lock = do
     LockParams secret amt <- endpoint "lock"
     let
@@ -65,5 +66,5 @@ lock = do
         tx     = unbalancedTx [] [output]
     writeTx tx
 
-game :: PlutusContract ()
+game :: (Semigroup (m ()), PlutusContract m) => m ()
 game = guess <> lock
