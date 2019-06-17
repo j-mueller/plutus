@@ -38,10 +38,12 @@ foldMaybe f b con = loopM go b where
 await :: MonadContract i o m => o -> (i -> Maybe a) -> m a
 await a f = do
     emit a
-    i <- waiting
-    case f i of
-        Nothing -> await a f
-        Just i' -> pure i'
+    go where
+        go = do
+            i <- waiting
+            case f i of
+                Nothing -> go
+                Just i' -> pure i'
 
 both :: MonadContract i o m => m a -> m b -> m (a, b)
 both = liftA2 (,)

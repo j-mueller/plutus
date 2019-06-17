@@ -18,6 +18,7 @@ module Language.Plutus.Contract(
     , timeout
     , between
     , collectUntil
+    , finally
     ) where
 
 import           Control.Lens                         hiding (both)

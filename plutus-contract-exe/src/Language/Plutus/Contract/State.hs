@@ -36,15 +36,20 @@ initialise = \case
         CMap _ c' -> initialise c'
         CAp l r -> fromPair (initialise l) (initialise r)
         CBind l f -> 
-            case snd (result l) of
-                Nothing -> initialise l
-                Just a -> fromPair (initialise l) (initialise $ f a)
+            case initialise l of
+                Left r -> Left (OpenBind r)
+                Right _ -> 
+                    case snd (result l) of
+                        -- Nothing -> Left (OpenBind (initialise l))
+                        Just a -> fromPair (initialise l) (initialise $ f a)
         CContract c ->
-            let (_, c') = C.drain c
-            in case C.result c' of
-                Right _ -> Right (ClosedLeaf (FinalEvents mempty))
-                Left _ -> Left (OpenLeaf mempty)
-        CJSONCheckpoint c' -> initialise c'
+            case snd (result (CContract c)) of
+                Nothing -> Left (OpenLeaf mempty)
+                Just _ -> Right (ClosedLeaf (FinalEvents mempty))
+        CJSONCheckpoint c' -> 
+            case result c' of
+                (_, Nothing) -> initialise c'
+                (o, Just a) -> Right $ jsonLeaf a o
 
 checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a, Aeson.FromJSON o, Aeson.ToJSON o) => StatefulContract i o a -> StatefulContract i o a
 checkpoint = CJSONCheckpoint
@@ -116,6 +121,7 @@ data ClosedRecord i o =
 
 data OpenRecord i o =
       OpenLeaf (Seq i)
+    | OpenBind (OpenRecord i o)
     | OpenLeft (OpenRecord i o) (ClosedRecord i o)
     | OpenRight (ClosedRecord i o) (OpenRecord i o)
     | OpenBoth (OpenRecord i o) (OpenRecord i o)
@@ -141,6 +147,7 @@ insert i = bimap go id  where
         OpenLeft or cr -> OpenLeft (go or) cr
         OpenRight cr or -> OpenRight cr (go or)
         OpenBoth or or' -> OpenBoth (go or) (go or')
+        OpenBind or -> OpenBind (go or)
 
 offer :: Monoid o => i -> StatefulContract i o a -> StatefulContract i o a
 offer i = \case
@@ -163,11 +170,11 @@ runClosed
     -> Either String (o, a)
 runClosed con = \case
     ClosedLeaf (FinalEvents is) ->
-        let con' = applyInputs (toList is) con
-            (o, r) = result con'
-        in case r of
-            Nothing -> Left "Closed contract not finished"
-            Just a  -> pure (o, a)
+        let con' = C.applyInputs (toList is) (lower con)
+            (o, r) = C.drain con'
+        in case C.result r of
+            Left _ -> Left "Closed contract not finished"
+            Right a  -> pure (o, a)
     ClosedLeaf (FinalJSON vl o) ->
         case con of
             CJSONCheckpoint _ -> do
@@ -221,8 +228,8 @@ runOpen con or =
                     pure (ol <> or, Left (OpenBoth oL oR))
         (CAp _ _, OpenLeaf _) -> Left "CAp OpenLeaf"
 
-        (CBind c f, OpenLeaf is) -> do
-            (ol, lr) <- runOpen c or
+        (CBind c f, OpenBind bnd) -> do
+            (ol, lr) <- runOpen c bnd
             case lr of
                 Left orL' -> pure (ol, Left orL')
                 Right (crL, a) -> do
