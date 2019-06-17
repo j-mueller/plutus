@@ -17,7 +17,6 @@ import qualified Wallet.Emulator                   as EM
 import           Spec.HUnit
 import qualified Test.Tasty.HUnit                  as HUnit
 
-import qualified Language.Plutus.Contract          as Con
 import qualified Language.Plutus.Contract.State    as S
 
 import qualified Debug.Trace                       as Trace
@@ -32,11 +31,10 @@ tests = testGroup "stateful contract"
         HUnit.assertBool "init" (isRight res)
     , HUnit.testCase "construct two parallel branches" $ do
         let con = 
-                let ep = waiting -- Con.endpoint @String "endpoint"
-                    a  = S.checkpoint $ (,) <$> ep <*> (pure () >> ep)
-                in Trace.trace (S.prtty a) a
-            initial = Trace.traceShowId (S.initialise @Hooks.BalancedHooks @Event.Event con)
+                let ep = Con.endpoint @String "endpoint"
+                in S.checkpoint $ (,) <$> ep <*> ep
+            initial = S.initialise @Hooks.BalancedHooks @Event.Event con
             inp = Event.endpoint "endpoint" (Aeson.toJSON "asd")
             res = S.insertAndUpdate con initial inp
-        HUnit.assertBool "para" (isRight res)
+        HUnit.assertBool "parallel" (isRight res)
     ]
