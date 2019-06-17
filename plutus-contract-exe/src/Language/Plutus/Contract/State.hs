@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE LambdaCase            #-}
@@ -10,6 +11,8 @@
 module Language.Plutus.Contract.State where
 
 import           Control.Lens
+import           Control.Monad.Except
+import           Control.Monad.Writer
 import           Data.Aeson                        (Value)
 import qualified Data.Aeson                        as Aeson
 import qualified Data.Aeson.Types                  as Aeson
@@ -35,21 +38,21 @@ initialise :: Monoid o => StatefulContract i o a -> Record i o
 initialise = \case
         CMap _ c' -> initialise c'
         CAp l r -> fromPair (initialise l) (initialise r)
-        CBind l f -> 
+        CBind l f ->
             case initialise l of
                 Left r -> Left (OpenBind r)
-                Right _ -> 
+                Right _ ->
                     case snd (result l) of
                         -- Nothing -> Left (OpenBind (initialise l))
                         Just a -> fromPair (initialise l) (initialise $ f a)
         CContract c ->
             case snd (result (CContract c)) of
                 Nothing -> Left (OpenLeaf mempty)
-                Just _ -> Right (ClosedLeaf (FinalEvents mempty))
-        CJSONCheckpoint c' -> 
+                Just _  -> Right (ClosedLeaf (FinalEvents mempty))
+        CJSONCheckpoint c' ->
             case result c' of
                 (_, Nothing) -> initialise c'
-                (o, Just a) -> Right $ jsonLeaf a o
+                (o, Just a)  -> Right $ jsonLeaf a o
 
 checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a, Aeson.FromJSON o, Aeson.ToJSON o) => StatefulContract i o a -> StatefulContract i o a
 checkpoint = CJSONCheckpoint
@@ -164,116 +167,118 @@ offer i = \case
 applyInputs is c = foldr offer c is
 
 runClosed
-    :: Monoid o
+    :: ( MonadWriter o m
+       , MonadError String m)
     => StatefulContract i o a
     -> ClosedRecord i o
-    -> Either String (o, a)
+    -> m a
 runClosed con = \case
     ClosedLeaf (FinalEvents is) ->
         let con' = C.applyInputs (toList is) (lower con)
             (o, r) = C.drain con'
         in case C.result r of
-            Left _ -> Left "Closed contract not finished"
-            Right a  -> pure (o, a)
+            Left _  -> throwError "Closed contract not finished"
+            Right a -> writer (a, o)
     ClosedLeaf (FinalJSON vl o) ->
         case con of
-            CJSONCheckpoint _ -> do
-                vl' <- Aeson.parseEither Aeson.parseJSON vl
-                pure (o, vl')
-            _ -> Left "Expected JSON checkpoint"
+            CJSONCheckpoint _ ->
+                case Aeson.parseEither Aeson.parseJSON vl of
+                    Left e    -> throwError e
+                    Right vl' -> writer (vl', o)
+            _ -> throwError "Expected JSON checkpoint"
     ClosedBin l r ->
         case con of
-            CMap f con' -> fmap (second f) (runClosed con' (ClosedBin l r))
-            CAp l' r' -> do
-                (lo, a) <- runClosed l' l
-                (ro, b) <- runClosed r' l
-                pure (lo <> ro, a b)
-            CBind l' f -> do
-                (lo, a) <- runClosed l' l
-                (ro, b) <- runClosed (f a) r
-                pure (lo <> ro, b)
-            _ -> Left "ClosedBin with wrong contract type"
+            CMap f con' -> fmap f (runClosed con' (ClosedBin l r))
+            CAp l' r'   -> runClosed l' l <*> runClosed r' l
+            CBind l' f  -> runClosed l' l >>= flip runClosed r . f
+            _           -> throwError "ClosedBin with wrong contract type"
 
 runOpen
-    :: (Show i, Show o, Monoid o)
+    :: ( Show i
+       , Show o
+       , Monoid o
+       , MonadWriter o m
+       , MonadError String m)
     => StatefulContract i o a
     -> OpenRecord i o
-    -> Either String (o, Either (OpenRecord i o) (ClosedRecord i o, a))
+    -> m (Either (OpenRecord i o) (ClosedRecord i o, a))
 runOpen con or =
     case (con, or) of
-        (CMap f con', _) -> (fmap . fmap .fmap $ fmap f) (runOpen con' or)
+        (CMap f con', _) -> (fmap .fmap $ fmap f) (runOpen con' or)
         (CAp l r, OpenLeft or cr) -> do
-            (ol, lr) <- runOpen l or
-            (or, rr) <- runClosed r cr
+            lr <- runOpen l or
+            rr <- runClosed r cr
             case lr of
-                Left or'       -> pure (ol <> or, Left (OpenLeft or' cr))
-                Right (cr', a) -> pure (ol <> or, Right (ClosedBin cr' cr, a rr))
+                Left or'       -> pure (Left (OpenLeft or' cr))
+                Right (cr', a) -> pure (Right (ClosedBin cr' cr, a rr))
         (CAp l r, OpenRight cr or) -> do
-            (ol, lr) <- runClosed l cr
-            (or, rr) <- runOpen r or
+            lr <- runClosed l cr
+            rr <- runOpen r or
             case rr of
-                Left or'       -> pure (ol <> or, Left (OpenRight cr or'))
-                Right (cr', a) -> pure (ol <> or, Right (ClosedBin cr cr', lr a))
+                Left or'       -> pure (Left (OpenRight cr or'))
+                Right (cr', a) -> pure (Right (ClosedBin cr cr', lr a))
         (CAp l r, OpenBoth orL orR) -> do
-            (ol, lr) <- runOpen l orL
-            (or, rr) <- runOpen r orR
+            lr <- runOpen l orL
+            rr <- runOpen r orR
             case (lr, rr) of
                 (Right (crL, a), Right (crR, b)) ->
-                    pure (ol <> or, Right (ClosedBin crL crR, a b))
+                    pure (Right (ClosedBin crL crR, a b))
                 (Right (crL, a), Left oR) ->
-                    pure (ol <> or, Left (OpenRight crL oR))
+                    pure (Left (OpenRight crL oR))
                 (Left oL, Right (cR, a)) ->
-                    pure (ol <> or, Left (OpenLeft oL cR))
+                    pure (Left (OpenLeft oL cR))
                 (Left oL, Left oR) ->
-                    pure (ol <> or, Left (OpenBoth oL oR))
-        (CAp _ _, OpenLeaf _) -> Left "CAp OpenLeaf"
+                    pure (Left (OpenBoth oL oR))
+        (CAp _ _, OpenLeaf _) -> throwError "CAp OpenLeaf"
 
         (CBind c f, OpenBind bnd) -> do
-            (ol, lr) <- runOpen c bnd
+            lr <- runOpen c bnd
             case lr of
-                Left orL' -> pure (ol, Left orL')
+                Left orL' -> pure (Left orL')
                 Right (crL, a) -> do
                     let con' = f a
                         orR' = initialise con'
                     case orR' of
                         Right crrrr -> do
-                            (or', a) <- runClosed con' crrrr
-                            pure (ol <> or', Right (ClosedBin crL crrrr, a))
+                            a <- runClosed con' crrrr
+                            pure (Right (ClosedBin crL crrrr, a))
                         Left orrrr -> do
-                            (or, rr) <- runOpen con' orrrr
+                            rr <- runOpen con' orrrr
                             case rr of
                                 Left orR'' ->
-                                    pure (ol <> or, Left (OpenRight crL orR''))
+                                    pure (Left (OpenRight crL orR''))
                                 Right (crR, a) ->
-                                    pure (ol <> or, Right (ClosedBin crL crR, a))
+                                    pure (Right (ClosedBin crL crR, a))
 
         (CBind c f, OpenRight cr or) -> do
-            (ol, lr) <- runClosed c cr
-            (or, rr) <- runOpen (f lr) or
+            lr <- runClosed c cr
+            rr <- runOpen (f lr) or
             case rr of
-                Left or'       -> pure (ol <> or, Left (OpenRight cr or'))
-                Right (cr', a) -> pure (ol <> or, Right (ClosedBin cr cr', a))
-        (CBind _ _, _) -> Left $ "CBind " ++ show or
+                Left or'       -> pure (Left (OpenRight cr or'))
+                Right (cr', a) -> pure (Right (ClosedBin cr cr', a))
+        (CBind _ _, _) -> throwError $ "CBind " ++ show or
 
         (CContract con, OpenLeaf is) ->
             case C.drain (C.applyInputs (toList is) con) of
-                (o, C.Pure a) -> pure (o, Right (ClosedLeaf (FinalEvents is), a))
-                (o, _)        -> pure (o, Left (OpenLeaf is))
-        (CContract _, _) -> Left $ "CContract non leaf " ++ show or
+                (o, C.Pure a) -> writer (Right (ClosedLeaf (FinalEvents is), a), o)
+                (o, _)        -> writer (Left (OpenLeaf is), o)
+        (CContract _, _) -> throwError $ "CContract non leaf " ++ show or
 
         (CJSONCheckpoint con, or) -> do
-            (o, r) <- runOpen con or
+            (r, o) <- listen (runOpen con or)
             case r of
-                Left or'      -> pure (o, Left or')
-                Right (cr, a) -> pure (o, Right (jsonLeaf a o, a))
-        _ -> Left "runOpen"
+                Left or'      -> pure (Left or')
+                Right (cr, a) -> pure (Right (jsonLeaf a o, a))
+        _ -> throwError "runOpen"
+
+runOpen' s = runExcept . runWriterT . runOpen s
 
 insertAndUpdate
     :: (Show i, Show o, Monoid o)
     => StatefulContract i o a
     -> Record i o
     -> i
-    -> Either String (o, Record i o)
+    -> Either String (Record i o, o)
 insertAndUpdate con rc i =
     updateRecord con (insert i rc)
 
@@ -281,14 +286,14 @@ updateRecord
     :: (Show i, Show o, Monoid o)
     => StatefulContract i o a
     -> Record i o
-    -> Either String (o, Record i o)
+    -> Either String (Record i o, o)
 updateRecord con rc =
     case rc of
         Right cl -> do
-            (o, _) <- runClosed con cl
-            pure (o, Right cl)
+            (_, o) <- runExcept $ runWriterT $ runClosed con cl
+            pure (Right cl, o)
         Left cl -> do
-            (o, result) <- runOpen con cl
+            (result, o) <- runOpen' con cl
             case result of
-                Left r'       -> pure (o, Left r')
-                Right (r', a) -> pure (o, Right r')
+                Left r'       -> pure (Left r', o)
+                Right (r', a) -> pure (Right r', o)
