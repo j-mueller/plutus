@@ -26,17 +26,17 @@ tests :: TestTree
 tests = testGroup "stateful contract"
     [ HUnit.testCase "construct initial state" $ do
         let con = Con.endpoint @String "endpoint"
-            initial = Left (S.initialise @Event.Event @Hooks.BalancedHooks con)
+            initial = S.initialise @Hooks.BalancedHooks @Event.Event con
             inp = Event.endpoint "endpoint" (Aeson.toJSON "asd")
             res = S.insertAndUpdate con initial inp
         HUnit.assertBool "init" (isRight res)
     , HUnit.testCase "construct two parallel branches" $ do
         let con = 
-                let ep = Con.endpoint @String "endpoint"
-                    a  = S.checkpoint ((,) <$> ep <*> ep)
+                let ep = waiting -- Con.endpoint @String "endpoint"
+                    a  = S.checkpoint $ (,) <$> ep <*> (pure () >> ep)
                 in Trace.trace (S.prtty a) a
-            initial = Left (S.initialise @Event.Event @Hooks.BalancedHooks con)
+            initial = Trace.traceShowId (S.initialise @Hooks.BalancedHooks @Event.Event con)
             inp = Event.endpoint "endpoint" (Aeson.toJSON "asd")
             res = S.insertAndUpdate con initial inp
-        HUnit.assertBool "para" (isRight $ Trace.traceShowId res)
+        HUnit.assertBool "para" (isRight res)
     ]
