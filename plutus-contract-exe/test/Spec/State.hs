@@ -32,9 +32,9 @@ tests = testGroup "stateful contract"
     , HUnit.testCase "construct two parallel branches" $ do
         let con = 
                 let ep = Con.endpoint @String "endpoint"
-                in S.checkpoint $ (,) <$> ep <*> ep
+                in S.checkpoint $ (,) <$> S.checkpoint ep <*> (ep >> ep)
             initial = S.initialise @Hooks.BalancedHooks @Event.Event con
             inp = Event.endpoint "endpoint" (Aeson.toJSON "asd")
             res = S.insertAndUpdate con initial inp
-        HUnit.assertBool "parallel" (isRight res)
+        HUnit.assertBool "parallel" (isRight $ Trace.traceShowId res)
     ]
