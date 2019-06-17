@@ -24,8 +24,6 @@ import           GHC.Generics                      (Generic)
 import           Language.Plutus.Contract.Class
 import qualified Language.Plutus.Contract.Contract as C
 
-import qualified Debug.Trace                       as Trace
-
 data StatefulContract i o a where
     CMap :: (a' -> a) -> StatefulContract i o a' -> StatefulContract i o a
     CAp :: StatefulContract i o (a' -> a) -> StatefulContract i o a' -> StatefulContract i o a
@@ -43,7 +41,6 @@ initialise = \case
                 Left r -> Left (OpenBind r)
                 Right _ ->
                     case snd (result l) of
-                        -- Nothing -> Left (OpenBind (initialise l))
                         Just a -> fromPair (initialise l) (initialise $ f a)
         CContract c ->
             case snd (result (CContract c)) of
@@ -229,7 +226,7 @@ runOpen con or =
                     pure (Left (OpenLeft oL cR))
                 (Left oL, Left oR) ->
                     pure (Left (OpenBoth oL oR))
-        (CAp _ _, OpenLeaf _) -> throwError "CAp OpenLeaf"
+        (CAp{}, OpenLeaf _) -> throwError "CAp OpenLeaf"
 
         (CBind c f, OpenBind bnd) -> do
             lr <- runOpen c bnd
@@ -256,22 +253,18 @@ runOpen con or =
             case rr of
                 Left or'       -> pure (Left (OpenRight cr or'))
                 Right (cr', a) -> pure (Right (ClosedBin cr cr', a))
-        (CBind _ _, _) -> throwError $ "CBind " ++ show or
+        (CBind{}, _) -> throwError $ "CBind " ++ show or
 
         (CContract con, OpenLeaf is) ->
             case C.drain (C.applyInputs (toList is) con) of
                 (o, C.Pure a) -> writer (Right (ClosedLeaf (FinalEvents is), a), o)
                 (o, _)        -> writer (Left (OpenLeaf is), o)
-        (CContract _, _) -> throwError $ "CContract non leaf " ++ show or
+        (CContract{}, _) -> throwError $ "CContract non leaf " ++ show or
 
         (CJSONCheckpoint con, or) -> do
             (r, o) <- listen (runOpen con or)
-            case r of
-                Left or'      -> pure (Left or')
-                Right (cr, a) -> pure (Right (jsonLeaf a o, a))
+            pure $ fmap (\(cr, a) -> (jsonLeaf a o, a)) r
         _ -> throwError "runOpen"
-
-runOpen' s = runExcept . runWriterT . runOpen s
 
 insertAndUpdate
     :: (Show i, Show o, Monoid o)
@@ -289,11 +282,5 @@ updateRecord
     -> Either String (Record i o, o)
 updateRecord con rc =
     case rc of
-        Right cl -> do
-            (_, o) <- runExcept $ runWriterT $ runClosed con cl
-            pure (Right cl, o)
-        Left cl -> do
-            (result, o) <- runOpen' con cl
-            case result of
-                Left r'       -> pure (Left r', o)
-                Right (r', a) -> pure (Right r', o)
+        Right cl -> fmap (first $ const $ Right cl) $ runExcept $ runWriterT $ runClosed con cl
+        Left cl -> fmap (first (fmap fst)) $ runExcept $ runWriterT $ runOpen con cl

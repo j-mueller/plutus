@@ -19,8 +19,6 @@ import qualified Test.Tasty.HUnit                  as HUnit
 
 import qualified Language.Plutus.Contract.State    as S
 
-import qualified Debug.Trace                       as Trace
-
 tests :: TestTree
 tests = testGroup "stateful contract"
     [ HUnit.testCase "construct initial state" $ do
@@ -36,5 +34,5 @@ tests = testGroup "stateful contract"
             initial = S.initialise @Hooks.BalancedHooks @Event.Event con
             inp = Event.endpoint "endpoint" (Aeson.toJSON "asd")
             res = S.insertAndUpdate con initial inp
-        HUnit.assertBool "parallel" (isRight $ Trace.traceShowId res)
+        HUnit.assertBool "parallel" (isRight res)
     ]
