@@ -328,7 +328,7 @@ geq = checkBinRel P.geq
 -- | Check whether one 'Value' is strictly greater than another. See 'Value' for an explanation of how operations on 'Value's work.
 gt :: Value -> Value -> Bool
 -- If both are zero then checkBinRel will be vacuously true. So we have a special case.
-gt l r = not (isZero l && isZero r) && checkBinRel P.gt l r
+gt l r = P.not (isZero l && isZero r) && checkBinRel P.gt l r
 
 {-# INLINABLE leq #-}
 -- | Check whether one 'Value' is less than or equal to another. See 'Value' for an explanation of how operations on 'Value's work.
@@ -340,7 +340,7 @@ leq = checkBinRel P.leq
 -- | Check whether one 'Value' is strictly less than another. See 'Value' for an explanation of how operations on 'Value's work.
 lt :: Value -> Value -> Bool
 -- If both are zero then checkBinRel will be vacuously true. So we have a special case.
-lt l r = not (isZero l && isZero r) && checkBinRel P.lt l r
+lt l r = P.not (isZero l && isZero r) && checkBinRel P.lt l r
 
 {-# INLINABLE eq #-}
 -- | Check whether one 'Value' is equal to another. See 'Value' for an explanation of how operations on 'Value's work.

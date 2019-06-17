@@ -31,13 +31,20 @@ data StatefulContract i o a where
     CContract :: C.Contract i o a -> StatefulContract i o a
     CJSONCheckpoint :: (Aeson.FromJSON a, Aeson.ToJSON a, Aeson.FromJSON o, Aeson.ToJSON o) => StatefulContract i o a -> StatefulContract i o a
 
-initialise :: StatefulContract i o a -> OpenRecord i o
+initialise :: Monoid o => StatefulContract i o a -> Record i o
 initialise = \case
-    CMap _ c' -> initialise c'
-    CAp l r -> OpenBoth (initialise l) (initialise r)
-    CBind l _ -> initialise l
-    CContract _ -> OpenLeaf mempty
-    CJSONCheckpoint c' -> initialise c'
+        CMap _ c' -> initialise c'
+        CAp l r -> fromPair (initialise l) (initialise r)
+        CBind l f -> 
+            case snd (result l) of
+                Nothing -> initialise l
+                Just a -> fromPair (initialise l) (initialise $ f a)
+        CContract c ->
+            let (_, c') = C.drain c
+            in case C.result c' of
+                Right _ -> Right (ClosedLeaf (FinalEvents mempty))
+                Left _ -> Left (OpenLeaf mempty)
+        CJSONCheckpoint c' -> initialise c'
 
 checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a, Aeson.FromJSON o, Aeson.ToJSON o) => StatefulContract i o a -> StatefulContract i o a
 checkpoint = CJSONCheckpoint
@@ -50,10 +57,11 @@ prtty = \case
     CContract _ -> "ccontract"
     CJSONCheckpoint j -> "json(" ++ prtty j ++ ")"
 
-result :: StatefulContract i o a -> Maybe a
-result = \case
-    CContract (C.Pure a) -> Just a
-    _ -> Nothing
+result :: Monoid o => StatefulContract i o a -> (o, Maybe a)
+result c = let (o, c') = C.drain (lower c) in
+            case c' of
+                C.Pure a -> (o, Just a)
+                _        -> (o, Nothing)
 
 instance Functor (StatefulContract i o) where
     fmap f = \case
@@ -116,6 +124,13 @@ data OpenRecord i o =
 
 type Record i o = Either (OpenRecord i o) (ClosedRecord i o)
 
+fromPair :: Record i o -> Record i o -> Record i o
+fromPair l r = case (l, r) of
+    (Left l', Right r')  -> Left (OpenLeft l' r')
+    (Left l', Left r')   -> Left (OpenBoth l' r')
+    (Right l', Left r')  -> Left (OpenRight l' r')
+    (Right l', Right r') -> Right (ClosedBin l' r')
+
 jsonLeaf :: (Aeson.ToJSON a) => a -> o -> ClosedRecord i o
 jsonLeaf a o = ClosedLeaf (FinalJSON (Aeson.toJSON a) o)
 
@@ -127,13 +142,13 @@ insert i = bimap go id  where
         OpenRight cr or -> OpenRight cr (go or)
         OpenBoth or or' -> OpenBoth (go or) (go or')
 
-offer :: i -> StatefulContract i o a -> StatefulContract i o a
+offer :: Monoid o => i -> StatefulContract i o a -> StatefulContract i o a
 offer i = \case
     CMap f c' -> CMap f (offer i c')
     CAp l r -> CAp (offer i l) (offer i r)
-    CBind l f -> 
-        case result l of
-            Just _ -> CBind l (offer i . f)
+    CBind l f ->
+        case snd (result l) of
+            Just _  -> CBind l (offer i . f)
             Nothing -> CBind (offer i l) f
 
     CContract c -> CContract (C.offer i c)
@@ -141,22 +156,7 @@ offer i = \case
 
 applyInputs is c = foldr offer c is
 
-drain :: Monoid o => StatefulContract i o a -> (o, Maybe a)
-drain = \case
-    CMap f c' -> let (o, r) = drain c' in (o, fmap f r)
-    CAp l r -> 
-        let (ol, rl) = drain l
-            (or, rr) = drain r
-        in (ol <> or, rl <*> rr)
-    CBind l f ->
-        let (o, r) = drain l
-        in case r of
-            Nothing -> (o, Nothing)
-            Just a  -> let (o', r') = drain (f a) in (o <> o', r')
-    CContract c' -> second (result . CContract) (C.drain c')
-    CJSONCheckpoint c' -> drain c'
-
-runClosed 
+runClosed
     :: Monoid o
     => StatefulContract i o a
     -> ClosedRecord i o
@@ -164,11 +164,11 @@ runClosed
 runClosed con = \case
     ClosedLeaf (FinalEvents is) ->
         let con' = applyInputs (toList is) con
-            (o, r) = drain con'
+            (o, r) = result con'
         in case r of
             Nothing -> Left "Closed contract not finished"
-            Just a -> pure (o, a)
-    ClosedLeaf (FinalJSON vl o) -> 
+            Just a  -> pure (o, a)
+    ClosedLeaf (FinalJSON vl o) ->
         case con of
             CJSONCheckpoint _ -> do
                 vl' <- Aeson.parseEither Aeson.parseJSON vl
@@ -185,7 +185,7 @@ runClosed con = \case
                 (lo, a) <- runClosed l' l
                 (ro, b) <- runClosed (f a) r
                 pure (lo <> ro, b)
-            _ -> Left "Right ClosedBin with wrong contract type"        
+            _ -> Left "ClosedBin with wrong contract type"
 
 runOpen
     :: (Show i, Show o, Monoid o)
@@ -199,19 +199,19 @@ runOpen con or =
             (ol, lr) <- runOpen l or
             (or, rr) <- runClosed r cr
             case lr of
-                Left or' -> pure (ol <> or, Left (OpenLeft or' cr))
+                Left or'       -> pure (ol <> or, Left (OpenLeft or' cr))
                 Right (cr', a) -> pure (ol <> or, Right (ClosedBin cr' cr, a rr))
         (CAp l r, OpenRight cr or) -> do
             (ol, lr) <- runClosed l cr
             (or, rr) <- runOpen r or
             case rr of
-                Left or' -> pure (ol <> or, Left (OpenRight cr or'))
+                Left or'       -> pure (ol <> or, Left (OpenRight cr or'))
                 Right (cr', a) -> pure (ol <> or, Right (ClosedBin cr cr', lr a))
         (CAp l r, OpenBoth orL orR) -> do
             (ol, lr) <- runOpen l orL
             (or, rr) <- runOpen r orR
             case (lr, rr) of
-                (Right (crL, a), Right (crR, b)) -> 
+                (Right (crL, a), Right (crR, b)) ->
                     pure (ol <> or, Right (ClosedBin crL crR, a b))
                 (Right (crL, a), Left oR) ->
                     pure (ol <> or, Left (OpenRight crL oR))
@@ -220,7 +220,7 @@ runOpen con or =
                 (Left oL, Left oR) ->
                     pure (ol <> or, Left (OpenBoth oL oR))
         (CAp _ _, OpenLeaf _) -> Left "CAp OpenLeaf"
-        
+
         (CBind c f, OpenLeaf is) -> do
             (ol, lr) <- runOpen c or
             case lr of
@@ -228,35 +228,37 @@ runOpen con or =
                 Right (crL, a) -> do
                     let con' = f a
                         orR' = initialise con'
-                    (or, rr) <- runOpen con' orR'
-                    case rr of
-                        Left orR'' -> 
-                            pure (ol <> or, Left (OpenRight crL orR''))
-                        Right (crR, a) ->
-                            pure (ol <> or, Right (ClosedBin crL crR, a))
+                    case orR' of
+                        Right crrrr -> do
+                            (or', a) <- runClosed con' crrrr
+                            pure (ol <> or', Right (ClosedBin crL crrrr, a))
+                        Left orrrr -> do
+                            (or, rr) <- runOpen con' orrrr
+                            case rr of
+                                Left orR'' ->
+                                    pure (ol <> or, Left (OpenRight crL orR''))
+                                Right (crR, a) ->
+                                    pure (ol <> or, Right (ClosedBin crL crR, a))
 
         (CBind c f, OpenRight cr or) -> do
             (ol, lr) <- runClosed c cr
             (or, rr) <- runOpen (f lr) or
             case rr of
-                Left or' -> pure (ol <> or, Left (OpenRight cr or'))
+                Left or'       -> pure (ol <> or, Left (OpenRight cr or'))
                 Right (cr', a) -> pure (ol <> or, Right (ClosedBin cr cr', a))
         (CBind _ _, _) -> Left $ "CBind " ++ show or
 
         (CContract con, OpenLeaf is) ->
             case C.drain (C.applyInputs (toList is) con) of
-                (o, C.Pure a) ->
-                    pure (o, Right (ClosedLeaf (FinalEvents is), a))
-                (o, _) -> pure (o, Left (OpenLeaf is))
+                (o, C.Pure a) -> pure (o, Right (ClosedLeaf (FinalEvents is), a))
+                (o, _)        -> pure (o, Left (OpenLeaf is))
         (CContract _, _) -> Left $ "CContract non leaf " ++ show or
 
         (CJSONCheckpoint con, or) -> do
             (o, r) <- runOpen con or
             case r of
-                Left or' -> pure (o, Left or')
-                Right (cr, a) ->
-                    let rec' = jsonLeaf a o in
-                    pure (o, Right (rec', a))
+                Left or'      -> pure (o, Left or')
+                Right (cr, a) -> pure (o, Right (jsonLeaf a o, a))
         _ -> Left "runOpen"
 
 insertAndUpdate
@@ -273,7 +275,7 @@ updateRecord
     => StatefulContract i o a
     -> Record i o
     -> Either String (o, Record i o)
-updateRecord con rc = 
+updateRecord con rc =
     case rc of
         Right cl -> do
             (o, _) <- runClosed con cl
@@ -281,5 +283,5 @@ updateRecord con rc =
         Left cl -> do
             (o, result) <- runOpen con cl
             case result of
-                Left r' -> pure (o, Left r')
+                Left r'       -> pure (o, Left r')
                 Right (r', a) -> pure (o, Right r')

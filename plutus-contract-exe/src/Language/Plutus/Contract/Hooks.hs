@@ -48,10 +48,6 @@ data BalancedHooks =
         deriving stock (Eq, Show, Generic)
         deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
-instance Aeson.FromJSONKey Address where
-
-instance Aeson.ToJSONKey Address where
-
 openKeys :: Map.Map k Balanced -> Set.Set k
 openKeys = Map.keysSet . Map.filter isOpen
 
