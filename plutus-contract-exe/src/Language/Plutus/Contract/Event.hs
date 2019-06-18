@@ -15,18 +15,20 @@ module Language.Plutus.Contract.Event(
     , endpointEvent
     ) where
 
-import qualified Data.Aeson                           as Aeson
-import           Data.Map                             (Map)
-import qualified Data.Map                             as Map
-import           GHC.Generics                         (Generic)
+import qualified Data.Aeson                    as Aeson
+import           Data.Map                      (Map)
+import qualified Data.Map                      as Map
+import           GHC.Generics                  (Generic)
 
-import           Ledger.AddressMap                    (AddressMap)
-import qualified Ledger.AddressMap                    as AM
-import           Ledger.Slot                          (Slot)
-import           Ledger.Tx                            (Address, Tx)
-        
+import           Language.Plutus.Contract.TxId (UnbalancedTxId)
+import           Ledger.AddressMap             (AddressMap)
+import qualified Ledger.AddressMap             as AM
+import           Ledger.Slot                   (Slot)
+import           Ledger.Tx                     (Address, Tx)
+
 data Event =
     LedgerUpdate Address Tx
+    | TxSubmission UnbalancedTxId -- TODO: add more events about specific transactions (namely, tx submitted, tx rejected, tx rolled back, etc.)
     | SlotChange Slot
     | Endpoint String Aeson.Value
     deriving stock (Eq, Show, Generic)

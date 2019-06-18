@@ -1,91 +1,74 @@
+{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 module Language.Plutus.Contract.Contract(
-      Contract(..)
-    , emit
-    , offer
-    , waiting
-    , applyInputs
-    , await
+      ContractPrompt
     , loopM
     , foldMaybe
     , selectEither
-    , select
     , both
     -- * Feed events to the contract and look at the outputs
-    , drain
-    , outputs
-    , result
+    , runContract
+    , runContract'
+    , initial
+    , InstanceState(..)
     ) where
 
-import           Control.Applicative            (liftA2)
-import           Control.Monad                  ((>=>))
-import           Data.Bifunctor                 (first)
-import           Data.Functor.Alt
+import           Control.Applicative              (Alternative)
+import           Control.Lens                     hiding (both)
+import           Control.Monad.Prompt             (MonadPrompt (..), PromptT, runPromptTM)
+import           Control.Monad.RWS.Lazy
 
 import           Language.Plutus.Contract.Class
+import           Language.Plutus.Contract.Event   as Event
+import           Language.Plutus.Contract.Hooks   as Hooks
+import           Language.Plutus.Contract.Request
+import           Language.Plutus.Contract.TxId
 
-data Contract i o a =
-    Waiting (i -> Contract i o a)
-    | Emit o (Contract i o a) -- produce a 't' value
-    | Pure a
-    deriving (Functor)
+-- | An instance of 'PlutusContract Event (Hook ())' 
+--   that uses the 'PromptT' type
+newtype ContractPrompt f a = ContractPrompt { unPlutusContract :: PromptT (Hook ()) Event f a }
+    deriving (Functor, Applicative, Monad, Alternative, MonadPrompt (Hook ()) Event)
 
-instance Alt (Contract i o) where
-    (<!>) = select
+data InstanceState =
+    InstanceState
+        { _events   :: [Event]
+        , _lastTxId :: UnbalancedTxId
+        }
 
--- The applicative instance parallelises the 'Waiting' operations
-instance Applicative (Contract i o) where
-    pure = Pure
-    Emit t c  <*> ca       = Emit t (c <*> ca)
-    cf        <*> Emit t c = Emit t (cf <*> c)
-    Pure f    <*> ca       = f <$> ca
-    Waiting f <*> ca       = Waiting $ \i -> f i <*> offer i ca
+makeLenses ''InstanceState
 
-instance MonadContract i o (Contract i o) where
-    emit t = Emit t (pure ())
-    waiting = Waiting pure
+initial :: InstanceState
+initial = InstanceState [] 0
 
-    select (Emit e c) r = Emit e (select c r)
-    select l (Emit e c) = Emit e (select l c)
-    select (Pure a)   _ = Pure a
-    select _   (Pure a) = Pure a
-    select (Waiting f) (Waiting f') =
-        Waiting $ \i -> select (f i) (f' i)
+applyEvents
+    :: forall m n a.
+       ( MonadState InstanceState m
+       , MonadWriter Hooks m
+       , MonadReader InstanceState m
+       , Functor (Zoomed n Hooks)
+       , Zoom n m UnbalancedTxId InstanceState )
+    => ContractPrompt Maybe a
+    -> m (Maybe a)
+applyEvents = flip runPromptTM go . unPlutusContract where
+    go hks = do
+        hks' <- zoom lastTxId (hooks hks)
+        evts <- view events
+        case evts of
+            []   -> tell hks' >> pure Nothing
+            e:es ->
+                case match hks e of
+                    Nothing -> pure Nothing
+                    Just e' -> events .= es >> pure (Just e')
 
-offer :: i -> Contract i o a -> Contract i o a
-offer i (Waiting f) = f i
-offer i (Emit t c)  = Emit t (offer i c)
-offer _ c           = c
+runContract :: forall a. ContractPrompt Maybe a -> InstanceState -> (Maybe a, UnbalancedTxId, Hooks)
+runContract con s = over _2 (view lastTxId) $ runRWS (applyEvents con) s s
 
-applyInputs
-    :: [i]
-    -> Contract i o a
-    -> Contract i o a
-applyInputs is c = foldr offer c is
-
--- The monad instance sequentialises the 'Waiting' operations
-instance Monad (Contract i o) where
-    c >>= f = case c of
-        Waiting f' -> Waiting (f' >=> f)
-        Pure a     -> f a
-        Emit t c'  -> Emit t (c' >>= f)
-
-instance Semigroup a => Semigroup (Contract i o a) where
-    (<>) = liftA2 (<>)
-
-drain :: Monoid o => Contract i o a -> (o, Contract i o a)
-drain = \case
-    Waiting f -> (mempty, Waiting f)
-    Pure a -> (mempty, Pure a)
-    Emit t c -> first (t <>) (drain c)
-
-outputs :: Monoid o => Contract i o a -> o
-outputs = fst . drain
-
-result :: Monoid o => Contract i o a -> Either o a
-result = \case
-    Pure a -> Right a
-    c'     -> Left (fst (drain c'))
+runContract' :: forall a. ContractPrompt Maybe a -> [Event] -> (Maybe a, Hooks)
+runContract' con es =
+    let (r, _, h) = runContract con (InstanceState es 0)
+    in (r, h)

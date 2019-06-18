@@ -5,7 +5,6 @@ module Spec.HUnit(
     -- * Making assertions about 'Hooks' values
       ContractTraceState
     , ctsEvents
-    , ctsHooks
     , ctsContract
     , ContractTestResult
     , ctrEmulatorState
@@ -24,7 +23,7 @@ module Spec.HUnit(
     , initContract
     , runWallet
     , event_
-    , drain_
+    , getHooks
     , handleInputs
     , callEndpoint
     -- * Running 'MonadEmulator' actions
@@ -32,13 +31,13 @@ module Spec.HUnit(
     , withInitialDistribution
     ) where
 
-import           Control.Lens                         (at, makeLenses, use, view, (.=), (<>=), (^.))
+import           Control.Lens                         (at, makeLenses, to, use, view, (<>=), (^.))
 import           Control.Monad                        (void)
 import           Control.Monad.State                  (StateT, gets, runStateT)
 import           Control.Monad.Trans.Class            (MonadTrans (..))
 import qualified Data.Aeson                           as Aeson
 import           Data.Bifunctor                       (Bifunctor (..))
-import           Data.Foldable                        (traverse_)
+import           Data.Foldable                        (toList, traverse_)
 import           Data.Functor.Contravariant           (Predicate (..))
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe)
@@ -48,11 +47,10 @@ import qualified Data.Set                             as Set
 import qualified Test.Tasty.HUnit                     as HUnit
 import           Test.Tasty.Providers                 (TestTree)
 
-import           Language.Plutus.Contract             (PlutusContract)
 import           Language.Plutus.Contract.Contract    as Con
 import           Language.Plutus.Contract.Event       (Event)
 import qualified Language.Plutus.Contract.Event       as Event
-import           Language.Plutus.Contract.Hooks       (BalancedHooks (..), Hooks (..))
+import           Language.Plutus.Contract.Hooks       (Hooks (..))
 import qualified Language.Plutus.Contract.Hooks       as Hooks
 import           Language.Plutus.Contract.Transaction (UnbalancedTx)
 import qualified Language.Plutus.Contract.Wallet      as Wallet
@@ -74,9 +72,7 @@ data ContractTraceState a =
     ContractTraceState
         { _ctsEvents   :: Seq Event
         -- ^ Events that were fed to the contract
-        , _ctsHooks    :: BalancedHooks
-        -- ^ Accumulated 'BalancedHooks' value
-        , _ctsContract :: Contract Event BalancedHooks a
+        , _ctsContract :: ContractPrompt Maybe a
         -- ^ Current state of the contract
         }
 
@@ -96,18 +92,21 @@ type TracePredicate a = InitialDistribution -> Predicate (ContractTestResult a)
 
 type ContractTrace m a b = StateT (ContractTraceState a) m b
 
-mkState :: Contract Event BalancedHooks a -> ContractTraceState a
-mkState = ContractTraceState mempty mempty
+mkState :: ContractPrompt Maybe a -> ContractTraceState a
+mkState = ContractTraceState mempty
 
 hooks :: ContractTestResult a -> Hooks
-hooks = Hooks.fromBalanced . _ctsHooks . _ctrTraceState
+hooks rs =
+    let evts = rs ^. ctrTraceState . ctsEvents . to toList
+        con  = rs ^. ctrTraceState . ctsContract
+    in snd (runContract' con evts)
 
 not :: TracePredicate a -> TracePredicate a
 not p a = Predicate $ \b -> Prelude.not (getPredicate (p a) b)
 
 checkPredicate
     :: String
-    -> Contract Event BalancedHooks a
+    -> ContractPrompt Maybe a
     -> TracePredicate a
     -> ContractTrace EmulatorAction a ()
     -> TestTree
@@ -136,7 +135,7 @@ runWallet ws w = EM.processEmulated . EM.runWalletActionAndProcessPending ws w
 
 endpointAvailable :: String -> TracePredicate a
 endpointAvailable nm _ = Predicate $ \r ->
-    nm `Set.member` _endpoints (hooks r)
+    nm `Set.member` _activeEndpoints (hooks r)
 
 interestingAddress :: Address -> TracePredicate a
 interestingAddress addr _ = Predicate $ \r ->
@@ -164,21 +163,17 @@ walletFundsChange w dlt initialDist = Predicate $
 defaultDist :: [(Wallet, Ada)]
 defaultDist = [(EM.Wallet x, 100) | x <- [1..10]]
 
-initContract :: Monad m => Contract Event BalancedHooks a -> m (Hooks, Contract Event BalancedHooks a)
-initContract = pure . first Hooks.fromBalanced . drain
+initContract :: ContractPrompt Maybe a -> Hooks
+initContract = snd . flip runContract' []
 
 event_ :: Monad m => Event -> ContractTrace m a ()
-event_ e = do
-    contract <- use ctsContract
-    ctsEvents <>= Seq.singleton e
-    ctsContract .= Con.offer e contract
+event_ e = ctsEvents <>= Seq.singleton e
 
-drain_ :: Monad m => ContractTrace m a BalancedHooks
-drain_ = do
+getHooks :: Monad m => ContractTrace m a Hooks
+getHooks = do
     contract <- use ctsContract
-    let (stp, rest) = Con.drain contract
-    ctsContract .= rest
-    ctsHooks <>= stp
+    evts <- gets (toList .  _ctsEvents)
+    let (_, stp) = runContract' contract evts
     return stp
 
 -- | Call the endpoint on the contract, submit all transactions
@@ -204,9 +199,9 @@ handleInputs
     -> ContractTrace m a ()
 handleInputs wllt ins = do
     _ <- traverse_ event_ ins
-    step1 <- drain_
+    step1 <- getHooks
     let run' = runWallet (EM.Wallet <$> [1..10])
-        txns = Hooks._transactions (Hooks.fromBalanced step1)
+        txns = Hooks._transactions step1
 
     block <- lift (run' wllt (traverse_ Wallet.handleTx txns))
     idx <- lift (gets (AM.fromUtxoIndex . view EM.index))

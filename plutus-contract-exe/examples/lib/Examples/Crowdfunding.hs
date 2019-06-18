@@ -11,6 +11,7 @@ module Examples.Crowdfunding(
     , CF.campaignAddress
     ) where
 
+import           Control.Applicative                                   (Alternative (..))
 import           Control.Lens                                          ((&), (.~), (^.))
 import           Control.Monad                                         (void)
 
@@ -30,8 +31,8 @@ import           Ledger.Scripts                                        (DataScri
 
 import qualified Wallet.Emulator                                       as Emulator
 
-crowdfunding :: (Semigroup (m ()), PlutusContract m) => m ()
-crowdfunding = contribute theCampaign <> scheduleCollection theCampaign
+crowdfunding :: PlutusContract m => m ()
+crowdfunding = contribute theCampaign <|> scheduleCollection theCampaign
 
 theCampaign :: Campaign
 theCampaign = Campaign
@@ -59,7 +60,7 @@ contribute cmp = do
         tx' = collectFromScriptFilter flt utxo (CF.contributionScript cmp) (L.RedeemerScript (L.lifted CF.Refund))
                 & validityRange .~ CF.refundRange cmp
     if not . null $ tx' ^. inputs
-    then writeTx tx'
+    then void (writeTx tx')
     else pure ()
 
 scheduleCollection :: PlutusContract m => Campaign -> m ()

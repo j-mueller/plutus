@@ -1,19 +1,13 @@
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Language.Plutus.Contract.Class where
 
-import           Control.Applicative            (liftA2)
+import           Control.Applicative  (Alternative (..), liftA2)
+import           Control.Monad.Prompt (MonadPrompt (..))
 
-class Monad m => MonadContract i o m | m -> i, m -> o where
-    emit :: o -> m ()
-    waiting :: m i
+type MonadContract i o m = MonadPrompt o i m
 
-    -- | Run both contracts and return the first one that finishes
-    --   @select (pure a) _ = pure a@
-    --   @fmap f (select a b) == select (fmap f a) (fmap f b)@
-    select :: m a -> m a -> m a
-
--- | A monadic version of 'loop', where the predicate returns 'Left' as a seed 
+-- | A monadic version of 'loop', where the predicate returns 'Left' as a seed
 --   for the next loop or 'Right' to abort the loop.
 --
 -- https://hackage.haskell.org/package/extra-1.6.15/docs/src/Control.Monad.Extra.html#loopM
@@ -35,18 +29,13 @@ foldMaybe
 foldMaybe f b con = loopM go b where
     go b' = maybe (Left b') (Right . flip f b') <$> con
 
-await :: MonadContract i o m => o -> (i -> Maybe a) -> m a
-await a f = do
-    emit a
-    go where
-        go = do
-            i <- waiting
-            case f i of
-                Nothing -> go
-                Just i' -> pure i'
+await :: (Alternative m, Monad m, MonadContract i o m) => o -> (i -> Maybe a) -> m a
+await i f = do
+    o <- prompt i
+    maybe empty pure (f o)
 
-both :: MonadContract i o m => m a -> m b -> m (a, b)
+both :: (MonadContract i o f) => f a -> f b -> f (a, b)
 both = liftA2 (,)
 
-selectEither :: MonadContract i o m => m a -> m b -> m (Either a b)
-selectEither l r = select (Left <$> l) (Right <$> r)
+selectEither :: (Alternative f) => f a -> f b -> f (Either a b)
+selectEither l r = (Left <$> l) <|> (Right <$> r)

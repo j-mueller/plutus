@@ -15,7 +15,7 @@ tests = testGroup "crowdfunding" [
     checkPredicate "Expose 'contribute' and 'scheduleCollection' endpoints"
         crowdfunding
         (endpointAvailable "contribute" <> endpointAvailable "schedule collection")
-        $ void drain_
+        $ pure ()
 
     , checkPredicate "'contribute' endpoint submits a transaction"
         crowdfunding
