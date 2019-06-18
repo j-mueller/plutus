@@ -12,29 +12,30 @@ module Language.Plutus.Contract.State where
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Control.Monad.Writer
-import qualified Data.Aeson                        as Aeson
-import qualified Data.Aeson.Types                  as Aeson
-import           Data.Bifunctor                    (Bifunctor (..))
-import           Data.Foldable                     (toList)
+import qualified Data.Aeson                         as Aeson
+import qualified Data.Aeson.Types                   as Aeson
+import           Data.Bifunctor                     (Bifunctor (..))
+import           Data.Foldable                      (toList)
+import qualified Data.Map                           as Map
 
-import qualified Language.Plutus.Contract.Contract as C
-import           Language.Plutus.Contract.Event    as Event
-import           Language.Plutus.Contract.Hooks    as Hooks
+import qualified Language.Plutus.Contract.Contract  as C
+import           Language.Plutus.Contract.Event     as Event
+import           Language.Plutus.Contract.Hooks     as Hooks
 import           Language.Plutus.Contract.Record
-import           Language.Plutus.Contract.TxId
+import           Language.Plutus.Contract.RequestId
 
 data StatefulContract a where
     CMap :: (a' -> a) -> StatefulContract  a' -> StatefulContract  a
     CAp :: StatefulContract  (a' -> a) -> StatefulContract  a' -> StatefulContract  a
     CBind :: StatefulContract  a' -> (a' -> StatefulContract  a) -> StatefulContract  a
 
-    CContract :: C.ContractPrompt Maybe a -> StatefulContract  a
+    CContract :: C.ContractPrompt (Either Hooks) a -> StatefulContract  a
     CJSONCheckpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
 
-initialise 
-    :: UnbalancedTxId
+initialise
+    :: RequestId
     -> StatefulContract a
-    -> (Rec Event Hooks a, UnbalancedTxId)
+    -> (Rec Event Hooks a, RequestId)
 initialise = undefined --  lower _ _ c
 
 checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
@@ -62,7 +63,7 @@ lower
     -- ^ What to do with map, ap, bind
     => (forall a'. (Aeson.FromJSON a', Aeson.ToJSON a') => m a' -> m a')
     -- ^ What to do with JSON checkpoints
-    -> (forall a'. C.ContractPrompt Maybe a' -> m a')
+    -> (forall a'. C.ContractPrompt (Either Hooks) a' -> m a')
     -- ^ What to do with the contracts
     -> StatefulContract a
     -> m a
@@ -80,12 +81,16 @@ instance Applicative StatefulContract where
 instance Monad StatefulContract where
     (>>=) = CBind
 
-runCon :: C.ContractPrompt Maybe a -> [Event] -> UnbalancedTxId -> (Maybe a, UnbalancedTxId, Hooks)
-runCon con es i = C.runContract con (C.InstanceState es i)
+runCon :: C.ContractPrompt (Either Hooks) a -> Map.Map RequestId Event -> RequestId -> (Maybe a, RequestId, Hooks)
+runCon con es i =
+    let (r, i') = C.runContract con (C.InstanceState es i)
+    in case r of
+        Left h  -> (Nothing, i', h)
+        Right a -> (Just a, i', mempty)
 
-runConM 
-    :: MonadState UnbalancedTxId m
-    => C.ContractPrompt Maybe a
+runConM
+    :: MonadState RequestId m
+    => C.ContractPrompt (Either Hooks) a
     -> [Event]
     -> m (Maybe a, Hooks)
 runConM con es = do
@@ -96,7 +101,7 @@ runConM con es = do
 
 runClosed
     :: ( MonadWriter Hooks m
-       , MonadState UnbalancedTxId m
+       , MonadState RequestId m
        , MonadError String m)
     => StatefulContract  a
     -> ClosedRecord Event Hooks
@@ -126,7 +131,7 @@ runClosed con = \case
 
 runOpen
     :: ( MonadWriter Hooks m
-       , MonadState UnbalancedTxId m
+       , MonadState RequestId m
        , MonadError String m)
     => StatefulContract  a
     -> OpenRecord Event Hooks
@@ -138,13 +143,13 @@ runOpen con opr =
             lr <- runOpen l opr'
             rr <- runClosed r cr
             case lr of
-                Left opr''       -> pure (Left (OpenLeft opr'' cr))
+                Left opr''     -> pure (Left (OpenLeft opr'' cr))
                 Right (cr', a) -> pure (Right (ClosedBin cr' cr, a rr))
         (CAp l r, OpenRight cr opr') -> do
             lr <- runClosed l cr
             rr <- runOpen r opr'
             case rr of
-                Left opr''       -> pure (Left (OpenRight cr opr''))
+                Left opr''     -> pure (Left (OpenRight cr opr''))
                 Right (cr', a) -> pure (Right (ClosedBin cr cr', lr a))
         (CAp l r, OpenBoth orL orR) -> do
             lr <- runOpen l orL
@@ -183,7 +188,7 @@ runOpen con opr =
             lr <- runClosed c cr
             rr <- runOpen (f lr) opr'
             case rr of
-                Left opr''       -> pure (Left (OpenRight cr opr''))
+                Left opr''     -> pure (Left (OpenRight cr opr''))
                 Right (cr', a) -> pure (Right (ClosedBin cr cr', a))
         (CBind{}, _) -> throwError $ "CBind " ++ show opr
 
