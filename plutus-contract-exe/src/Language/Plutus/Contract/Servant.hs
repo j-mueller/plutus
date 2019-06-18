@@ -19,11 +19,11 @@ type ContractAPI =
   :<|> "run" :> ReqBody '[JSON] [Event] :> Post '[JSON] Hooks
 
 -- | Serve a 'PlutusContract' via the contract API
-contractServer :: ContractPrompt Maybe () -> Server ContractAPI
+contractServer :: ContractPrompt (Either Hooks) () -> Server ContractAPI
 contractServer c = initialise :<|> run where
     initialise = pure (snd (runContract' c []))
     run        = pure . snd . runContract' c
 
 -- | A servant 'Application' that serves a Plutus contract
-contractApp :: ContractPrompt Maybe () -> Application
+contractApp :: ContractPrompt (Either Hooks) () -> Application
 contractApp = serve (Proxy @ContractAPI) . contractServer

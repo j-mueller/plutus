@@ -72,7 +72,7 @@ data ContractTraceState a =
     ContractTraceState
         { _ctsEvents   :: Seq Event
         -- ^ Events that were fed to the contract
-        , _ctsContract :: ContractPrompt Maybe a
+        , _ctsContract :: ContractPrompt (Either Hooks) a
         -- ^ Current state of the contract
         }
 
@@ -92,7 +92,7 @@ type TracePredicate a = InitialDistribution -> Predicate (ContractTestResult a)
 
 type ContractTrace m a b = StateT (ContractTraceState a) m b
 
-mkState :: ContractPrompt Maybe a -> ContractTraceState a
+mkState :: ContractPrompt (Either Hooks) a -> ContractTraceState a
 mkState = ContractTraceState mempty
 
 hooks :: ContractTestResult a -> Hooks
@@ -106,7 +106,7 @@ not p a = Predicate $ \b -> Prelude.not (getPredicate (p a) b)
 
 checkPredicate
     :: String
-    -> ContractPrompt Maybe a
+    -> ContractPrompt (Either Hooks) a
     -> TracePredicate a
     -> ContractTrace EmulatorAction a ()
     -> TestTree
@@ -163,7 +163,7 @@ walletFundsChange w dlt initialDist = Predicate $
 defaultDist :: [(Wallet, Ada)]
 defaultDist = [(EM.Wallet x, 100) | x <- [1..10]]
 
-initContract :: ContractPrompt Maybe a -> Hooks
+initContract :: ContractPrompt (Either Hooks) a -> Hooks
 initContract = snd . flip runContract' []
 
 event_ :: Monad m => Event -> ContractTrace m a ()

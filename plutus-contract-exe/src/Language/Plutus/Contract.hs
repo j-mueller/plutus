@@ -21,7 +21,7 @@ module Language.Plutus.Contract(
 
 import           Control.Applicative                  (Alternative (..))
 import           Control.Lens                         hiding (both)
-import           Control.Monad.Prompt                 (MonadPrompt(..))
+import           Control.Monad.Prompt                 (MonadPrompt (..))
 import           Data.Aeson                           (FromJSON)
 import qualified Data.Aeson                           as Aeson
 import           Data.Maybe                           (fromMaybe)
@@ -30,7 +30,7 @@ import           Language.Plutus.Contract.Contract    as Contract
 import           Language.Plutus.Contract.Event       as Event hiding (endpoint)
 import           Language.Plutus.Contract.Hooks       as Hooks
 import           Language.Plutus.Contract.Transaction as Transaction
-import           Language.Plutus.Contract.TxId        (UnbalancedTxId)
+import           Language.Plutus.Contract.Request     (RequestId)
 
 import           Ledger.AddressMap                    (AddressMap)
 import qualified Ledger.AddressMap                    as AM
@@ -98,7 +98,7 @@ fundsAtAddressGt addr' vl = loopM go mempty where
         then pure (Left cur') else pure (Right cur')
 
 -- | Wait until a slot number has been reached
-slotGeq :: (PlutusContract m) => Slot -> m Slot
+-- slotGeq :: (PlutusContract m) => Slot -> m Slot
 slotGeq sl = do
     i <- prompt (Hooks.slotHook sl)
     case i of
