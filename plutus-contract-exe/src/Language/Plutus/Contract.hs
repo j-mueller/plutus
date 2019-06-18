@@ -8,10 +8,8 @@ module Language.Plutus.Contract(
     , endpoint
     , writeTx
     , fundsAtAddressGt
-    , emit
     , slotGeq
     , selectEither
-    , select
     , both
     , until
     , when
@@ -21,17 +19,18 @@ module Language.Plutus.Contract(
     , finally
     ) where
 
+import           Control.Applicative                  (Alternative (..))
 import           Control.Lens                         hiding (both)
-import           Control.Monad                        ((>=>))
+import           Control.Monad.Prompt                 (MonadPrompt(..))
 import           Data.Aeson                           (FromJSON)
 import qualified Data.Aeson                           as Aeson
 import           Data.Maybe                           (fromMaybe)
 
-import           Language.Plutus.Contract.Class       (MonadContract (..))
 import           Language.Plutus.Contract.Contract    as Contract
 import           Language.Plutus.Contract.Event       as Event hiding (endpoint)
 import           Language.Plutus.Contract.Hooks       as Hooks
 import           Language.Plutus.Contract.Transaction as Transaction
+import           Language.Plutus.Contract.TxId        (UnbalancedTxId)
 
 import           Ledger.AddressMap                    (AddressMap)
 import qualified Ledger.AddressMap                    as AM
@@ -42,18 +41,16 @@ import qualified Ledger.Value                         as V
 
 import           Prelude                              hiding (until)
 
-type PlutusContract m = (MonadContract Event BalancedHooks m)
+type PlutusContract m = (Monad m, Alternative m, MonadPrompt (Hook ()) Event m)
 
 -- | Watch an 'Address', returning the next transaction that changes it
 nextTransactionAt :: PlutusContract m => Address -> m Tx
 nextTransactionAt a = do
-    r <- await (Hooks.addr a) (ledgerUpdate >=> check)
-    _ <- emit (Hooks.closeAddr a)
-    pure r
-    where
-    check (a', t)
-        | a == a' = Just t
-        | otherwise = Nothing
+    i <- prompt (Hooks.addrHook a)
+    case i of
+        LedgerUpdate a' tx
+            | a' == a -> pure tx
+        _ -> empty
 
 -- | Watch an address until the given slot, then return all known outputs
 --   at the address.
@@ -69,19 +66,24 @@ finally a b = do
 
 -- | Expose an endpoint, returning the data that was entered
 endpoint :: forall a. forall m. (PlutusContract m, FromJSON a) => String -> m a
-endpoint nm = await (Hooks.endpointName nm) (endpointEvent >=> uncurry dec) `finally` emit (Hooks.closeEndpoint nm)
-    where
-        dec :: String -> Aeson.Value -> Maybe a
-        dec nm' vl
-            | nm' == nm =
-                case Aeson.fromJSON vl of
-                    Aeson.Success r -> Just r
-                    _               -> Nothing
-            | otherwise = Nothing
+endpoint nm = do
+    i <- prompt (Hooks.endpointHook nm)
+    case i of
+        Endpoint nm' vl
+            | nm' == nm -> case Aeson.fromJSON vl of
+                Aeson.Success r -> pure r
+                _               -> empty -- TODO: Report error somewhere
+        _ -> empty
 
--- | Produce an unbalanced transaction
-writeTx :: PlutusContract m => UnbalancedTx -> m ()
-writeTx = emit . Hooks.tx
+
+-- | Produce an unbalanced transaction, returning an ID
+--   that can be used to query its status (TBD)
+writeTx :: PlutusContract m => UnbalancedTx -> m UnbalancedTxId
+writeTx t = do
+    i <- prompt (Hooks.txHook t)
+    case i of
+        TxSubmission txid -> pure txid
+        _                 -> empty
 
 -- | Watch an address for changes, and return the outputs
 --   at that address when the total value at the address
@@ -96,18 +98,20 @@ fundsAtAddressGt addr' vl = loopM go mempty where
         then pure (Left cur') else pure (Right cur')
 
 -- | Wait until a slot number has been reached
-slotGeq :: PlutusContract m => Slot -> m Slot
-slotGeq sl = await (Hooks.slot sl) (slotChange >=> go) where
-    go sl'
-        | sl' >= sl = Just sl'
-        | otherwise = Nothing
+slotGeq :: (PlutusContract m) => Slot -> m Slot
+slotGeq sl = do
+    i <- prompt (Hooks.slotHook sl)
+    case i of
+        SlotChange sl'
+            | sl' >= sl -> pure sl'
+        _ -> empty
 
 -- | Run a contract until the given slot has been reached.
-until :: PlutusContract m => m a -> Slot -> m (Maybe a)
+until :: (PlutusContract m) => m a -> Slot -> m (Maybe a)
 until c sl = fmap (either (const Nothing) Just) (selectEither (slotGeq sl) c)
 
 -- | Run a contract when the given slot has been reached.
-when :: PlutusContract m => Slot -> m a -> m a
+when :: (PlutusContract m) => Slot -> m a -> m a
 when s c = slotGeq s >> c
 
 -- | Run a contract until the given slot has been reached.

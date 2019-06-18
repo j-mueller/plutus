@@ -14,7 +14,9 @@ module Examples.Game(
     , gameAddress
     ) where
 
+import           Control.Applicative                           (Alternative (..))
 import           Control.Lens                                  (at, (^.))
+import           Control.Monad                                 (void)
 import qualified Data.Aeson                                    as Aeson
 import qualified Data.Map                                      as Map
 import           Data.Maybe                                    (fromMaybe)
@@ -54,7 +56,7 @@ guess = do
         redeemer = gameRedeemerScript theGuess
         inp      = (\o -> (L.scriptTxIn (fst o) gameValidator redeemer, L.txOutValue (snd o))) <$> outputs
         tx       = unbalancedTx inp []
-    writeTx tx
+    void (writeTx tx)
 
 lock :: PlutusContract m => m ()
 lock = do
@@ -64,7 +66,7 @@ lock = do
         dataScript = gameDataScript secret
         output = L.TxOutOf gameAddress vl (L.PayToScript dataScript)
         tx     = unbalancedTx [] [output]
-    writeTx tx
+    void (writeTx tx)
 
-game :: (Semigroup (m ()), PlutusContract m) => m ()
-game = guess <> lock
+game :: PlutusContract m => m ()
+game = guess <|> lock

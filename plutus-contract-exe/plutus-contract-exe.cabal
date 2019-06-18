@@ -42,15 +42,16 @@ library
     import: lang
     exposed-modules:
         Language.Plutus.Contract
-        Language.Plutus.Contract.Balanced
         Language.Plutus.Contract.Class
         Language.Plutus.Contract.Contract
         Language.Plutus.Contract.Event
         Language.Plutus.Contract.Hooks
-        Language.Plutus.Contract.NewCon
+        Language.Plutus.Contract.Record
+        Language.Plutus.Contract.Request
         Language.Plutus.Contract.Servant
         Language.Plutus.Contract.State
         Language.Plutus.Contract.Transaction
+        Language.Plutus.Contract.TxId
         Language.Plutus.Contract.Wallet
     hs-source-dirs: src
     build-depends:
@@ -67,7 +68,8 @@ library
         servant-server -any,
         mtl -any,
         semigroupoids -any,
-        profunctors -any
+        profunctors -any,
+        prompt -any
 
 library examples
     import: lang
