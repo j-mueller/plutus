@@ -24,6 +24,11 @@ import           Language.Plutus.Contract.Hooks     as Hooks
 import           Language.Plutus.Contract.Record
 import           Language.Plutus.Contract.RequestId
 
+-- TODO:
+-- Make go with a Map RequestId Event
+-- Records should keep track of a set of request IDs that their braches consume
+-- then use that to do garbage collection when running 
+
 data StatefulContract a where
     CMap :: (a' -> a) -> StatefulContract  a' -> StatefulContract  a
     CAp :: StatefulContract  (a' -> a) -> StatefulContract  a' -> StatefulContract  a
@@ -104,7 +109,7 @@ runClosed
        , MonadState RequestId m
        , MonadError String m)
     => StatefulContract  a
-    -> ClosedRecord Event Hooks
+    -> ClosedRecord RequestId Hooks
     -> m a
 runClosed con = \case
     ClosedLeaf (FinalEvents is) ->
