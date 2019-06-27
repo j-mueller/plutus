@@ -32,7 +32,7 @@ data StatefulContract a where
 
 initialise
     :: StatefulContract a
-    -> Either (OpenRecord b Hooks) (ClosedRecord b Hooks, a)
+    -> Either (OpenRecord b) (ClosedRecord b, a)
 initialise = \case
     CMap f con ->  fmap f <$> initialise con
     CAp conL conR -> let
@@ -61,7 +61,7 @@ initialise = \case
         let r = initialise con in
         case r of
             Left _ -> r
-            Right (_, a) -> Right (jsonLeaf a mempty, a)
+            Right (_, a) -> Right (jsonLeaf a, a)
         
 
 checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
@@ -134,8 +134,8 @@ runConM evts con = writer (evalState (C.runContract' con) evts)
 runClosed
     :: ( MonadWriter Hooks m
        , MonadError String m)
-    => StatefulContract  a
-    -> ClosedRecord Event Hooks
+    => StatefulContract a
+    -> ClosedRecord Event
     -> m a
 runClosed con = \case
     ClosedLeaf (FinalEvents evts) ->
@@ -146,12 +146,12 @@ runClosed con = \case
                     Nothing -> throwError "ClosedLeaf, contract not finished"
                     Just  a -> pure a
             _ -> throwError "ClosedLeaf, expected CContract "
-    ClosedLeaf (FinalJSON vl o) ->
+    ClosedLeaf (FinalJSON vl) ->
         case con of
             CJSONCheckpoint _ ->
                 case Aeson.parseEither Aeson.parseJSON vl of
                     Left e    -> throwError e
-                    Right vl' -> writer (vl', o)
+                    Right vl' -> writer (vl', mempty)
             _ -> throwError "Expected JSON checkpoint"
     ClosedBin l r ->
         case con of
@@ -164,8 +164,8 @@ runOpen
     :: ( MonadWriter Hooks m
        , MonadError String m)
     => StatefulContract a
-    -> OpenRecord Event Hooks
-    -> m (Either (OpenRecord Event Hooks) (ClosedRecord Event Hooks, a))
+    -> OpenRecord Event
+    -> m (Either (OpenRecord Event) (ClosedRecord Event, a))
 runOpen con opr =
     case (con, opr) of
         (CMap f con', _) -> (fmap .fmap $ fmap f) (runOpen con' opr)
@@ -227,23 +227,22 @@ runOpen con opr =
                     Nothing -> pure (Left (OpenLeaf is))
         (CContract{}, _) -> throwError $ "CContract non leaf " ++ show opr
 
-        (CJSONCheckpoint con', opr') -> do
-            (r, o) <- listen (runOpen con' opr')
-            pure $ fmap (\(_, a) -> (jsonLeaf a o, a)) r
+        (CJSONCheckpoint con', opr') ->
+            fmap (\(_, a) -> (jsonLeaf a, a)) <$> runOpen con' opr'
         _ -> throwError "runOpen"
 
 insertAndUpdate 
     :: StatefulContract a
-    -> Record Event Hooks
+    -> Record Event
     -> Event
-    -> Either String (Record Event Hooks, Hooks)
+    -> Either String (Record Event, Hooks)
 insertAndUpdate con rc e = updateRecord con (insert e rc)
 
 
 updateRecord
     :: StatefulContract  a
-    -> Record Event Hooks
-    -> Either String (Record Event Hooks, Hooks)
+    -> Record Event
+    -> Either String (Record Event, Hooks)
 updateRecord con rc =
     case rc of
         Right cl -> 

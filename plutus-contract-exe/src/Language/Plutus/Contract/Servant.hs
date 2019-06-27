@@ -23,16 +23,12 @@ import           Language.Plutus.Contract.Hooks     (Hooks)
 import           Language.Plutus.Contract.Record
 import           Language.Plutus.Contract.RequestId (RequestId)
 
-data State = State
-    { responses :: Map RequestId Event
-    , record    :: Record RequestId Hooks
-    }
+newtype State = State { record :: Record Event }
     deriving stock (Eq, Show, Generic)
-    deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
+    deriving newtype (Aeson.FromJSON, Aeson.ToJSON)
 
 data Request = Request
     { oldState   :: State
-    , eventReqId :: RequestId
     , event      :: Event
     }
     deriving stock (Eq, Show, Generic)
@@ -54,7 +50,7 @@ type ContractAPI =
 -- | Serve a 'PlutusContract' via the contract API
 contractServer :: ContractPrompt (Either Hooks) () -> Server ContractAPI
 contractServer c = initialise :<|> run where
-    initialise = undefined -- pure (snd (runContract' c []))
+    initialise = undefined -- pure . Response .   -- pure (snd (runContract' c []))
     run        = undefined -- pure . snd . runContract' c
 
 -- | A servant 'Application' that serves a Plutus contract

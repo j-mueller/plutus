@@ -12,26 +12,26 @@ import           GHC.Generics   (Generic)
 import           Data.Aeson     (Value)
 import qualified Data.Aeson     as Aeson
 
-data FinalValue i o = FinalJSON Value o | FinalEvents (Seq i)
+data FinalValue i = FinalJSON Value | FinalEvents (Seq i)
     deriving stock (Eq, Show, Generic, Functor)
     deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
-data ClosedRecord i o =
-    ClosedLeaf (FinalValue i o)
-  | ClosedBin  (ClosedRecord i o) (ClosedRecord i o)
+data ClosedRecord i =
+    ClosedLeaf (FinalValue i)
+  | ClosedBin  (ClosedRecord i) (ClosedRecord i)
   deriving stock (Eq, Show, Generic, Functor)
   deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
-data OpenRecord i o =
+data OpenRecord i =
     OpenLeaf (Seq i)
-  | OpenBind (OpenRecord i o)
-  | OpenLeft (OpenRecord i o) (ClosedRecord i o)
-  | OpenRight (ClosedRecord i o) (OpenRecord i o)
-  | OpenBoth (OpenRecord i o) (OpenRecord i o)
+  | OpenBind (OpenRecord i)
+  | OpenLeft (OpenRecord i) (ClosedRecord i)
+  | OpenRight (ClosedRecord i) (OpenRecord i)
+  | OpenBoth (OpenRecord i) (OpenRecord i)
   deriving stock (Eq, Show, Generic, Functor)
   deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
-openSubRecords :: Traversal' (OpenRecord i o) (OpenRecord i o)
+openSubRecords :: Traversal' (OpenRecord i) (OpenRecord i)
 openSubRecords f = \case
     v@OpenLeaf{} -> pure v
     OpenBind b -> OpenBind <$> f b
@@ -39,24 +39,24 @@ openSubRecords f = \case
     OpenRight l r -> OpenRight l <$> f r
     OpenBoth l r -> OpenBoth <$> f l <*> f r
 
-closedSubRecords :: Traversal' (ClosedRecord i o) (ClosedRecord i o)
+closedSubRecords :: Traversal' (ClosedRecord i) (ClosedRecord i)
 closedSubRecords f = \case
     v@ClosedLeaf{} -> pure v
     ClosedBin l r -> ClosedBin <$> f l <*> f r
 
-type Record i o = Either (OpenRecord i o) (ClosedRecord i o)
+type Record i = Either (OpenRecord i) (ClosedRecord i)
 
-fromPair :: Record i o -> Record i o -> Record i o
+fromPair :: Record i -> Record i -> Record i
 fromPair l r = case (l, r) of
   (Left l', Right r')  -> Left (OpenLeft l' r')
   (Left l', Left r')   -> Left (OpenBoth l' r')
   (Right l', Left r')  -> Left (OpenRight l' r')
   (Right l', Right r') -> Right (ClosedBin l' r')
 
-jsonLeaf :: (Aeson.ToJSON a) => a -> o -> ClosedRecord i o
-jsonLeaf a o = ClosedLeaf (FinalJSON (Aeson.toJSON a) o)
+jsonLeaf :: (Aeson.ToJSON a) => a -> ClosedRecord i
+jsonLeaf = ClosedLeaf . FinalJSON . Aeson.toJSON
 
-insert :: i -> Record i o -> Record i o
+insert :: i -> Record i -> Record i
 insert i = bimap go id  where
   go = \case
       OpenLeaf s -> OpenLeaf (s |> i)
