@@ -18,19 +18,11 @@ module Language.Plutus.Contract.Hooks(
     ) where
 
 import           Control.Lens
-import           Control.Monad.State                  (MonadState)
-import           Control.Monad.Trans.Error
 import qualified Data.Aeson                           as Aeson
-import qualified Data.Map                             as Map
-import           Data.Maybe                           (catMaybes)
-import           Data.Semigroup                       (Min (..), Option (..))
 import           Data.Sequence                        (Seq)
 import qualified Data.Sequence                        as Seq
-import           Data.Set                             (Set)
-import qualified Data.Set                             as Set
 import           GHC.Generics                         (Generic)
 
-import           Language.Plutus.Contract.RequestId
 import           Language.Plutus.Contract.Transaction (UnbalancedTx)
 import           Ledger.Slot                          (Slot (..))
 import           Ledger.Tx                            (Address)
@@ -60,11 +52,6 @@ endpointHook s = EndpointHook s ()
 newtype Hooks = Hooks { unHooks :: Seq (Hook ()) }
     deriving stock (Eq, Show, Generic)
     deriving newtype (Aeson.FromJSON, Aeson.ToJSON, Semigroup, Monoid)
-
-instance Error Hooks where
-    noMsg = mempty -- :( It doesn't compile without this instance. I haven't
-    -- been able to track down the exact cause yet but it should really
-    -- be possible to do it without Error.
 
 transactions :: Hooks -> [UnbalancedTx]
 transactions = toListOf (traversed . _TxHook) . unHooks

@@ -20,7 +20,6 @@ import           Data.Map                           (Map)
 import qualified Data.Map                           as Map
 import           GHC.Generics                       (Generic)
 
-import           Language.Plutus.Contract.RequestId (RequestId)
 import           Ledger.AddressMap                  (AddressMap)
 import qualified Ledger.AddressMap                  as AM
 import           Ledger.Slot                        (Slot)

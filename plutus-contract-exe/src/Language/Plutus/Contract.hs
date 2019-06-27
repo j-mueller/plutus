@@ -29,7 +29,6 @@ import           Data.Maybe                           (fromMaybe)
 import           Language.Plutus.Contract.Contract    as Contract
 import           Language.Plutus.Contract.Event       as Event hiding (endpoint)
 import           Language.Plutus.Contract.Hooks       as Hooks
-import           Language.Plutus.Contract.RequestId   (RequestId)
 import           Language.Plutus.Contract.Transaction as Transaction
 
 import           Ledger.AddressMap                    (AddressMap)
@@ -99,7 +98,7 @@ fundsAtAddressGt addr' vl = loopM go mempty where
         then pure (Left cur') else pure (Right cur')
 
 -- | Wait until a slot number has been reached
--- slotGeq :: (PlutusContract m) => Slot -> m Slot
+slotGeq :: (PlutusContract m) => Slot -> m Slot
 slotGeq sl = do
     i <- prompt (Hooks.slotHook sl)
     case i of

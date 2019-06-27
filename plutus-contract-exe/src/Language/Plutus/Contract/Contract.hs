@@ -15,18 +15,14 @@ module Language.Plutus.Contract.Contract(
     ) where
 
 import           Control.Applicative                (Alternative)
-import           Control.Monad.Prompt               (MonadPrompt (..), PromptT, hoistP, runPromptTM)
+import           Control.Monad.Prompt               (MonadPrompt (..), PromptT, runPromptTM)
 import           Control.Monad.State
 import           Control.Monad.Writer
-import           Data.Either.Validation
-import qualified Data.Map                           as Map
-import           Data.Sequence                      (Seq)
 
 import           Language.Plutus.Contract.Class
 import           Language.Plutus.Contract.Event     as Event
 import           Language.Plutus.Contract.Hooks     as Hooks
 import           Language.Plutus.Contract.Request
-import           Language.Plutus.Contract.RequestId
 
 -- | An instance of 'PlutusContract Event (Hook ())'
 --   that uses the 'PromptT' type
@@ -48,9 +44,9 @@ runContract = flip runPromptTM go . unPlutusContract where
     go hks = do
         let hks' = hooks hks
         evts <- get
-        let go = \case
+        let go' = \case
                     [] -> tell hks' >> pure Nothing
                     e:es -> case match hks e of
-                        Nothing -> go es
+                        Nothing -> go' es
                         Just e' -> put es >> pure (Just e')
-        go evts
+        go' evts

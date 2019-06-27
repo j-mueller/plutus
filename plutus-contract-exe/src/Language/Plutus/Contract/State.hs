@@ -62,9 +62,7 @@ initialise = \case
         r <- initialise con
         case r of
             Left _ -> pure r
-            Right (_, a) -> pure $ Right (jsonLeaf a, a)
-
-        
+            Right (_, a) -> pure $ Right (jsonLeaf a, a)        
 
 checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
 checkpoint = CJSONCheckpoint
@@ -222,7 +220,6 @@ insertAndUpdate
     -> Event
     -> Either String (Record Event, Hooks)
 insertAndUpdate con rc e = updateRecord con (insert e rc)
-
 
 updateRecord
     :: StatefulContract  a

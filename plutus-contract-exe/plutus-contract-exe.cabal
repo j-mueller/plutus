@@ -48,7 +48,6 @@ library
         Language.Plutus.Contract.Hooks
         Language.Plutus.Contract.Record
         Language.Plutus.Contract.Request
-        Language.Plutus.Contract.RequestId
         Language.Plutus.Contract.Servant
         Language.Plutus.Contract.State
         Language.Plutus.Contract.Transaction
@@ -70,7 +69,6 @@ library
         semigroupoids -any,
         profunctors -any,
         prompt -any,
-        either -any,
         transformers -any
 
 library examples
