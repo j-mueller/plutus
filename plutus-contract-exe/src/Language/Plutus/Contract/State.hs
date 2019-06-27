@@ -10,6 +10,7 @@
 module Language.Plutus.Contract.State where
 
 import           Control.Monad.Except
+import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer
 import qualified Data.Aeson                         as Aeson
@@ -24,11 +25,6 @@ import           Language.Plutus.Contract.Hooks     as Hooks
 import           Language.Plutus.Contract.Record
 import           Language.Plutus.Contract.RequestId
 
--- TODO:
--- Make go with a Map RequestId Event
--- Records should keep track of a set of request IDs that their braches consume
--- then use that to do garbage collection when running 
-
 data StatefulContract a where
     CMap :: (a' -> a) -> StatefulContract  a' -> StatefulContract  a
     CAp :: StatefulContract  (a' -> a) -> StatefulContract  a' -> StatefulContract  a
@@ -38,10 +34,39 @@ data StatefulContract a where
     CJSONCheckpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
 
 initialise
-    :: RequestId
-    -> StatefulContract a
-    -> (Rec Event Hooks a, RequestId)
-initialise = undefined --  lower _ _ c
+    :: (MonadState RequestId m)
+    => StatefulContract a
+    -> m (Either (OpenRecord RequestId Hooks) (ClosedRecord RequestId Hooks, a))
+initialise = \case
+    CMap f con -> fmap (fmap f) <$> initialise con
+    CAp conL conR -> do
+        l' <- initialise conL
+        r' <- initialise conR
+        case (l', r') of
+            (Left l, Left r) -> pure $ Left (OpenBoth l r)
+            (Right (l, _), Left r) -> pure $ Left (OpenRight l r)
+            (Left l, Right (r, _)) -> pure $ Left (OpenLeft l r)
+            (Right (l, f), Right (r, a)) -> pure $ Right (ClosedBin l r, f a)
+    CBind c f -> do
+        l <- initialise c
+        case l of
+            Left l' -> pure $ Left (OpenBind l')
+            Right (l', a) -> do
+                r <- initialise (f a)
+                case r of
+                    Left r' -> pure $ Left $ OpenRight l' r'
+                    Right (r', b) -> pure $ Right (ClosedBin l' r', b)
+    CContract con -> do
+        (r, _) <- runReaderT (C.runContract' con) mempty
+        case r of
+            Nothing -> pure $ Left $ OpenLeaf mempty
+            Just a -> pure $ Right (ClosedLeaf (FinalEvents mempty), a)
+    CJSONCheckpoint con -> do
+        r <- initialise con
+        case r of
+            Left _ -> pure r
+            Right (_, a) -> pure $ Right (jsonLeaf a mempty, a)
+        
 
 checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
 checkpoint = CJSONCheckpoint
@@ -63,7 +88,24 @@ instance Functor StatefulContract where
         CContract con -> CContract (fmap f con)
         CJSONCheckpoint c -> CMap f (CJSONCheckpoint c)
 
-lower
+-- lower
+--     :: (forall a b m. (a -> b) -> m a -> m b)
+--     -> (forall a b m. m (a -> b) -> m a -> m b)
+--     -> (forall a b m. m a -> (a -> m b) -> m b)
+--     -> (forall a'. (Aeson.FromJSON a', Aeson.ToJSON a') => m a' -> m a')
+--     -> (forall a'. C.ContractPrompt (Either Hooks) a' -> m a')
+--     -> StatefulContract a
+--     -> m a
+-- lower fmap_ ap_ bind_ fj fc = 
+--     \case
+--         CMap f c' -> fmap_ f (lower fmap_ ap_ bind_ fj fc c')
+--         CAp l r -> ap_ (lower fmap_ ap_ bind_ fj fc l) (lower fmap_ ap_ bind_ fj fc r)
+--         CBind a f -> bind_ (lower fmap_ ap_ bind_ fj fc a) (fmap_ (lower fmap_ ap_ bind_ fj fc) f)
+--         CContract c' -> fc c'
+--         CJSONCheckpoint c' -> fj (lower fmap_ ap_ bind_ fj fc c')
+
+
+lowerM
     :: (Monad m)
     -- ^ What to do with map, ap, bind
     => (forall a'. (Aeson.FromJSON a', Aeson.ToJSON a') => m a' -> m a')
@@ -72,12 +114,12 @@ lower
     -- ^ What to do with the contracts
     -> StatefulContract a
     -> m a
-lower fj fc = \case
-    CMap f c' -> f <$> lower fj fc c'
-    CAp l r -> lower fj fc l <*> lower fj fc r
-    CBind c' f -> lower fj fc c' >>= fmap (lower fj fc) f
+lowerM fj fc = \case
+    CMap f c' -> f <$> lowerM fj fc c'
+    CAp l r -> lowerM fj fc l <*> lowerM fj fc r
+    CBind c' f -> lowerM fj fc c' >>= fmap (lowerM fj fc) f
     CContract c' -> fc c'
-    CJSONCheckpoint c' -> fj (lower fj fc c')
+    CJSONCheckpoint c' -> fj (lowerM fj fc c')
 
 instance Applicative StatefulContract where
     pure = CContract . pure
@@ -86,39 +128,30 @@ instance Applicative StatefulContract where
 instance Monad StatefulContract where
     (>>=) = CBind
 
-runCon :: C.ContractPrompt (Either Hooks) a -> Map.Map RequestId Event -> RequestId -> (Maybe a, RequestId, Hooks)
-runCon con es i =
-    let (r, i') = C.runContract con (C.InstanceState es i)
-    in case r of
-        Left h  -> (Nothing, i', h)
-        Right a -> (Just a, i', mempty)
-
 runConM
-    :: MonadState RequestId m
+    :: ( MonadState RequestId m
+       , MonadReader (Map.Map RequestId Event) m
+       , MonadWriter Hooks m)
     => C.ContractPrompt (Either Hooks) a
-    -> [Event]
-    -> m (Maybe a, Hooks)
-runConM con es = do
-    s <- get
-    let (r, s', h) = runCon con es s
-    put s'
-    return (r, h)
+    -> m (Maybe a)
+runConM con = C.runContract' con >>= writer
 
 runClosed
     :: ( MonadWriter Hooks m
        , MonadState RequestId m
+       , MonadReader (Map.Map RequestId Event) m
        , MonadError String m)
     => StatefulContract  a
     -> ClosedRecord RequestId Hooks
     -> m a
 runClosed con = \case
-    ClosedLeaf (FinalEvents is) ->
+    ClosedLeaf (FinalEvents _) ->
         case con of
             CContract con' -> do
-                (r, h) <- runConM con' (toList is)
+                r <- runConM con'
                 case r of
                     Nothing -> throwError "ClosedLeaf, contract not finished"
-                    Just  a -> writer (a, h)
+                    Just  a -> pure a
             _ -> throwError "ClosedLeaf, expected CContract "
     ClosedLeaf (FinalJSON vl o) ->
         case con of
@@ -137,10 +170,11 @@ runClosed con = \case
 runOpen
     :: ( MonadWriter Hooks m
        , MonadState RequestId m
+       , MonadReader (Map.Map RequestId Event) m
        , MonadError String m)
     => StatefulContract  a
-    -> OpenRecord Event Hooks
-    -> m (Either (OpenRecord Event Hooks) (ClosedRecord Event Hooks, a))
+    -> OpenRecord RequestId Hooks
+    -> m (Either (OpenRecord RequestId Hooks) (ClosedRecord RequestId Hooks, a))
 runOpen con opr =
     case (con, opr) of
         (CMap f con', _) -> (fmap .fmap $ fmap f) (runOpen con' opr)
@@ -176,10 +210,8 @@ runOpen con opr =
                 Left orL' -> pure (Left orL')
                 Right (crL, a) -> do
                     let con' = f a
-                    i <- get
-                    let (orR', i') = initialise i con'
-                    put i'
-                    case unRec orR' of
+                    orR' <- initialise con'
+                    case orR' of
                         Right (crrrr, a') -> pure (Right (ClosedBin crL crrrr, a'))
                         Left orrrr -> do
                             rr <- runOpen con' orrrr
@@ -198,10 +230,10 @@ runOpen con opr =
         (CBind{}, _) -> throwError $ "CBind " ++ show opr
 
         (CContract con', OpenLeaf is) -> do
-                (r, h) <- runConM con' (toList is)
+                r <- runConM con'
                 case r of
-                    Just a  -> writer (Right (ClosedLeaf (FinalEvents is), a), h)
-                    Nothing -> writer (Left (OpenLeaf is), h)
+                    Just a  -> pure (Right (ClosedLeaf (FinalEvents is), a))
+                    Nothing -> pure (Left (OpenLeaf is))
         (CContract{}, _) -> throwError $ "CContract non leaf " ++ show opr
 
         (CJSONCheckpoint con', opr') -> do
@@ -209,18 +241,12 @@ runOpen con opr =
             pure $ fmap (\(_, a) -> (jsonLeaf a o, a)) r
         _ -> throwError "runOpen"
 
-insertAndUpdate
-    :: StatefulContract  a
-    -> Record Event Hooks
-    -> Event
-    -> Either String (Record Event Hooks, Hooks)
-insertAndUpdate con rc i = updateRecord con (insert i rc)
-
 updateRecord
     :: StatefulContract  a
-    -> Record Event Hooks
-    -> Either String (Record Event Hooks, Hooks)
-updateRecord con rc =
+    -> Map.Map RequestId Event
+    -> Record RequestId Hooks
+    -> Either String (Record RequestId Hooks, Hooks)
+updateRecord con mp rc =
     case rc of
-        Right cl -> fmap (first $ const $ Right cl) $ runExcept $ flip evalStateT 0 $ runWriterT $ runClosed con cl
-        Left cl  -> fmap (first (fmap fst)) $ runExcept $ flip evalStateT 0 $ runWriterT $ runOpen con cl
+        Right cl -> fmap (first $ const $ Right cl) $ runExcept $ flip  evalStateT 0 $ runWriterT $ runReaderT (runClosed con cl) mp
+        Left cl  -> fmap (first (fmap fst)) $ runExcept $ flip evalStateT 0 $ runWriterT $ runReaderT (runOpen con cl) mp

@@ -29,8 +29,8 @@ import           Data.Maybe                           (fromMaybe)
 import           Language.Plutus.Contract.Contract    as Contract
 import           Language.Plutus.Contract.Event       as Event hiding (endpoint)
 import           Language.Plutus.Contract.Hooks       as Hooks
+import           Language.Plutus.Contract.RequestId   (RequestId)
 import           Language.Plutus.Contract.Transaction as Transaction
-import           Language.Plutus.Contract.Request     (RequestId)
 
 import           Ledger.AddressMap                    (AddressMap)
 import qualified Ledger.AddressMap                    as AM
@@ -76,14 +76,15 @@ endpoint nm = do
         _ -> empty
 
 
--- | Produce an unbalanced transaction, returning an ID
---   that can be used to query its status (TBD)
-writeTx :: PlutusContract m => UnbalancedTx -> m UnbalancedTxId
+-- | Produce an unbalanced transaction.
+--
+--   TODO: returning a 'RequestID' that can be used to query its status (TBD)
+writeTx :: PlutusContract m => UnbalancedTx -> m ()
 writeTx t = do
     i <- prompt (Hooks.txHook t)
     case i of
-        TxSubmission txid -> pure txid
-        _                 -> empty
+        TxSubmission -> pure ()
+        _            -> empty
 
 -- | Watch an address for changes, and return the outputs
 --   at that address when the total value at the address

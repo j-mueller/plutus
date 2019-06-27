@@ -1,16 +1,16 @@
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase         #-}
 module Language.Plutus.Contract.Record where
 
 import           Control.Lens
-import           Data.Bifunctor                    (Bifunctor (..))
-import           Data.Sequence                     (Seq)
-import           GHC.Generics                      (Generic)
+import           Data.Bifunctor (Bifunctor (..))
+import           Data.Sequence  (Seq)
+import           GHC.Generics   (Generic)
 
-import           Data.Aeson                        (Value)
-import qualified Data.Aeson                        as Aeson
+import           Data.Aeson     (Value)
+import qualified Data.Aeson     as Aeson
 
 data FinalValue i o = FinalJSON Value o | FinalEvents (Seq i)
     deriving stock (Eq, Show, Generic, Functor)
@@ -45,25 +45,6 @@ closedSubRecords f = \case
     ClosedBin l r -> ClosedBin <$> f l <*> f r
 
 type Record i o = Either (OpenRecord i o) (ClosedRecord i o)
-
-newtype Rec i o a = Rec { unRec :: Either (OpenRecord i o) (ClosedRecord i o, a) }
-    deriving (Functor, Foldable, Traversable)
-
-getRecord :: Rec i o a -> Record i o
-getRecord (Rec e) = fmap fst e
-
-instance Applicative (Rec i o) where
-    pure a = Rec (Right (ClosedLeaf (FinalEvents mempty), a))
-    Rec l <*> Rec r = Rec $ case (l, r) of
-        (Left l', Right (r', _))  -> Left (OpenLeft l' r')
-        (Left l', Left r')   -> Left (OpenBoth l' r')
-        (Right (l', _), Left r')  -> Left (OpenRight l' r')
-        (Right (l', f), Right (r', a)) -> Right (ClosedBin l' r', f a)
-
-instance Monad (Rec i o) where
-    Rec l >>= _ = case l of
-        Left l' -> Rec (Left (OpenBind l'))
-        Right (l', _) -> Rec (Left (OpenRight l' (OpenLeaf mempty)))
 
 fromPair :: Record i o -> Record i o -> Record i o
 fromPair l r = case (l, r) of
