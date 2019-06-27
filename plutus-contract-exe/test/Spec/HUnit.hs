@@ -204,6 +204,7 @@ handleInputs wllt ins = do
         txns = Hooks.transactions step1
 
     block <- lift (run' wllt (traverse_ Wallet.handleTx txns))
+    traverse_ event_ (fmap (const Event.txSubmission) txns)
     idx <- lift (gets (AM.fromUtxoIndex . view EM.index))
 
     let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block

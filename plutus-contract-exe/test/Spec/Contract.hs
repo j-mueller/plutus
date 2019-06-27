@@ -62,8 +62,6 @@ tests = testGroup "contracts"
     , checkPredicate "call endpoint (2)"
         (endpoint @Int "1" >> endpoint @Int "2")
           (endpointAvailable "2" <> not (endpointAvailable "1"))
-        --   (not (endpointAvailable "1")) -- OK
-        -- (endpointAvailable "2") -- FAIL
         (callEndpoint w1 "1" (1::Int))
     ]
 
