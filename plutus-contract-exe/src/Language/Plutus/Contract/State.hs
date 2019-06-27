@@ -10,20 +10,17 @@
 module Language.Plutus.Contract.State where
 
 import           Control.Monad.Except
-import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer
 import qualified Data.Aeson                         as Aeson
 import qualified Data.Aeson.Types                   as Aeson
 import           Data.Bifunctor                     (Bifunctor (..))
 import           Data.Foldable                      (toList)
-import qualified Data.Map                           as Map
 
 import qualified Language.Plutus.Contract.Contract  as C
 import           Language.Plutus.Contract.Event     as Event
 import           Language.Plutus.Contract.Hooks     as Hooks
 import           Language.Plutus.Contract.Record
-import           Language.Plutus.Contract.RequestId
 
 data StatefulContract a where
     CMap :: (a' -> a) -> StatefulContract  a' -> StatefulContract  a
@@ -34,38 +31,37 @@ data StatefulContract a where
     CJSONCheckpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
 
 initialise
-    :: (MonadState RequestId m)
-    => StatefulContract a
-    -> m (Either (OpenRecord RequestId Hooks) (ClosedRecord RequestId Hooks, a))
+    :: StatefulContract a
+    -> Either (OpenRecord b Hooks) (ClosedRecord b Hooks, a)
 initialise = \case
-    CMap f con -> fmap (fmap f) <$> initialise con
-    CAp conL conR -> do
-        l' <- initialise conL
-        r' <- initialise conR
-        case (l', r') of
-            (Left l, Left r) -> pure $ Left (OpenBoth l r)
-            (Right (l, _), Left r) -> pure $ Left (OpenRight l r)
-            (Left l, Right (r, _)) -> pure $ Left (OpenLeft l r)
-            (Right (l, f), Right (r, a)) -> pure $ Right (ClosedBin l r, f a)
-    CBind c f -> do
-        l <- initialise c
+    CMap f con ->  fmap f <$> initialise con
+    CAp conL conR -> let
+        l' = initialise conL
+        r' = initialise conR
+        in case (l', r') of
+            (Left l, Left r) -> Left (OpenBoth l r)
+            (Right (l, _), Left r) -> Left (OpenRight l r)
+            (Left l, Right (r, _)) -> Left (OpenLeft l r)
+            (Right (l, f), Right (r, a)) -> Right (ClosedBin l r, f a)
+    CBind c f ->
+        let l = initialise c in
         case l of
-            Left l' -> pure $ Left (OpenBind l')
-            Right (l', a) -> do
-                r <- initialise (f a)
+            Left l' -> Left (OpenBind l')
+            Right (l', a) ->
+                let r = initialise (f a) in
                 case r of
-                    Left r' -> pure $ Left $ OpenRight l' r'
-                    Right (r', b) -> pure $ Right (ClosedBin l' r', b)
-    CContract con -> do
-        (r, _) <- runReaderT (C.runContract' con) mempty
+                    Left r' -> Left $ OpenRight l' r'
+                    Right (r', b) -> Right (ClosedBin l' r', b)
+    CContract con -> 
+        let (r, _) = evalState (C.runContract' con) mempty in
         case r of
-            Nothing -> pure $ Left $ OpenLeaf mempty
-            Just a -> pure $ Right (ClosedLeaf (FinalEvents mempty), a)
-    CJSONCheckpoint con -> do
-        r <- initialise con
+            Nothing -> Left $ OpenLeaf mempty
+            Just a -> Right (ClosedLeaf (FinalEvents mempty), a)
+    CJSONCheckpoint con ->
+        let r = initialise con in
         case r of
-            Left _ -> pure r
-            Right (_, a) -> pure $ Right (jsonLeaf a mempty, a)
+            Left _ -> r
+            Right (_, a) -> Right (jsonLeaf a mempty, a)
         
 
 checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
@@ -129,26 +125,23 @@ instance Monad StatefulContract where
     (>>=) = CBind
 
 runConM
-    :: ( MonadState RequestId m
-       , MonadReader (Map.Map RequestId Event) m
-       , MonadWriter Hooks m)
-    => C.ContractPrompt (Either Hooks) a
+    :: ( MonadWriter Hooks m )
+    => [Event]
+    -> C.ContractPrompt (Either Hooks) a
     -> m (Maybe a)
-runConM con = C.runContract' con >>= writer
+runConM evts con = writer (evalState (C.runContract' con) evts)
 
 runClosed
     :: ( MonadWriter Hooks m
-       , MonadState RequestId m
-       , MonadReader (Map.Map RequestId Event) m
        , MonadError String m)
     => StatefulContract  a
-    -> ClosedRecord RequestId Hooks
+    -> ClosedRecord Event Hooks
     -> m a
 runClosed con = \case
-    ClosedLeaf (FinalEvents _) ->
+    ClosedLeaf (FinalEvents evts) ->
         case con of
             CContract con' -> do
-                r <- runConM con'
+                r <- runConM (toList evts) con'
                 case r of
                     Nothing -> throwError "ClosedLeaf, contract not finished"
                     Just  a -> pure a
@@ -169,12 +162,10 @@ runClosed con = \case
 
 runOpen
     :: ( MonadWriter Hooks m
-       , MonadState RequestId m
-       , MonadReader (Map.Map RequestId Event) m
        , MonadError String m)
-    => StatefulContract  a
-    -> OpenRecord RequestId Hooks
-    -> m (Either (OpenRecord RequestId Hooks) (ClosedRecord RequestId Hooks, a))
+    => StatefulContract a
+    -> OpenRecord Event Hooks
+    -> m (Either (OpenRecord Event Hooks) (ClosedRecord Event Hooks, a))
 runOpen con opr =
     case (con, opr) of
         (CMap f con', _) -> (fmap .fmap $ fmap f) (runOpen con' opr)
@@ -210,7 +201,7 @@ runOpen con opr =
                 Left orL' -> pure (Left orL')
                 Right (crL, a) -> do
                     let con' = f a
-                    orR' <- initialise con'
+                        orR' = initialise con'
                     case orR' of
                         Right (crrrr, a') -> pure (Right (ClosedBin crL crrrr, a'))
                         Left orrrr -> do
@@ -230,7 +221,7 @@ runOpen con opr =
         (CBind{}, _) -> throwError $ "CBind " ++ show opr
 
         (CContract con', OpenLeaf is) -> do
-                r <- runConM con'
+                r <- runConM (toList is) con'
                 case r of
                     Just a  -> pure (Right (ClosedLeaf (FinalEvents is), a))
                     Nothing -> pure (Left (OpenLeaf is))
@@ -241,12 +232,27 @@ runOpen con opr =
             pure $ fmap (\(_, a) -> (jsonLeaf a o, a)) r
         _ -> throwError "runOpen"
 
+insertAndUpdate 
+    :: StatefulContract a
+    -> Record Event Hooks
+    -> Event
+    -> Either String (Record Event Hooks, Hooks)
+insertAndUpdate con rc e = updateRecord con (insert e rc)
+
+
 updateRecord
     :: StatefulContract  a
-    -> Map.Map RequestId Event
-    -> Record RequestId Hooks
-    -> Either String (Record RequestId Hooks, Hooks)
-updateRecord con mp rc =
+    -> Record Event Hooks
+    -> Either String (Record Event Hooks, Hooks)
+updateRecord con rc =
     case rc of
-        Right cl -> fmap (first $ const $ Right cl) $ runExcept $ flip  evalStateT 0 $ runWriterT $ runReaderT (runClosed con cl) mp
-        Left cl  -> fmap (first (fmap fst)) $ runExcept $ flip evalStateT 0 $ runWriterT $ runReaderT (runOpen con cl) mp
+        Right cl -> 
+            fmap (first $ const $ Right cl) 
+            $ runExcept 
+            $ runWriterT 
+            $ runClosed con cl
+        Left cl  -> 
+            fmap (first (fmap fst)) 
+            $ runExcept 
+            $ runWriterT 
+            $ runOpen con cl

@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -16,9 +17,10 @@ module Language.Plutus.Contract.Contract(
 
 import           Control.Applicative                (Alternative)
 import           Control.Monad.Prompt               (MonadPrompt (..), PromptT, hoistP, runPromptTM)
-import           Control.Monad.RWS.Lazy
+import           Control.Monad.State
 import           Data.Either.Validation
 import qualified Data.Map                           as Map
+import           Data.Sequence                      (Seq)
 
 import           Language.Plutus.Contract.Class
 import           Language.Plutus.Contract.Event     as Event
@@ -33,31 +35,31 @@ newtype ContractPrompt f a = ContractPrompt { unPlutusContract :: PromptT (Hook 
 
 applyEvents
     :: forall m a.
-       ( MonadReader (Map.Map RequestId Event) m
-       , MonadState RequestId m )
+       ( MonadState [Event] m )
     => ContractPrompt (Either Hooks) a
     -> m (Validation Hooks a)
 applyEvents = flip runPromptTM go . hoistP eitherToValidation validationToEither . unPlutusContract where
     go :: Hook () -> m (Validation Hooks Event)
     go hks = do
-        (hks', i) <- hooks hks -- FIXME needs to be stable
-        evts <- ask
-        case Map.lookup i evts >>= match hks of
-            Nothing -> pure (eitherToValidation $ Left hks')
-            Just e' -> pure (eitherToValidation $ Right e')
+        let hks' = hooks hks
+        evts <- get
+        let go = \case
+                    [] -> pure (eitherToValidation $ Left hks')
+                    e:es -> case match hks e of
+                        Nothing -> go es
+                        Just e' -> put es >> pure (eitherToValidation (Right e'))
+        go evts
 
 runContract
     :: forall m a.
-        ( MonadReader (Map.Map RequestId Event) m
-        , MonadState RequestId m)
+       ( MonadState [Event] m )
     => ContractPrompt (Either Hooks) a
     -> m (Either Hooks a)
 runContract con = validationToEither <$> applyEvents con
 
-runContract' 
-    :: forall m a. 
-        ( MonadReader (Map.Map RequestId Event) m
-        , MonadState RequestId m)
+runContract'
+    :: forall m a.
+       ( MonadState [Event] m )
     => ContractPrompt (Either Hooks) a
     -> m (Maybe a, Hooks)
 runContract' con =

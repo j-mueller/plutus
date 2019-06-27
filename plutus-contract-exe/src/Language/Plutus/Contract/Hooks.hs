@@ -24,6 +24,9 @@ import qualified Data.Aeson                           as Aeson
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (catMaybes)
 import           Data.Semigroup                       (Min (..), Option (..))
+import           Data.Sequence                        (Seq)
+import qualified Data.Sequence                        as Seq
+import           Data.Set                             (Set)
 import qualified Data.Set                             as Set
 import           GHC.Generics                         (Generic)
 
@@ -54,7 +57,7 @@ slotHook = SlotHook
 endpointHook :: String -> Hook ()
 endpointHook s = EndpointHook s ()
 
-newtype Hooks = Hooks { unHooks :: Map.Map RequestId (Hook ()) }
+newtype Hooks = Hooks { unHooks :: Seq (Hook ()) }
     deriving stock (Eq, Show, Generic)
     deriving newtype (Aeson.FromJSON, Aeson.ToJSON, Semigroup, Monoid)
 
@@ -63,10 +66,8 @@ instance Error Hooks where
     -- been able to track down the exact cause yet but it should really
     -- be possible to do it without Error.
 
-transactions :: Hooks -> [(RequestId, UnbalancedTx)]
-transactions = catMaybes . fmap (traverse (preview _TxHook)) . Map.toList . unHooks
+transactions :: Hooks -> [UnbalancedTx]
+transactions = toListOf (traversed . _TxHook) . unHooks
 
-hooks :: (MonadState RequestId m) => Hook () -> m (Hooks, RequestId)
-hooks h = do
-    i <- freshId
-    pure (Hooks $ Map.singleton i h, i)
+hooks :: Hook () -> Hooks
+hooks = Hooks . Seq.singleton
