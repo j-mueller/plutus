@@ -27,41 +27,43 @@ data StatefulContract a where
     CAp :: StatefulContract  (a' -> a) -> StatefulContract  a' -> StatefulContract  a
     CBind :: StatefulContract  a' -> (a' -> StatefulContract  a) -> StatefulContract  a
 
-    CContract :: C.ContractPrompt (Either Hooks) a -> StatefulContract  a
+    CContract :: C.ContractPrompt Maybe a -> StatefulContract  a
     CJSONCheckpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
 
 initialise
-    :: StatefulContract a
-    -> Either (OpenRecord b) (ClosedRecord b, a)
+    :: ( MonadWriter Hooks m )
+    => StatefulContract a
+    -> m (Either (OpenRecord Event) (ClosedRecord Event, a))
 initialise = \case
-    CMap f con ->  fmap f <$> initialise con
-    CAp conL conR -> let
-        l' = initialise conL
-        r' = initialise conR
-        in case (l', r') of
-            (Left l, Left r) -> Left (OpenBoth l r)
-            (Right (l, _), Left r) -> Left (OpenRight l r)
-            (Left l, Right (r, _)) -> Left (OpenLeft l r)
-            (Right (l, f), Right (r, a)) -> Right (ClosedBin l r, f a)
-    CBind c f ->
-        let l = initialise c in
+    CMap f con -> fmap (fmap f) <$> initialise con
+    CAp conL conR -> do
+        l' <- initialise conL
+        r' <- initialise conR
+        case (l', r') of
+            (Left l, Left r) -> pure $ Left (OpenBoth l r)
+            (Right (l, _), Left r) -> pure $ Left (OpenRight l r)
+            (Left l, Right (r, _)) -> pure $ Left (OpenLeft l r)
+            (Right (l, f), Right (r, a)) -> pure $ Right (ClosedBin l r, f a)
+    CBind c f -> do
+        l <- initialise c
         case l of
-            Left l' -> Left (OpenBind l')
-            Right (l', a) ->
-                let r = initialise (f a) in
+            Left l' -> pure $ Left (OpenBind l')
+            Right (l', a) -> do
+                r <- initialise (f a)
                 case r of
-                    Left r' -> Left $ OpenRight l' r'
-                    Right (r', b) -> Right (ClosedBin l' r', b)
-    CContract con -> 
-        let (r, _) = evalState (C.runContract' con) mempty in
+                    Left r' -> pure $ Left $ OpenRight l' r'
+                    Right (r', b) -> pure $ Right (ClosedBin l' r', b)
+    CContract con -> do
+        r <- runConM mempty con
         case r of
-            Nothing -> Left $ OpenLeaf mempty
-            Just a -> Right (ClosedLeaf (FinalEvents mempty), a)
-    CJSONCheckpoint con ->
-        let r = initialise con in
+            Nothing -> pure $ Left $ OpenLeaf mempty
+            Just a -> pure $ Right (ClosedLeaf (FinalEvents mempty), a)
+    CJSONCheckpoint con -> do
+        r <- initialise con
         case r of
-            Left _ -> r
-            Right (_, a) -> Right (jsonLeaf a, a)
+            Left _ -> pure r
+            Right (_, a) -> pure $ Right (jsonLeaf a, a)
+
         
 
 checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
@@ -84,29 +86,12 @@ instance Functor StatefulContract where
         CContract con -> CContract (fmap f con)
         CJSONCheckpoint c -> CMap f (CJSONCheckpoint c)
 
--- lower
---     :: (forall a b m. (a -> b) -> m a -> m b)
---     -> (forall a b m. m (a -> b) -> m a -> m b)
---     -> (forall a b m. m a -> (a -> m b) -> m b)
---     -> (forall a'. (Aeson.FromJSON a', Aeson.ToJSON a') => m a' -> m a')
---     -> (forall a'. C.ContractPrompt (Either Hooks) a' -> m a')
---     -> StatefulContract a
---     -> m a
--- lower fmap_ ap_ bind_ fj fc = 
---     \case
---         CMap f c' -> fmap_ f (lower fmap_ ap_ bind_ fj fc c')
---         CAp l r -> ap_ (lower fmap_ ap_ bind_ fj fc l) (lower fmap_ ap_ bind_ fj fc r)
---         CBind a f -> bind_ (lower fmap_ ap_ bind_ fj fc a) (fmap_ (lower fmap_ ap_ bind_ fj fc) f)
---         CContract c' -> fc c'
---         CJSONCheckpoint c' -> fj (lower fmap_ ap_ bind_ fj fc c')
-
-
 lowerM
     :: (Monad m)
     -- ^ What to do with map, ap, bind
     => (forall a'. (Aeson.FromJSON a', Aeson.ToJSON a') => m a' -> m a')
     -- ^ What to do with JSON checkpoints
-    -> (forall a'. C.ContractPrompt (Either Hooks) a' -> m a')
+    -> (forall a'. C.ContractPrompt Maybe a' -> m a')
     -- ^ What to do with the contracts
     -> StatefulContract a
     -> m a
@@ -127,9 +112,9 @@ instance Monad StatefulContract where
 runConM
     :: ( MonadWriter Hooks m )
     => [Event]
-    -> C.ContractPrompt (Either Hooks) a
+    -> C.ContractPrompt Maybe a
     -> m (Maybe a)
-runConM evts con = writer (evalState (C.runContract' con) evts)
+runConM evts con = evalStateT (C.runContract con) evts
 
 runClosed
     :: ( MonadWriter Hooks m
@@ -201,7 +186,7 @@ runOpen con opr =
                 Left orL' -> pure (Left orL')
                 Right (crL, a) -> do
                     let con' = f a
-                        orR' = initialise con'
+                    orR' <- initialise con'
                     case orR' of
                         Right (crrrr, a') -> pure (Right (ClosedBin crL crrrr, a'))
                         Left orrrr -> do

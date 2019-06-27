@@ -17,7 +17,7 @@ import qualified Data.Aeson                         as Aeson
 
 import           Data.Map                           (Map)
 import qualified Data.Map                           as Map
-import           Language.Plutus.Contract.Contract  (ContractPrompt, runContract')
+import           Language.Plutus.Contract.Contract  (ContractPrompt, runContract)
 import           Language.Plutus.Contract.Event     (Event)
 import           Language.Plutus.Contract.Hooks     (Hooks)
 import           Language.Plutus.Contract.Record

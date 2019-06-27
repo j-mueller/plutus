@@ -12,12 +12,12 @@ module Language.Plutus.Contract.Contract(
     , both
     -- * Feed events to the contract and look at the outputs
     , runContract
-    , runContract'
     ) where
 
 import           Control.Applicative                (Alternative)
 import           Control.Monad.Prompt               (MonadPrompt (..), PromptT, hoistP, runPromptTM)
 import           Control.Monad.State
+import           Control.Monad.Writer
 import           Data.Either.Validation
 import qualified Data.Map                           as Map
 import           Data.Sequence                      (Seq)
@@ -33,34 +33,24 @@ import           Language.Plutus.Contract.RequestId
 newtype ContractPrompt f a = ContractPrompt { unPlutusContract :: PromptT (Hook ()) Event f a }
     deriving (Functor, Applicative, Monad, Alternative, MonadPrompt (Hook ()) Event)
 
-applyEvents
+-- | Apply the events in the state. If there were enough events to satisfy
+--   all the requests, then 'Just a' is returned and nothing is written.
+--   If there aren't enough, then 'Nothing' is return and the missing hooks
+--   are written.
+runContract
     :: forall m a.
-       ( MonadState [Event] m )
-    => ContractPrompt (Either Hooks) a
-    -> m (Validation Hooks a)
-applyEvents = flip runPromptTM go . hoistP eitherToValidation validationToEither . unPlutusContract where
-    go :: Hook () -> m (Validation Hooks Event)
+       ( MonadState [Event] m
+       , MonadWriter Hooks m)
+    => ContractPrompt Maybe a
+    -> m (Maybe a)
+runContract = flip runPromptTM go . unPlutusContract where
+    go :: Hook () -> m (Maybe Event)
     go hks = do
         let hks' = hooks hks
         evts <- get
         let go = \case
-                    [] -> pure (eitherToValidation $ Left hks')
+                    [] -> tell hks' >> pure Nothing
                     e:es -> case match hks e of
                         Nothing -> go es
-                        Just e' -> put es >> pure (eitherToValidation (Right e'))
+                        Just e' -> put es >> pure (Just e')
         go evts
-
-runContract
-    :: forall m a.
-       ( MonadState [Event] m )
-    => ContractPrompt (Either Hooks) a
-    -> m (Either Hooks a)
-runContract con = validationToEither <$> applyEvents con
-
-runContract'
-    :: forall m a.
-       ( MonadState [Event] m )
-    => ContractPrompt (Either Hooks) a
-    -> m (Maybe a, Hooks)
-runContract' con =
-    either (\h -> (Nothing, h)) (\a -> (Just a, mempty)) <$> runContract con
