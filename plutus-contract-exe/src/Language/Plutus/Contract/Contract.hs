@@ -29,6 +29,8 @@ import           Language.Plutus.Contract.Request
 newtype ContractPrompt f a = ContractPrompt { unPlutusContract :: PromptT (Hook ()) Event f a }
     deriving (Functor, Applicative, Monad, Alternative, MonadPrompt (Hook ()) Event)
 
+-- TODO: Naming
+
 -- | Apply the events in the state. If there were enough events to satisfy
 --   all the requests, then 'Just a' is returned and nothing is written.
 --   If there aren't enough, then 'Nothing' is return and the missing hooks

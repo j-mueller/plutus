@@ -35,6 +35,7 @@ import           Control.Lens                         (at, makeLenses, to, use, 
 import           Control.Monad                        (void)
 import           Control.Monad.State                  (StateT, gets, runStateT)
 import           Control.Monad.Trans.Class            (MonadTrans (..))
+import           Control.Monad.Writer
 import qualified Data.Aeson                           as Aeson
 import           Data.Bifunctor                       (Bifunctor (..))
 import           Data.Foldable                        (toList, traverse_)
@@ -72,7 +73,7 @@ data ContractTraceState a =
     ContractTraceState
         { _ctsEvents   :: Seq Event
         -- ^ Events that were fed to the contract
-        , _ctsContract :: ContractPrompt (Either Hooks) a
+        , _ctsContract :: ContractPrompt Maybe a
         -- ^ Current state of the contract
         }
 
@@ -92,21 +93,21 @@ type TracePredicate a = InitialDistribution -> Predicate (ContractTestResult a)
 
 type ContractTrace m a b = StateT (ContractTraceState a) m b
 
-mkState :: ContractPrompt (Either Hooks) a -> ContractTraceState a
+mkState :: ContractPrompt Maybe a -> ContractTraceState a
 mkState = ContractTraceState mempty
 
 hooks :: ContractTestResult a -> Hooks
 hooks rs =
     let evts = rs ^. ctrTraceState . ctsEvents . to toList
         con  = rs ^. ctrTraceState . ctsContract
-    in snd (runContract' con evts)
+    in execWriter (runStateT (runContract con) evts)
 
 not :: TracePredicate a -> TracePredicate a
 not p a = Predicate $ \b -> Prelude.not (getPredicate (p a) b)
 
 checkPredicate
     :: String
-    -> ContractPrompt (Either Hooks) a
+    -> ContractPrompt Maybe a
     -> TracePredicate a
     -> ContractTrace EmulatorAction a ()
     -> TestTree
@@ -135,19 +136,19 @@ runWallet ws w = EM.processEmulated . EM.runWalletActionAndProcessPending ws w
 
 endpointAvailable :: String -> TracePredicate a
 endpointAvailable nm _ = Predicate $ \r ->
-    nm `Set.member` _activeEndpoints (hooks r)
+    nm `Set.member` Hooks.activeEndpoints (hooks r)
 
 interestingAddress :: Address -> TracePredicate a
 interestingAddress addr _ = Predicate $ \r ->
-        addr `Set.member` _addresses (hooks r)
+        addr `Set.member` Hooks.addresses (hooks r)
 
 tx :: (UnbalancedTx -> Bool) -> TracePredicate a
 tx flt _ = Predicate $ \r ->
-    any flt (_transactions (hooks r))
+    any flt (Hooks.transactions (hooks r))
 
 waitingForSlot :: Slot -> TracePredicate a
 waitingForSlot sl _ = Predicate $ \r ->
-    Just sl == _nextSlot (hooks r)
+    Just sl == Hooks.nextSlot (hooks r)
 
 anyTx :: TracePredicate a
 anyTx = tx (const True)
@@ -163,8 +164,8 @@ walletFundsChange w dlt initialDist = Predicate $
 defaultDist :: [(Wallet, Ada)]
 defaultDist = [(EM.Wallet x, 100) | x <- [1..10]]
 
-initContract :: ContractPrompt (Either Hooks) a -> Hooks
-initContract = snd . flip runContract' []
+initContract :: ContractPrompt Maybe a -> Hooks
+initContract con = execWriter (runStateT (runContract con) [])
 
 event_ :: Monad m => Event -> ContractTrace m a ()
 event_ e = ctsEvents <>= Seq.singleton e
@@ -173,8 +174,7 @@ getHooks :: Monad m => ContractTrace m a Hooks
 getHooks = do
     contract <- use ctsContract
     evts <- gets (toList .  _ctsEvents)
-    let (_, stp) = runContract' contract evts
-    return stp
+    return $ execWriter (runStateT (runContract contract) evts)
 
 -- | Call the endpoint on the contract, submit all transactions
 --   to the mockchain in the context of the given wallet, and
@@ -203,7 +203,7 @@ handleInputs wllt ins = do
     let run' = runWallet (EM.Wallet <$> [1..10])
         txns = Hooks.transactions step1
 
-    block <- lift (run' wllt (traverse_ (Wallet.handleTx . snd) txns))
+    block <- lift (run' wllt (traverse_ Wallet.handleTx txns))
     idx <- lift (gets (AM.fromUtxoIndex . view EM.index))
 
     let events = foldMap (fmap snd . Map.toList . Event.txEvents idx) block

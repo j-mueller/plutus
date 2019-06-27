@@ -15,12 +15,18 @@ module Language.Plutus.Contract.Hooks(
     , Hooks(..)
     , hooks
     , transactions
+    , activeEndpoints
+    , addresses
+    , nextSlot
     ) where
 
 import           Control.Lens
 import qualified Data.Aeson                           as Aeson
+import           Data.Semigroup                       (Min (..))
 import           Data.Sequence                        (Seq)
 import qualified Data.Sequence                        as Seq
+import           Data.Set                             (Set)
+import qualified Data.Set                             as Set
 import           GHC.Generics                         (Generic)
 
 import           Language.Plutus.Contract.Transaction (UnbalancedTx)
@@ -55,6 +61,15 @@ newtype Hooks = Hooks { unHooks :: Seq (Hook ()) }
 
 transactions :: Hooks -> [UnbalancedTx]
 transactions = toListOf (traversed . _TxHook) . unHooks
+
+activeEndpoints :: Hooks -> Set String
+activeEndpoints = Set.fromList . toListOf (traversed . _EndpointHook . _1) . unHooks
+
+addresses :: Hooks -> Set Address
+addresses = Set.fromList . toListOf (traversed . _AddrHook) . unHooks
+
+nextSlot :: Hooks -> Maybe Slot
+nextSlot = fmap getMin . foldMapOf (traversed . _SlotHook) (Just . Min) . unHooks
 
 hooks :: Hook () -> Hooks
 hooks = Hooks . Seq.singleton
