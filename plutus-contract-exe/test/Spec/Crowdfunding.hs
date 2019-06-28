@@ -19,7 +19,7 @@ tests = testGroup "crowdfunding" [
 
     , checkPredicate "'contribute' endpoint submits a transaction"
         crowdfunding
-        (anyTx <> interestingAddress (campaignAddress theCampaign))
+        (interestingAddress (campaignAddress theCampaign) <> walletFundsChange w1 (Ada.adaValueOf (-10)))
         $ let key = EM.walletPubKey w1
               contribution = Ada.adaValueOf 10
           in callEndpoint w1 "contribute" (key, contribution)

@@ -7,6 +7,7 @@
 {-# LANGUAGE TemplateHaskell        #-}
 module Language.Plutus.Contract.Transaction(
       UnbalancedTx
+    , emptyTx
     , computeBalance
     , inputs
     , outputs
@@ -51,6 +52,12 @@ data UnbalancedTx = UnbalancedTx
         deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 Lens.TH.makeLenses ''UnbalancedTx
+
+-- | An unbalanced transaction wiht no inputs and outputs, and an unbounded
+--   validity range.
+--
+emptyTx :: UnbalancedTx
+emptyTx = UnbalancedTx [] [] mempty [] I.always
 
 -- | The ledger transaction of the 'UnbalancedTx'. Note that the result
 --   does not have any signatures, and is potentially unbalanced (ie. invalid).
@@ -150,5 +157,15 @@ network, the contract backend needs to
   The signing process needs to provide signatures for all public key
   inputs in the balanced transaction, and for all public keys in the
   `utxRequiredSignatures` field.
+
+While there is an 'empty' transaction we can't make 'UnbalancedTx' a monoid
+because it's not clear what the binary operator should do with the validity
+interval. There are two valid options: Hull and intersection. ('always' is the 
+unit for the intersection but then there is the issue that we don't have a 
+canonical representation of the empty interval (that's why 'intersection' 
+returns a 'Maybe Interval'.)) 
+
+TODO:  I think a good way forward would be to make 
+'Interval' a lattice, and then make 'UnbalancedTx' a lattice too.
 
 -}

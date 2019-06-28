@@ -12,6 +12,7 @@ match l r = case (l, r) of
         | sl <= sl' -> Just r
     (EndpointHook n _, Endpoint n' _)
         | n == n' -> Just r
+    (TxHook _, TxSubmission) -> Just r
     _ -> Nothing
 
 {- note  [Hooks and Events]

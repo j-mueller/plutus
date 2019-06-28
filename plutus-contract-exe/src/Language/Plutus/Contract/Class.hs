@@ -27,7 +27,7 @@ foldMaybe
     -> m (Maybe a)
     -> m b
 foldMaybe f b con = loopM go b where
-    go b' = maybe (Left b') (Right . flip f b') <$> con
+    go b' = maybe (Right b') (Left . flip f b') <$> con
 
 await :: (Alternative m, Monad m, MonadContract i o m) => o -> (i -> Maybe a) -> m a
 await i f = do

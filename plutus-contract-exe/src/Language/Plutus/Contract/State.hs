@@ -9,17 +9,19 @@
 --   writes checkpoints
 module Language.Plutus.Contract.State where
 
+import           Control.Applicative
 import           Control.Monad.Except
+import           Control.Monad.Prompt              (MonadPrompt (..))
 import           Control.Monad.State
 import           Control.Monad.Writer
-import qualified Data.Aeson                         as Aeson
-import qualified Data.Aeson.Types                   as Aeson
-import           Data.Bifunctor                     (Bifunctor (..))
-import           Data.Foldable                      (toList)
+import qualified Data.Aeson                        as Aeson
+import qualified Data.Aeson.Types                  as Aeson
+import           Data.Bifunctor                    (Bifunctor (..))
+import           Data.Foldable                     (toList)
 
-import qualified Language.Plutus.Contract.Contract  as C
-import           Language.Plutus.Contract.Event     as Event
-import           Language.Plutus.Contract.Hooks     as Hooks
+import qualified Language.Plutus.Contract.Contract as C
+import           Language.Plutus.Contract.Event    as Event
+import           Language.Plutus.Contract.Hooks    as Hooks
 import           Language.Plutus.Contract.Record
 
 data StatefulContract a where
@@ -40,9 +42,9 @@ initialise = \case
         l' <- initialise conL
         r' <- initialise conR
         case (l', r') of
-            (Left l, Left r) -> pure $ Left (OpenBoth l r)
-            (Right (l, _), Left r) -> pure $ Left (OpenRight l r)
-            (Left l, Right (r, _)) -> pure $ Left (OpenLeft l r)
+            (Left l, Left r)             -> pure $ Left (OpenBoth l r)
+            (Right (l, _), Left r)       -> pure $ Left (OpenRight l r)
+            (Left l, Right (r, _))       -> pure $ Left (OpenLeft l r)
             (Right (l, f), Right (r, a)) -> pure $ Right (ClosedBin l r, f a)
     CBind c f -> do
         l <- initialise c
@@ -51,18 +53,18 @@ initialise = \case
             Right (l', a) -> do
                 r <- initialise (f a)
                 case r of
-                    Left r' -> pure $ Left $ OpenRight l' r'
+                    Left r'       -> pure $ Left $ OpenRight l' r'
                     Right (r', b) -> pure $ Right (ClosedBin l' r', b)
     CContract con -> do
         r <- runConM mempty con
         case r of
             Nothing -> pure $ Left $ OpenLeaf mempty
-            Just a -> pure $ Right (ClosedLeaf (FinalEvents mempty), a)
+            Just a  -> pure $ Right (ClosedLeaf (FinalEvents mempty), a)
     CJSONCheckpoint con -> do
         r <- initialise con
         case r of
-            Left _ -> pure r
-            Right (_, a) -> pure $ Right (jsonLeaf a, a)        
+            Left _       -> pure r
+            Right (_, a) -> pure $ Right (jsonLeaf a, a)
 
 checkpoint :: (Aeson.FromJSON a, Aeson.ToJSON a) => StatefulContract  a -> StatefulContract  a
 checkpoint = CJSONCheckpoint
@@ -84,6 +86,21 @@ instance Functor StatefulContract where
         CContract con -> CContract (fmap f con)
         CJSONCheckpoint c -> CMap f (CJSONCheckpoint c)
 
+instance Applicative StatefulContract where
+    pure = CContract . pure
+    (<*>) = CAp
+
+-- TODO: Should we add an `Alt` constructor to `StatefulContract`?
+instance Alternative StatefulContract where
+    empty = CContract empty
+    l <|> r = CContract (lower l <|> lower r)
+
+instance Monad StatefulContract where
+    (>>=) = CBind
+
+instance MonadPrompt (Hook ()) Event StatefulContract where
+    prompt = CContract . prompt
+
 lowerM
     :: (Monad m)
     -- ^ What to do with map, ap, bind
@@ -100,12 +117,8 @@ lowerM fj fc = \case
     CContract c' -> fc c'
     CJSONCheckpoint c' -> fj (lowerM fj fc c')
 
-instance Applicative StatefulContract where
-    pure = CContract . pure
-    (<*>) = CAp
-
-instance Monad StatefulContract where
-    (>>=) = CBind
+lower :: StatefulContract a -> C.ContractPrompt Maybe a
+lower = lowerM id id
 
 runConM
     :: ( MonadWriter Hooks m )
@@ -120,28 +133,31 @@ runClosed
     => StatefulContract a
     -> ClosedRecord Event
     -> m a
-runClosed con = \case
-    ClosedLeaf (FinalEvents evts) ->
-        case con of
-            CContract con' -> do
-                r <- runConM (toList evts) con'
-                case r of
-                    Nothing -> throwError "ClosedLeaf, contract not finished"
-                    Just  a -> pure a
-            _ -> throwError "ClosedLeaf, expected CContract "
-    ClosedLeaf (FinalJSON vl) ->
-        case con of
-            CJSONCheckpoint _ ->
-                case Aeson.parseEither Aeson.parseJSON vl of
-                    Left e    -> throwError e
-                    Right vl' -> writer (vl', mempty)
-            _ -> throwError "Expected JSON checkpoint"
-    ClosedBin l r ->
-        case con of
-            CMap f con' -> fmap f (runClosed con' (ClosedBin l r))
-            CAp l' r'   -> runClosed l' l <*> runClosed r' l
-            CBind l' f  -> runClosed l' l >>= flip runClosed r . f
-            _           -> throwError "ClosedBin with wrong contract type"
+runClosed con rc =
+    case con of
+        CMap f c' -> fmap f (runClosed c' rc)
+        _ -> case rc of
+                ClosedLeaf (FinalEvents evts) ->
+                    case con of
+                        CContract con' -> do
+                            r <- runConM (toList evts) con'
+                            case r of
+                                Nothing -> throwError "ClosedLeaf, contract not finished"
+                                Just  a -> pure a
+                        _ -> throwError "ClosedLeaf, expected CContract "
+                ClosedLeaf (FinalJSON vl) ->
+                    case con of
+                        CJSONCheckpoint _ ->
+                            case Aeson.parseEither Aeson.parseJSON vl of
+                                Left e    -> throwError e
+                                Right vl' -> writer (vl', mempty)
+                        _ -> throwError ("Expected JSON checkpoint, got " ++ prtty con)
+                ClosedBin l r ->
+                    case con of
+                        CMap f con' -> fmap f (runClosed con' (ClosedBin l r))
+                        CAp l' r'   -> runClosed l' l <*> runClosed r' l
+                        CBind l' f  -> runClosed l' l >>= flip runClosed r . f
+                        _           -> throwError "ClosedBin with wrong contract type"
 
 runOpen
     :: ( MonadWriter Hooks m
@@ -181,7 +197,7 @@ runOpen con opr =
         (CBind c f, OpenBind bnd) -> do
             lr <- runOpen c bnd
             case lr of
-                Left orL' -> pure (Left orL')
+                Left orL' -> pure (Left $ OpenBind orL')
                 Right (crL, a) -> do
                     let con' = f a
                     orR' <- initialise con'
@@ -214,7 +230,7 @@ runOpen con opr =
             fmap (\(_, a) -> (jsonLeaf a, a)) <$> runOpen con' opr'
         _ -> throwError "runOpen"
 
-insertAndUpdate 
+insertAndUpdate
     :: StatefulContract a
     -> Record Event
     -> Event
@@ -227,13 +243,13 @@ updateRecord
     -> Either String (Record Event, Hooks)
 updateRecord con rc =
     case rc of
-        Right cl -> 
-            fmap (first $ const $ Right cl) 
-            $ runExcept 
-            $ runWriterT 
+        Right cl ->
+            fmap (first $ const $ Right cl)
+            $ runExcept
+            $ runWriterT
             $ runClosed con cl
-        Left cl  -> 
-            fmap (first (fmap fst)) 
-            $ runExcept 
-            $ runWriterT 
+        Left cl  ->
+            fmap (first (fmap fst))
+            $ runExcept
+            $ runWriterT
             $ runOpen con cl

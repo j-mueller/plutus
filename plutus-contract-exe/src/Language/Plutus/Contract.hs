@@ -127,4 +127,4 @@ between a b = timeout b . when a
 -- | Repeatedly run a contract until the slot is reached, then
 --   return the last result.
 collectUntil :: PlutusContract m => (a -> b -> b) -> b -> m a -> Slot -> m b
-collectUntil f b con s = foldMaybe f b (timeout s con)
+collectUntil f b con s = foldMaybe f b (until con s)

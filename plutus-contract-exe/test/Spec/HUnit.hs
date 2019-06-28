@@ -13,6 +13,7 @@ module Spec.HUnit(
     , Spec.HUnit.not
     , endpointAvailable
     , interestingAddress
+    , assertResult
     , tx
     , anyTx
     , walletFundsChange
@@ -33,7 +34,7 @@ module Spec.HUnit(
 
 import           Control.Lens                         (at, makeLenses, to, use, view, (<>=), (^.))
 import           Control.Monad                        (void)
-import           Control.Monad.State                  (StateT, gets, runStateT)
+import           Control.Monad.State                  (StateT, gets, execStateT, runStateT)
 import           Control.Monad.Trans.Class            (MonadTrans (..))
 import           Control.Monad.Writer
 import qualified Data.Aeson                           as Aeson
@@ -100,7 +101,7 @@ hooks :: ContractTestResult a -> Hooks
 hooks rs =
     let evts = rs ^. ctrTraceState . ctsEvents . to toList
         con  = rs ^. ctrTraceState . ctsContract
-    in execWriter (runStateT (runContract con) evts)
+    in execWriter (execStateT (runContract con) evts)
 
 not :: TracePredicate a -> TracePredicate a
 not p a = Predicate $ \b -> Prelude.not (getPredicate (p a) b)
@@ -114,7 +115,8 @@ checkPredicate
 checkPredicate nm con predicate action =
     HUnit.testCase nm $
         case withInitialDistribution defaultDist (runStateT action (mkState con)) of
-            (Left err, _) -> HUnit.assertFailure $ "EmulatorAction failed. " ++ show err
+            (Left err, _) -> 
+                HUnit.assertFailure $ "EmulatorAction failed. " ++ show err
             (Right (_, st), ms) ->
                 let dt = ContractTestResult ms st in
                 HUnit.assertBool nm (getPredicate (predicate defaultDist) dt)
@@ -152,6 +154,13 @@ waitingForSlot sl _ = Predicate $ \r ->
 
 anyTx :: TracePredicate a
 anyTx = tx (const True)
+
+assertResult :: (Maybe a -> Bool) -> TracePredicate a
+assertResult p _ = Predicate $ \rs ->
+    let evts = rs ^. ctrTraceState . ctsEvents . to toList
+        con  = rs ^. ctrTraceState . ctsContract
+        result = fst (runWriter (runStateT (runContract con) evts))
+    in p (fst result)
 
 walletFundsChange :: Wallet -> Value -> TracePredicate a
 walletFundsChange w dlt initialDist = Predicate $
