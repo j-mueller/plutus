@@ -1,18 +1,17 @@
 {-# LANGUAGE TypeApplications #-}
 module Spec.Contract(tests) where
 
-import           Data.Either                                   (isLeft)
+import           Data.Either                          (isLeft)
 import           Test.Tasty
 
 import           Examples.Game
-import           Language.Plutus.Contract                      as Con
-import           Language.Plutus.Contract.Class                (loopM)
-import qualified Language.Plutus.Contract.Event                as Event
-import qualified Language.Plutus.Contract.Transaction          as Tx
-import qualified Language.PlutusTx.Coordination.Contracts.Game (gameAddress)
-import qualified Ledger.Ada                                    as Ada
-import           Prelude                                       hiding (not)
-import qualified Wallet.Emulator                               as EM
+import           Language.Plutus.Contract             as Con
+import           Language.Plutus.Contract.Class       (loopM)
+import qualified Language.Plutus.Contract.Event       as Event
+import qualified Language.Plutus.Contract.Transaction as Tx
+import qualified Ledger.Ada                           as Ada
+import           Prelude                              hiding (not)
+import qualified Wallet.Emulator                      as EM
 
 import           Spec.HUnit
 

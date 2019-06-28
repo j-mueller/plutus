@@ -133,8 +133,8 @@ mapThese f mps = (Map mpl, Map mpr)  where
     (mpl, mpr) = P.foldr f' ([], []) mps'
     Map mps'  = fmap f mps
     f' (k, v) (as, bs) = case v of
-        This a -> ((k, a):as, bs)
-        That b -> (as, (k, b):bs)
+        This a    -> ((k, a):as, bs)
+        That b    -> (as, (k, b):bs)
         These a b -> ((k, a):as, (k, b):bs)
 
 -- | A singleton map.

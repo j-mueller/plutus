@@ -1,10 +1,9 @@
 module Spec.Crowdfunding(tests) where
 
-import           Control.Monad                     (void)
 import           Test.Tasty
 
-import qualified Ledger.Ada                        as Ada
-import qualified Wallet.Emulator                   as EM
+import qualified Ledger.Ada            as Ada
+import qualified Wallet.Emulator       as EM
 
 import           Examples.Crowdfunding
 

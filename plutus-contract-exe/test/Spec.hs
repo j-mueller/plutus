@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
 
-import qualified Spec.Crowdfunding
 import qualified Spec.Contract
+import qualified Spec.Crowdfunding
 import qualified Spec.Game
 import qualified Spec.State
 import           Test.Tasty

@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Spec.Game where
 
-import           Control.Monad                                 (void)
 import qualified Data.Aeson                                    as Aeson
 import           Test.Tasty
 

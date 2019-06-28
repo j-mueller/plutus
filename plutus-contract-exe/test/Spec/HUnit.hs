@@ -34,7 +34,7 @@ module Spec.HUnit(
 
 import           Control.Lens                         (at, makeLenses, to, use, view, (<>=), (^.))
 import           Control.Monad                        (void)
-import           Control.Monad.State                  (StateT, gets, execStateT, runStateT)
+import           Control.Monad.State                  (StateT, execStateT, gets, runStateT)
 import           Control.Monad.Trans.Class            (MonadTrans (..))
 import           Control.Monad.Writer
 import qualified Data.Aeson                           as Aeson
@@ -115,7 +115,7 @@ checkPredicate
 checkPredicate nm con predicate action =
     HUnit.testCase nm $
         case withInitialDistribution defaultDist (runStateT action (mkState con)) of
-            (Left err, _) -> 
+            (Left err, _) ->
                 HUnit.assertFailure $ "EmulatorAction failed. " ++ show err
             (Right (_, st), ms) ->
                 let dt = ContractTestResult ms st in

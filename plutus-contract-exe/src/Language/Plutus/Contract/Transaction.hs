@@ -160,12 +160,12 @@ network, the contract backend needs to
 
 While there is an 'empty' transaction we can't make 'UnbalancedTx' a monoid
 because it's not clear what the binary operator should do with the validity
-interval. There are two valid options: Hull and intersection. ('always' is the 
-unit for the intersection but then there is the issue that we don't have a 
-canonical representation of the empty interval (that's why 'intersection' 
-returns a 'Maybe Interval'.)) 
+interval. There are two valid options: Hull and intersection. ('always' is the
+unit for the intersection but then there is the issue that we don't have a
+canonical representation of the empty interval (that's why 'intersection'
+returns a 'Maybe Interval'.))
 
-TODO:  I think a good way forward would be to make 
+TODO:  I think a good way forward would be to make
 'Interval' a lattice, and then make 'UnbalancedTx' a lattice too.
 
 -}

@@ -14,14 +14,14 @@ module Language.Plutus.Contract.Contract(
     , runContract
     ) where
 
-import           Control.Applicative                (Alternative)
-import           Control.Monad.Prompt               (MonadPrompt (..), PromptT, runPromptTM)
+import           Control.Applicative              (Alternative)
+import           Control.Monad.Prompt             (MonadPrompt (..), PromptT, runPromptTM)
 import           Control.Monad.State
 import           Control.Monad.Writer
 
 import           Language.Plutus.Contract.Class
-import           Language.Plutus.Contract.Event     as Event
-import           Language.Plutus.Contract.Hooks     as Hooks
+import           Language.Plutus.Contract.Event   as Event
+import           Language.Plutus.Contract.Hooks   as Hooks
 import           Language.Plutus.Contract.Request
 
 -- | An instance of 'PlutusContract Event (Hook ())'
