@@ -33,6 +33,9 @@ newtype ContractPrompt f a = ContractPrompt { unPlutusContract :: PromptT (Hook 
 --   all the requests, then 'pure a' is returned and nothing is written.
 --   If there aren't enough, then 'empty' is returned and the missing hooks
 --   are written.
+--   See notes [Handling state in contracts] in 
+--   'Language.Plutus.Contract.State' and [Hooks and Events] in 
+--   'Language.Plutus.Contract.Request'.
 runContract
     :: forall f m a.
        ( Alternative f

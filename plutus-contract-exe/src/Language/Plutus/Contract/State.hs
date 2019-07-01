@@ -24,6 +24,75 @@ import           Language.Plutus.Contract.Event    as Event
 import           Language.Plutus.Contract.Hooks    as Hooks
 import           Language.Plutus.Contract.Record
 
+{- note [Handling state in contracts]
+
+If we look at 'runContract' in 'Language.Plutus.Contract.Contract', we can see
+that it takes a list of events and runs the contract as far as possible, until
+either the events are depleted or the contract is done. That means we can take
+the current state of the contract to be represented by the type '[Event]'. When
+a new event comes in, we add it to the previous state, and apply 'runContract' 
+again.
+
+This is nice because '[Event]' is a type we can serialise (which we 
+would like to do because our contract should expose a stateless interface to 
+the outside world, and so we need to be able to recover the state from its 
+serialised form), and at the same time we can write our contracts using the full
+power of the 'ContractPrompt' interface, ie. monad, applicative, etc.
+
+There is a drawback however. The list-of-events representation of the state 
+means we have to replay all previous events whenever we want to process a new 
+event, so 'runContract' uses time proportional to the number of events that 
+have been seen.
+
+Can we do better than '[Event]' without compromising on the expressiveness of 
+the 'Contract' interface? It turns out we can, by pruning the event sequence 
+whenever the contract has arrived at a state that we know how to serialise to 
+something better than '[Event]'. This is the purpose of the 'StatefulContract' 
+type and the functions in this module, and the 'Record' type in 
+'Language.Plutus.Contract.Record'.
+
+The main problem with serialising the contract state to anything other than '
+[Event]' is that the state may contain arbitrary callbacks introduced by 
+the 'Control.Monad.PromptT' type. The only time we can be certain that a 
+contract has no callbacks that it is waiting for is when 'runContract' (with 'f 
+= Maybe') evaluates to 'Just a'. At that point, the 'a' represents exactly the 
+same state as the list of events, '[Event]', that was used to produce the 'a'. 
+So if we want to serialise the state now, we can just serialise the 'a' and 
+drop all the events.
+
+This is complicated by the fact that contracts may have multiple branches that 
+run at the same time (using '<*>') or one after another (with '>>='). So for a
+contract 'l <*> r', if the 'r' branch is done but the 'l' branch is still 
+waiting for input, we can only drop the events that have been seen by 'r', and 
+we must continue to use the '[Event]' representation for the state of 'l' until 
+both 'l' and 'r' are finished. 
+
+To account for this, we store the events in a 
+'Language.Plutus.Contract.Record.Record' instead of a list. The record is a 
+tree that mirrors the structure of the contract, and whenever one of the 
+contract's branches is done we can serialise its state and store it in the 
+correct location in the record.
+
+Finally we need to know how to serialise the result value of the (branch of a) contract when it's done. This is what the 'StatefulContract' type is for. We can
+use its 'CJSONCheckpoint' constructor to inject the serialisation constraints at
+arbitrary points in the contract. So we could write the previous example as
+'l <*> jsonCheckpoint r' to ensure that the events consumed by the 'r' branch
+are discarded as soon as 'r' produces a result.
+
+To actually run a 'StatefulContract', we need to
+* use 'initialise' to get the initial state (of type 'Record') of the contract
+* for each new event, run 'insertAndUpdate' with the current state and the event
+  to get the new state. 
+
+TODO: There is a lot of boilerplate in the definitions of 'runClosed' and 
+'runOpen' - the cases we have to cover are all possible combinations of the
+constructors of 'StatefulContract' and 'Record'. 
+
+I did attempt to reduce this by using 'newtype Rec i a = Rec Either (OpenRecord i) (ClosedRecord i, a)' and variations but always ran into trouble. I would be 
+very grateful for suggestions on how to improve this situation.
+
+-}
+
 data StatefulContract a where
     CMap :: (a' -> a) -> StatefulContract  a' -> StatefulContract  a
     CAp :: StatefulContract  (a' -> a) -> StatefulContract  a' -> StatefulContract  a

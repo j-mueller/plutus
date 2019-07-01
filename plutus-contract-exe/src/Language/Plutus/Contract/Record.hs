@@ -12,6 +12,11 @@ import           GHC.Generics   (Generic)
 import           Data.Aeson     (Value)
 import qualified Data.Aeson     as Aeson
 
+-- | The serialisable state of a contract instance, containing a mix of raw 
+--   input events and serisalised checkpoints.
+--   See note [Handling state in contracts] in 'Language.Plutus.Contract.State'.
+type Record i = Either (OpenRecord i) (ClosedRecord i)
+
 data FinalValue i = FinalJSON Value | FinalEvents (Seq i)
     deriving stock (Eq, Show, Generic, Functor)
     deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
@@ -43,8 +48,6 @@ closedSubRecords :: Traversal' (ClosedRecord i) (ClosedRecord i)
 closedSubRecords f = \case
     v@ClosedLeaf{} -> pure v
     ClosedBin l r -> ClosedBin <$> f l <*> f r
-
-type Record i = Either (OpenRecord i) (ClosedRecord i)
 
 fromPair :: Record i -> Record i -> Record i
 fromPair l r = case (l, r) of
