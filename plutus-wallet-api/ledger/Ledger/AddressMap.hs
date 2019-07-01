@@ -47,6 +47,7 @@ newtype AddressMap = AddressMap { getAddressMap :: Map Address (Map TxOutRef TxO
     deriving stock (Generic)
     deriving newtype (Serialise)
 
+-- | An address map with a single unspent transaction output.
 singleton :: (Address, TxOutRef, TxOut) -> AddressMap
 singleton (addr, ref, ot) = AddressMap $ Map.singleton addr (Map.singleton ref ot)
 
@@ -104,6 +105,8 @@ fromTxOutputs tx =
     mkUtxo (i, t) = (txOutAddress t, Map.singleton (TxOutRefOf h i) t)
     h = hashTx tx
 
+-- | Take all unspent outputs from the 'UtxoIndex' and put them in
+--   an 'AddressMap'.
 fromUtxoIndex :: UtxoIndex -> AddressMap
 fromUtxoIndex utxo = foldMap (singleton . addr) mp' where
     mp' = Map.toList (Index.getIndex utxo)

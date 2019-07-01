@@ -77,7 +77,7 @@ endpoint nm = do
 
 -- | Produce an unbalanced transaction.
 --
---   TODO: returning a 'RequestID' that can be used to query its status (TBD)
+--   TODO: Return a 'RequestID' that can be used to query its status (TBD)
 writeTx :: PlutusContract m => UnbalancedTx -> m ()
 writeTx t = do
     i <- prompt (Hooks.txHook t)
