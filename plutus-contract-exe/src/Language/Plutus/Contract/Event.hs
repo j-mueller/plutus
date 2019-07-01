@@ -26,6 +26,8 @@ import qualified Ledger.AddressMap as AM
 import           Ledger.Slot       (Slot)
 import           Ledger.Tx         (Address, Tx)
 
+-- | An event that happened on the blockchain or as a result of a user action.
+--   See note [Hooks and Events] in 'Language.Plutus.Contract.Request'.
 data Event =
     LedgerUpdate Address Tx
     | TxSubmission -- TODO: add more events about specific transactions (namely, tx submitted, tx rejected, tx rolled back, etc.)
@@ -63,25 +65,3 @@ endpointEvent :: Event -> Maybe (String, Aeson.Value)
 endpointEvent = \case
     Endpoint s v -> Just (s, v)
     _ -> Nothing
-
-{-
-    Event-based interface between contract executables and the app platform and
-    (by extension) the wallet.
-
-    Two types of events are defined:
-
-    1. 'ContractOut'. Events produced by the contract for consumption by app
-       platform and wallet. Includes transactions and instructions to start
-       watching interesting addresses on the ledger.
-
-    2. 'LedgerUpdate'. Events that inform the contract about changes to the
-       ledger state.
-
-    Contracts will offer an HTTP interface with the following routes.
-
-    * 1 route "initialise" to get the list of endpoints and interesting
-      addresses at the start of the instance
-    * 1 route "update" to advance the contract to the next state given some
-      input (user interaction or blockchain)
-
--}

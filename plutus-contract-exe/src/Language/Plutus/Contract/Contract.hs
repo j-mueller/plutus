@@ -14,7 +14,7 @@ module Language.Plutus.Contract.Contract(
     , runContract
     ) where
 
-import           Control.Applicative              (Alternative)
+import           Control.Applicative              (Alternative (empty))
 import           Control.Monad.Prompt             (MonadPrompt (..), PromptT, runPromptTM)
 import           Control.Monad.State
 import           Control.Monad.Writer
@@ -29,26 +29,23 @@ import           Language.Plutus.Contract.Request
 newtype ContractPrompt f a = ContractPrompt { unPlutusContract :: PromptT (Hook ()) Event f a }
     deriving (Functor, Applicative, Monad, Alternative, MonadPrompt (Hook ()) Event)
 
--- TODO: Naming
-
 -- | Apply the events in the state. If there were enough events to satisfy
---   all the requests, then 'Just a' is returned and nothing is written.
---   If there aren't enough, then 'Nothing' is return and the missing hooks
+--   all the requests, then 'pure a' is returned and nothing is written.
+--   If there aren't enough, then 'empty' is returned and the missing hooks
 --   are written.
 runContract
-    :: forall m a.
-       ( MonadState [Event] m
+    :: forall f m a.
+       ( Alternative f
+       , MonadState [Event] m
        , MonadWriter Hooks m)
-    => ContractPrompt Maybe a
-    -> m (Maybe a)
+    => ContractPrompt f a
+    -> m (f a)
 runContract = flip runPromptTM go . unPlutusContract where
-    go :: Hook () -> m (Maybe Event)
     go hks = do
-        let hks' = hooks hks
         evts <- get
         let go' = \case
-                    [] -> tell hks' >> pure Nothing
+                    [] -> tell (hooks hks) >> pure empty
                     e:es -> case match hks e of
                         Nothing -> go' es
-                        Just e' -> put es >> pure (Just e')
+                        Just e' -> put es >> pure (pure e')
         go' evts

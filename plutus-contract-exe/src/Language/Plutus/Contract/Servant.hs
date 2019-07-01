@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE TypeOperators      #-}
 module Language.Plutus.Contract.Servant(
@@ -13,8 +14,10 @@ import           Control.Monad.Writer
 import qualified Data.Aeson                      as Aeson
 import           Data.Bifunctor
 import           Data.Proxy                      (Proxy (..))
+import           Data.String                     (IsString (fromString))
 import           GHC.Generics                    (Generic)
-import           Servant                         ((:<|>) ((:<|>)), (:>), Get, JSON, Post, ReqBody)
+import           Servant                         ((:<|>) ((:<|>)), (:>), Get, JSON, Post, ReqBody, err500, errBody,
+                                                  throwError)
 import           Servant.Server                  (Application, Server, serve)
 
 import           Language.Plutus.Contract.Event  (Event)
@@ -52,7 +55,9 @@ contractServer con = initialise :<|> run where
     initialise = pure (initialResponse con)
     run (Request o e) =
         case State.insertAndUpdate con (record o) e of
-            Left err     -> error err -- TODO: 404
+            Left err     ->
+                let bd = "'insertAndUpdate' failed. " in
+                throwError $ err500 { errBody = fromString (bd <> err) }
             Right (r, h) -> pure $ Response (State r) h
 
 -- | A servant 'Application' that serves a Plutus contract

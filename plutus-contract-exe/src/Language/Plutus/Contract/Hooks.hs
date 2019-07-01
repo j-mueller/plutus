@@ -33,6 +33,8 @@ import           Language.Plutus.Contract.Transaction (UnbalancedTx)
 import           Ledger.Slot                          (Slot (..))
 import           Ledger.Tx                            (Address)
 
+-- | A condition that the contract is waiting for. See note [Hooks and Events]
+--   in 'Language.Plutus.Contract.Request'.
 data Hook a =
     TxHook UnbalancedTx
     | AddrHook Address
