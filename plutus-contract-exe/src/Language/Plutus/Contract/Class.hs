@@ -29,11 +29,6 @@ foldMaybe
 foldMaybe f b con = loopM go b where
     go b' = maybe (Right b') (Left . flip f b') <$> con
 
-await :: (Alternative m, Monad m, MonadContract i o m) => o -> (i -> Maybe a) -> m a
-await i f = do
-    o <- prompt i
-    maybe empty pure (f o)
-
 both :: (MonadContract i o f) => f a -> f b -> f (a, b)
 both = liftA2 (,)
 

@@ -27,7 +27,7 @@ c1 = return () -- <2>
 
 === Waiting
 
-If we compiled `c1` and deployed it, it would finish right away without doing anything. To get the contract to interact with the environment we can use the functions exported by the `Language.Plutus.Contract` module. For example, `slotGeq {2c} Slot -> PlutusContract m Slot` is a function that takes a `Slot` argument produces a contract that waits until the slot has been reached.
+If we compiled `c1` and deployed it, it would finish right away without doing anything. To get the contract to interact with the environment we can use the functions exported by the `Language.Plutus.Contract` module. For example, `slotGeq {2c} Slot -> PlutusContract m Slot` is a function that takes a `Slot` argument and produces a contract that waits until the slot has been reached.
 
 [source,haskell]
 ----

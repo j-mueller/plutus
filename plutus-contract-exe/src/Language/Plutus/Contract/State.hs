@@ -12,7 +12,6 @@ module Language.Plutus.Contract.State where
 import           Control.Applicative
 import           Control.Monad.Except
 import           Control.Monad.Prompt              (MonadPrompt (..))
-import           Control.Monad.State
 import           Control.Monad.Writer
 import qualified Data.Aeson                        as Aeson
 import qualified Data.Aeson.Types                  as Aeson
@@ -24,7 +23,7 @@ import           Language.Plutus.Contract.Event    as Event
 import           Language.Plutus.Contract.Hooks    as Hooks
 import           Language.Plutus.Contract.Record
 
-{- note [Handling state in contracts]
+{- Note [Handling state in contracts]
 
 If we look at 'runContract' in 'Language.Plutus.Contract.Contract', we can see
 that it takes a list of events and runs the contract as far as possible, until
@@ -37,7 +36,9 @@ This is nice because '[Event]' is a type we can serialise (which we
 would like to do because our contract should expose a stateless interface to 
 the outside world, and so we need to be able to recover the state from its 
 serialised form), and at the same time we can write our contracts using the full
-power of the 'ContractPrompt' interface, ie. monad, applicative, etc.
+power of the 'ContractPrompt' interface, ie. monad, applicative, etc. In 
+addition, by restricting the contract's effects to what comes down to different 
+forms of `Prompt`, we get completely deterministic execution of contracts.
 
 There is a drawback however. The list-of-events representation of the state 
 means we have to replay all previous events whenever we want to process a new 
@@ -125,7 +126,7 @@ initialise = \case
                     Left r'       -> pure $ Left $ OpenRight l' r'
                     Right (r', b) -> pure $ Right (ClosedBin l' r', b)
     CContract con -> do
-        r <- runConM mempty con
+        r <- C.runConM mempty con
         case r of
             Nothing -> pure $ Left $ OpenLeaf mempty
             Just a  -> pure $ Right (ClosedLeaf (FinalEvents mempty), a)
@@ -147,13 +148,7 @@ prtty = \case
     CJSONCheckpoint j -> "json(" ++ prtty j ++ ")"
 
 instance Functor StatefulContract where
-    fmap f = \case
-        CMap f' c -> CMap (f . f') c
-        CAp l r     -> CAp (fmap (fmap f) l) r
-        CBind m f'  -> CBind m (fmap f . f')
-
-        CContract con -> CContract (fmap f con)
-        CJSONCheckpoint c -> CMap f (CJSONCheckpoint c)
+    fmap = CMap
 
 instance Applicative StatefulContract where
     pure = CContract . pure
@@ -189,13 +184,6 @@ lowerM fj fc = \case
 lower :: StatefulContract a -> C.ContractPrompt Maybe a
 lower = lowerM id id
 
-runConM
-    :: ( MonadWriter Hooks m )
-    => [Event]
-    -> C.ContractPrompt Maybe a
-    -> m (Maybe a)
-runConM evts con = evalStateT (C.runContract con) evts
-
 runClosed
     :: ( MonadWriter Hooks m
        , MonadError String m)
@@ -209,7 +197,7 @@ runClosed con rc =
                 ClosedLeaf (FinalEvents evts) ->
                     case con of
                         CContract con' -> do
-                            r <- runConM (toList evts) con'
+                            r <- C.runConM (toList evts) con'
                             case r of
                                 Nothing -> throwError "ClosedLeaf, contract not finished"
                                 Just  a -> pure a
@@ -289,7 +277,7 @@ runOpen con opr =
         (CBind{}, _) -> throwError $ "CBind " ++ show opr
 
         (CContract con', OpenLeaf is) -> do
-                r <- runConM (toList is) con'
+                r <- C.runConM (toList is) con'
                 case r of
                     Just a  -> pure (Right (ClosedLeaf (FinalEvents is), a))
                     Nothing -> pure (Left (OpenLeaf is))

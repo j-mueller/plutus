@@ -12,6 +12,7 @@ module Language.Plutus.Contract.Contract(
     , both
     -- * Feed events to the contract and look at the outputs
     , runContract
+    , runConM
     ) where
 
 import           Control.Applicative              (Alternative (empty))
@@ -26,7 +27,7 @@ import           Language.Plutus.Contract.Request
 
 -- | An instance of 'PlutusContract Event (Hook ())'
 --   that uses the 'PromptT' type
-newtype ContractPrompt f a = ContractPrompt { unPlutusContract :: PromptT (Hook ()) Event f a }
+newtype ContractPrompt f a = ContractPrompt { unContractPrompt :: PromptT (Hook ()) Event f a }
     deriving (Functor, Applicative, Monad, Alternative, MonadPrompt (Hook ()) Event)
 
 -- | Apply the events in the state. If there were enough events to satisfy
@@ -43,7 +44,7 @@ runContract
        , MonadWriter Hooks m)
     => ContractPrompt f a
     -> m (f a)
-runContract = flip runPromptTM go . unPlutusContract where
+runContract = flip runPromptTM go . unContractPrompt where
     go hks = do
         evts <- get
         let go' = \case
@@ -52,3 +53,11 @@ runContract = flip runPromptTM go . unPlutusContract where
                         Nothing -> go' es
                         Just e' -> put es >> pure (pure e')
         go' evts
+
+runConM
+    :: ( MonadWriter Hooks m )
+    => [Event]
+    -> ContractPrompt Maybe a
+    -> m (Maybe a)
+runConM evts con = evalStateT (runContract con) evts
+    

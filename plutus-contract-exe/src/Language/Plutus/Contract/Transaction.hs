@@ -130,7 +130,7 @@ collectFromScriptFilter flt am vls red =
     in
     unbalancedTx txInputs []
 
-{- note [Unbalanced transactions]
+{- Note [Unbalanced transactions]
 
 To turn an 'UnbalancedTx' into a valid transaction that can be submitted to the
 network, the contract backend needs to
