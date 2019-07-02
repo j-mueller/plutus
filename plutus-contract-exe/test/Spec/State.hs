@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeApplications #-}
 module Spec.State where
 
+import           Control.Applicative
 import           Control.Monad.Writer
 import qualified Data.Aeson                      as Aeson
 import           Data.Either                     (isRight)
@@ -28,4 +29,10 @@ tests =
             let con = S.checkpoint $ (,) <$> S.checkpoint ep <*> (ep >> ep)
                 res = run con [inp, inp]
             in HUnit.assertBool "checkpoint" (res == Right (Right (jsonLeaf ("asd", "asd"))))
+
+        , HUnit.testCase "run a parallel contract with checkpoints, recording the result as JSON" $
+        let con = S.checkpoint $ (ep >> ep) <|> (ep >> ep >> ep)
+            res = run con [inp, inp]
+        in HUnit.assertBool "checkpoint" (res == Right (Right (jsonLeaf "asd")))
+
         ]

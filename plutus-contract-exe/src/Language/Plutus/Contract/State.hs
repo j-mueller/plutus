@@ -97,6 +97,7 @@ very grateful for suggestions on how to improve this situation.
 data StatefulContract a where
     CMap :: (a' -> a) -> StatefulContract  a' -> StatefulContract  a
     CAp :: StatefulContract  (a' -> a) -> StatefulContract  a' -> StatefulContract  a
+    CAlt :: StatefulContract  a -> StatefulContract  a -> StatefulContract  a
     CBind :: StatefulContract  a' -> (a' -> StatefulContract  a) -> StatefulContract  a
 
     CContract :: C.ContractPrompt Maybe a -> StatefulContract  a
@@ -116,6 +117,13 @@ initialise = \case
             (Right (l, _), Left r)       -> pure $ Left (OpenRight l r)
             (Left l, Right (r, _))       -> pure $ Left (OpenLeft l r)
             (Right (l, f), Right (r, a)) -> pure $ Right (ClosedBin l r, f a)
+    CAlt conL conR -> do
+        l' <- initialise conL
+        r' <- initialise conR
+        case (l', r') of
+            (Right (_, a), _)       -> pure $ Right (ClosedLeaf (FinalEvents mempty), a)
+            (_, Right (_, a))       -> pure $ Right (ClosedLeaf (FinalEvents mempty), a)
+            (Left l, Left r)        -> pure $ Left (OpenBoth l r)
     CBind c f -> do
         l <- initialise c
         case l of
@@ -145,6 +153,7 @@ prtty = \case
     CAp l r -> "cap (" ++ prtty l ++ ") (" ++ prtty r ++ ")"
     CBind l _ -> "cbind (" ++ prtty l ++  ") f"
     CContract _ -> "ccontract"
+    CAlt l r -> "calt (" ++ prtty l ++ ") (" ++ prtty r ++ ")"
     CJSONCheckpoint j -> "json(" ++ prtty j ++ ")"
 
 instance Functor StatefulContract where
@@ -154,10 +163,9 @@ instance Applicative StatefulContract where
     pure = CContract . pure
     (<*>) = CAp
 
--- TODO: Should we add an `Alt` constructor to `StatefulContract`?
 instance Alternative StatefulContract where
     empty = CContract empty
-    l <|> r = CContract (lower l <|> lower r)
+    (<|>) = CAlt
 
 instance Monad StatefulContract where
     (>>=) = CBind
@@ -166,7 +174,7 @@ instance MonadPrompt (Hook ()) Event StatefulContract where
     prompt = CContract . prompt
 
 lowerM
-    :: (Monad m)
+    :: (Monad m, Alternative m)
     -- ^ What to do with map, ap, bind
     => (forall a'. (Aeson.FromJSON a', Aeson.ToJSON a') => m a' -> m a')
     -- ^ What to do with JSON checkpoints
@@ -177,6 +185,7 @@ lowerM
 lowerM fj fc = \case
     CMap f c' -> f <$> lowerM fj fc c'
     CAp l r -> lowerM fj fc l <*> lowerM fj fc r
+    CAlt l r -> lowerM fj fc l <|> lowerM fj fc r
     CBind c' f -> lowerM fj fc c' >>= fmap (lowerM fj fc) f
     CContract c' -> fc c'
     CJSONCheckpoint c' -> fj (lowerM fj fc c')
@@ -201,6 +210,16 @@ runClosed con rc =
                             case r of
                                 Nothing -> throwError "ClosedLeaf, contract not finished"
                                 Just  a -> pure a
+                        CAlt conL conR -> do
+                            -- We know that one of the branches is finished so 
+                            -- we can ignore the hooks produced by the other 
+                            -- branch
+                            r <- censor (const mempty) 
+                                    $ (<|>) <$> C.runConM (toList evts) (lower conL)
+                                            <*> C.runConM (toList evts) (lower conR)
+                            case r of
+                                Nothing -> throwError "ClosedLeaf CAlt, neither side finished"
+                                Just a -> pure a
                         _ -> throwError "ClosedLeaf, expected CContract "
                 ClosedLeaf (FinalJSON vl) ->
                     case con of
@@ -250,6 +269,15 @@ runOpen con opr =
                 (Left oL, Left oR) ->
                     pure (Left (OpenBoth oL oR))
         (CAp{}, OpenLeaf _) -> throwError "CAp OpenLeaf"
+
+        (CAlt l r, OpenBoth orL orR) -> do
+            lr <- runOpen l orL
+            rr <- runOpen r orR
+            case (lr, rr) of
+                (Right (crL, a), _) -> pure (Right (crL, a))
+                (_, Right (crR, a)) -> pure (Right (crR, a))
+                (Left oL, Left oR)  -> pure (Left (OpenBoth oL oR))
+        (CAlt{}, OpenLeaf _) -> throwError "CAlt OpenLeaf"
 
         (CBind c f, OpenBind bnd) -> do
             lr <- runOpen c bnd
