@@ -53606,7 +53606,7 @@ description = "The Plutus Book";
 license = stdenv.lib.licenses.asl20;
 
 }) {};
-"plutus-contract-exe" = callPackage
+"plutus-contract" = callPackage
 ({
   mkDerivation
 , aeson
@@ -53633,9 +53633,9 @@ license = stdenv.lib.licenses.asl20;
 }:
 mkDerivation {
 
-pname = "plutus-contract-exe";
+pname = "plutus-contract";
 version = "0.1.0.0";
-src = .././plutus-contract-exe;
+src = .././plutus-contract;
 isLibrary = true;
 isExecutable = true;
 libraryHaskellDepends = [

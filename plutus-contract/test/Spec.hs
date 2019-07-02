@@ -11,7 +11,7 @@ main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "plutus-contract-exe" [
+tests = testGroup "plutus-contract" [
     Spec.Crowdfunding.tests,
     Spec.Contract.tests,
     Spec.Game.tests,
