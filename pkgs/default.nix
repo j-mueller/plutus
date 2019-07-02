@@ -53613,13 +53613,14 @@ license = stdenv.lib.licenses.asl20;
 , base
 , bytestring
 , containers
-, fingertree
 , hedgehog
 , lens
 , mtl
 , plutus-emulator
 , plutus-use-cases
 , plutus-wallet-api
+, profunctors
+, prompt
 , semigroupoids
 , servant
 , servant-server
@@ -53643,16 +53644,18 @@ aeson
 base
 bytestring
 containers
-fingertree
 lens
 mtl
 plutus-emulator
 plutus-use-cases
 plutus-wallet-api
+profunctors
+prompt
 semigroupoids
 servant
 servant-server
 text
+transformers
 ];
 executableHaskellDepends = [
 base
@@ -63027,8 +63030,8 @@ version = "0.9.0.2";
 src = fetchgit {
 
 url = "https://github.com/shmish111/servant-purescript.git";
-sha256 = "1a7d301p6sr2wcxr4lfilk1f2wam66cp7qcvhf5zbc02x9qkjxc9";
-rev = "ab14502279c92084f06aa6222a17873275279e63";
+sha256 = "09nyxv1j4igda45r4fjamxmhh0h0nxi1ix4jz26yvswjprhm3qa6";
+rev = "6f17281567152c11c9368ed1861b6d421b258863";
 fetchSubmodules = true;
 
 };
