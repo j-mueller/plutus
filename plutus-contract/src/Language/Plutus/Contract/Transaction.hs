@@ -42,11 +42,11 @@ import           Ledger.Value      as V
 -- | An unsigned and potentially unbalanced transaction, as produced by
 --   a contract endpoint. See note [Unbalanced transactions]
 data UnbalancedTx = UnbalancedTx
-        { _Inputs             :: [(L.TxIn, V.Value)]
-        , _Outputs            :: [L.TxOut]
-        , _Forge              :: V.Value
-        , _RequiredSignatures :: [PubKey]
-        , _ValidityRange      :: SlotRange
+        { _inputs             :: [(L.TxIn, V.Value)]
+        , _outputs            :: [L.TxOut]
+        , _forge              :: V.Value
+        , _requiredSignatures :: [PubKey]
+        , _validityRange      :: SlotRange
         }
         deriving stock (Eq, Show, Generic)
         deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
@@ -64,11 +64,11 @@ emptyTx = UnbalancedTx [] [] mempty [] I.always
 --   To produce a balanced 'Tx', use 'Language.Plutus.Contract.Wallet.balance'.
 toLedgerTx :: UnbalancedTx -> L.Tx
 toLedgerTx utx = L.Tx
-            { L.txInputs = Set.fromList (fst <$> _Inputs utx)
-            , L.txOutputs = _Outputs utx
-            , L.txForge = _Forge utx
+            { L.txInputs = Set.fromList (fst <$> _inputs utx)
+            , L.txOutputs = _outputs utx
+            , L.txForge = _forge utx
             , L.txFee = 0
-            , L.txValidRange = _ValidityRange utx
+            , L.txValidRange = _validityRange utx
             , L.txSignatures = Map.empty
             }
 
@@ -89,11 +89,11 @@ mergeWith
     -> UnbalancedTx
     -> UnbalancedTx
 mergeWith f l r = UnbalancedTx
-        { _Inputs = _Inputs l <> _Inputs r
-        , _Outputs = _Outputs l <> _Outputs r
-        , _Forge = _Forge l `V.plus` _Forge r
-        , _RequiredSignatures = _RequiredSignatures l <> _RequiredSignatures r
-        , _ValidityRange = f (_ValidityRange l) (_ValidityRange r)
+        { _inputs = _inputs l <> _inputs r
+        , _outputs = _outputs l <> _outputs r
+        , _forge = _forge l `V.plus` _forge r
+        , _requiredSignatures = _requiredSignatures l <> _requiredSignatures r
+        , _validityRange = f (_validityRange l) (_validityRange r)
         }
 
 -- | Make an unbalanced transaction that does not forge any value.
