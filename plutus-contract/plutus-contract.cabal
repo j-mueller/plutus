@@ -44,6 +44,7 @@ library
         Language.Plutus.Contract
         Language.Plutus.Contract.Class
         Language.Plutus.Contract.Contract
+        Language.Plutus.Contract.Emulator
         Language.Plutus.Contract.Event
         Language.Plutus.Contract.Hooks
         Language.Plutus.Contract.Record
