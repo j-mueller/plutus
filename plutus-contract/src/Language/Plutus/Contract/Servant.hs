@@ -54,7 +54,7 @@ type ContractAPI =
        "initialise" :> Get '[JSON] Response
   :<|> "run" :> ReqBody '[JSON] Request :> Post '[JSON] Response
 
--- | Serve a 'PlutusContract' via the contract API
+-- | Serve a 'PlutusContract' via the contract API.
 contractServer :: Contract PlutusEffects () -> Server ContractAPI
 contractServer con = initialise :<|> run where
     initialise = pure (initialResponse con)

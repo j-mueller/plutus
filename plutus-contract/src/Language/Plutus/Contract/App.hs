@@ -1,4 +1,4 @@
--- | Run a plutus contract as a servant application
+-- | Run a Plutus contract as a servant application.
 module Language.Plutus.Contract.App(
       run
     , runWithTraces

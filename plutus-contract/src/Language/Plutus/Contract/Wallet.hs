@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Balance  `UnbalancedTx` values using the
---   wallet API
+--   wallet API.
 module Language.Plutus.Contract.Wallet(
       balanceWallet
     , balanceTx
@@ -45,7 +45,7 @@ balanceWallet utx = do
 --   value of the outputs produced by the transaction. If the result is zero
 --   then the transaction is balanced.
 --
---   Fails if the unbalanced transaction contains an input the spends an output
+--   Fails if the unbalanced transaction contains an input that spends an output
 --   unknown to the wallet.
 computeBalance :: WAPI.MonadWallet m => UnbalancedTx -> m Value
 computeBalance utx = Value.minus <$> left <*> pure right  where
@@ -63,7 +63,7 @@ computeBalance utx = Value.minus <$> left <*> pure right  where
     -- left = (utx ^. forge) `V.plus` foldMap snd (utx ^. inputs)
 
 -- | Balance an unbalanced transaction by adding public key inputs
---   and outputs
+--   and outputs.
 balanceTx
     :: ( WAPI.MonadWallet m )
     => Map TxOutRef TxOut

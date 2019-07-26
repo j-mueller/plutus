@@ -27,7 +27,7 @@ import           Ledger.Slot       (Slot)
 import           Ledger.Tx         (Address, Tx)
 
 -- | An event that happened on the blockchain or as a result of a user action.
---   See note [Hooks and Events] in 'Language.Plutus.Contract.Request'.
+--   See note [Hooks and Events] in 'Language.Plutus.Contract.Effects'.
 data Event =
     LedgerUpdate Address Tx
     | TxSubmission -- TODO: add more events about specific transactions (namely, tx submitted, tx rejected, tx rolled back, etc.)

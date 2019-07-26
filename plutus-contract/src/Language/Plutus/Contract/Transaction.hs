@@ -39,7 +39,7 @@ import qualified Ledger.Tx         as Tx
 import           Ledger.Value      as V
 
 -- | An unsigned and potentially unbalanced transaction, as produced by
---   a contract endpoint. See note [Unbalanced transactions]
+--   a contract endpoint. See note [Unbalanced transactions].
 data UnbalancedTx = UnbalancedTx
         { _inputs             :: [L.TxIn]
         , _outputs            :: [L.TxOut]
@@ -60,7 +60,7 @@ emptyTx = UnbalancedTx [] [] mempty [] I.always
 
 -- | The ledger transaction of the 'UnbalancedTx'. Note that the result
 --   does not have any signatures, and is potentially unbalanced (ie. invalid).
---   To produce a balanced 'Tx', use 'Language.Plutus.Contract.Wallet.balance'.
+--   To produce a balanced 'Tx', use 'Language.Plutus.Contract.Wallet.balanceTx'.
 toLedgerTx :: UnbalancedTx -> L.Tx
 toLedgerTx utx = L.Tx
             { L.txInputs = Set.fromList (_inputs utx)
@@ -98,7 +98,7 @@ payToScript v a ds = unbalancedTx [] [outp] where
 
 -- | Create an `UnbalancedTx` that collects script outputs from the
 --   address of the given validator script, using the same redeemer script
---   for all outputs. See 'Wallet.API.collectFromScript'
+--   for all outputs. See 'Wallet.API.collectFromScript'.
 collectFromScript
     :: AddressMap
     -> ValidatorScript
@@ -106,7 +106,7 @@ collectFromScript
     -> UnbalancedTx
 collectFromScript = collectFromScriptFilter (\_ -> const True)
 
--- | See 'Wallet.API.collectFromScriptFilter'
+-- | See 'Wallet.API.collectFromScriptFilter'.
 collectFromScriptFilter
     :: (TxOutRef -> TxOut -> Bool)
     -> AddressMap
@@ -133,7 +133,7 @@ network, the contract backend needs to
   to the wallet (probably configurable).
   If the total balance `utxInputs` + the `txForge` field is less than
   the total value of `utxOutput`, then one or more public key inputs need
-  to be added (and potentially some outputs for the change)
+  to be added (and potentially some outputs for the change).
 
 * Compute fees.
   Once the final size of the transaction is known, the fees for the transaction

@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 -- | Write an 'UnbalancedTx' to be transferred to the wallet for
---   balancing and signing
+--   balancing and signing.
 module Language.Plutus.Contract.Effects.WriteTx where
 
 import           Language.Plutus.Contract.Transaction

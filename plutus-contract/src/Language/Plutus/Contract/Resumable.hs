@@ -6,7 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes            #-}
 -- | A version of 'Language.Plutus.Contract.Contract' that
---   writes checkpoints
+--   writes checkpoints.
 module Language.Plutus.Contract.Resumable(
     Resumable
     , Step(..)
@@ -49,8 +49,8 @@ making the complexity of adding a new event quadratic in the number of events.
 We avoid this in 'Resumable (Step i o)' by adding checkpoints at which the state can be serialised and resumed without having to replay all the previous 
 events. 
 
-The current state of 'Resumable (Step i o)' programs is capturey by the 'Record 
-i' type. Every 'Record' is a tree with branches that match the structure the 
+The current state of 'Resumable (Step i o)' programs is captured by the 'Record 
+i' type. Every 'Record' is a tree with branches that match the structure of the 
 'Resumable' program whose state it represents. 
 
 Given a 'Resumable (Step i o)'  we can use 'initialise' to get the initial 

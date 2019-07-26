@@ -27,7 +27,7 @@ We model effects of Plutus contracts using 'Control.Eff'. The ones
 exported here are the basic effects that we need for our use cases (wait for a
 slot, expose an endpoint, watch an address on the blockchain, and submit
 transactions). To make these easier to use we export them as the
-'App' constraint.
+'Plutus' constraint.
 
 To our users, the signatures of our contracts look like '(Plutus r) =>
 Contract r ()'.
@@ -52,7 +52,7 @@ type PlutusEffects =
 
 type PromptEffects = '[Reader (Maybe Event), Exc (Hook ())]
 
--- | Interpret the 'ContractEffects' in 'Reader' and 'Exc'. See note [Contract
+-- | Interpret the 'PlutusEffects' in 'Reader' and 'Exc'. See note [Contract
 --   Effects]
 runEffects :: Eff PlutusEffects a -> Eff PromptEffects a
 runEffects =
@@ -61,7 +61,7 @@ runEffects =
         . runAwaitSlot
         . runWriteTx
 
-{- note  [Hooks and Events]
+{- Note [Hooks and Events]
 
 The three types 'Hook', 'Hooks' and 'Event' are closely related.
 
