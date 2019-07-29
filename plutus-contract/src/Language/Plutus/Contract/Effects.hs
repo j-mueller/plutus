@@ -47,14 +47,14 @@ type ContractActions r = [WriteTx, AwaitSlot, WatchAddress, ExposeEndpoint] <:: 
 
 -- | List of effects that this interpreter ('Maybe Event -> Either Hooks a')
 --   supports.
-type ContractEffects =
-    WriteTx ': AwaitSlot ': WatchAddress ': ExposeEndpoint ': PromptEffects
+type ContractEffects r =
+    WriteTx ': AwaitSlot ': WatchAddress ': ExposeEndpoint ': PromptEffects r
 
-type PromptEffects = '[Reader (Maybe Event), Exc (Hook ())]
+type PromptEffects r = Reader (Maybe Event) ': Exc (Hook ()) ': r
 
 -- | Interpret the 'PlutusEffects' in 'Reader' and 'Exc'. See note [Contract
 --   Effects]
-runEffects :: Eff ContractEffects a -> Eff PromptEffects a
+runEffects :: Eff (ContractEffects r) a -> Eff (PromptEffects r) a
 runEffects =
         runExposeEndpoint
         . runWatchAddress

@@ -116,12 +116,12 @@ fundsAtAddressGt addr' vl = loopM go mempty where
         then pure (Left cur') else pure (Right cur')
 
 
--- | Take a single step in form of 'Eff AppEffects a' and attempt to run it
---   on the given 'Event' (or 'Nothing'). If it fails, return a description
---   of the data that is needed (the 'Hooks'). If it succeeds, return the
---   result. See note [Contract Effects]
-convertStep :: Eff ContractEffects a -> Step Event Hooks a
+-- | Take a single step in form of 'Eff (ContractEffects []) a' and attempt to 
+--   run it on the given 'Event' (or 'Nothing'). If it fails, return a 
+--   description of the data that is needed (the 'Hooks'). If it succeeds, 
+--   return the result. See note [Contract Effects].
+convertStep :: Eff (ContractEffects '[]) a -> Step Event Hooks a
 convertStep st = Step $ \i -> first hooks . run . runError . runReader i . runEffects $ st
 
-convertContract :: Resumable (Eff ContractEffects) a -> Resumable (Step Event Hooks) a
+convertContract :: Resumable (Eff (ContractEffects '[])) a -> Resumable (Step Event Hooks) a
 convertContract = mapStep convertStep

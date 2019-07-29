@@ -1,6 +1,8 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE KindSignatures   #-}
 {-# LANGUAGE TemplateHaskell  #-}
+{-# LANGUAGE TupleSections    #-}
 -- | Some conveniences for running Plutus contracts
 --   in the emulator.
 module Language.Plutus.Contract.Emulator(
@@ -68,13 +70,13 @@ data ContractTraceState a =
     ContractTraceState
         { _ctsEvents   :: Map Wallet (Seq Event)
         -- ^ Events that were fed to the contract
-        , _ctsContract :: Contract ContractEffects a
+        , _ctsContract :: Contract (ContractEffects '[]) a
         -- ^ Current state of the contract
         }
 
 makeLenses ''ContractTraceState
 
-initState :: [Wallet] -> Contract ContractEffects a -> ContractTraceState a
+initState :: [Wallet] -> Contract (ContractEffects '[]) a -> ContractTraceState a
 initState wllts = ContractTraceState wallets where
     wallets = Map.fromList $ fmap (,mempty) wllts
 
@@ -110,7 +112,7 @@ addEventAll e = traverse_ (flip addEvent e) allWallets
 -- | Run a trace in the emulator and return the
 --   final events for each wallet.
 execTrace
-    :: Contract ContractEffects a
+    :: Contract (ContractEffects '[]) a
     -> ContractTrace EmulatorAction a ()
     -> Map Wallet [Event]
 execTrace con action =
@@ -121,7 +123,7 @@ execTrace con action =
 -- | Run a trace in the emulator and return the final state alongside the
 --   result
 runTrace
-    :: Contract ContractEffects a
+    :: Contract (ContractEffects '[]) a
     -> ContractTrace EmulatorAction a ()
     -> (Either AssertionError ((), ContractTraceState a), EmulatorState)
 runTrace con action =

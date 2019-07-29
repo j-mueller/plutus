@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 -- | Run a Plutus contract as a servant application.
 module Language.Plutus.Contract.App(
       run
@@ -20,13 +21,13 @@ import           System.Environment                (getArgs)
 import           Wallet.Emulator                   (Wallet (..))
 
 -- | Run the contract as an HTTP server with servant/warp
-run :: Contract ContractEffects () -> IO ()
+run :: Contract (ContractEffects '[]) () -> IO ()
 run st = runWithTraces st []
 
 -- | Run the contract as an HTTP server with servant/warp, and
 --   print the 'Request' values for the given traces.
 runWithTraces
-    :: Contract ContractEffects ()
+    :: Contract (ContractEffects '[]) ()
     -> [(String, (Wallet, ContractTrace EmulatorAction () ()))]
     -> IO ()
 runWithTraces con traces = do
@@ -48,7 +49,7 @@ printTracesAndExit mp = do
 
 -- | Run a trace on the mockchain and print the 'Request' JSON objects
 --   for each intermediate state to stdout.
-printTrace :: Contract ContractEffects () -> Wallet -> ContractTrace EmulatorAction () () -> IO ()
+printTrace :: Contract (ContractEffects '[]) () -> Wallet -> ContractTrace EmulatorAction () () -> IO ()
 printTrace con wllt ctr = foldM_ go (initialResponse con) events where
     events = Map.findWithDefault [] wllt $ execTrace con ctr
     go previous evt = do

@@ -70,7 +70,7 @@ not p a = Predicate $ \b -> Prelude.not (getPredicate (p a) b)
 
 checkPredicate
     :: String
-    -> Contract ContractEffects a
+    -> Contract (ContractEffects '[]) a
     -> TracePredicate a
     -> ContractTrace EmulatorAction a ()
     -> TestTree
