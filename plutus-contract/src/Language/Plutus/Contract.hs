@@ -4,7 +4,7 @@
 {-# LANGUAGE MonoLocalBinds   #-}
 module Language.Plutus.Contract(
       Contract
-    , Plutus
+    , ContractActions
     -- * Dealing with time
     , AwaitSlot
     , awaitSlot
@@ -38,8 +38,8 @@ import           Data.Aeson                                      (FromJSON)
 import           Data.Bifunctor                                  (Bifunctor (..))
 import           Data.Maybe                                      (fromMaybe)
 
-import           Language.Plutus.Contract.Effects                (AwaitSlot, ExposeEndpoint, Plutus, PlutusEffects,
-                                                                  WatchAddress, WriteTx, runEffects)
+import           Language.Plutus.Contract.Effects                (AwaitSlot, ContractActions, ContractEffects,
+                                                                  ExposeEndpoint, WatchAddress, WriteTx, runEffects)
 import qualified Language.Plutus.Contract.Effects.AwaitSlot      as Slot
 import qualified Language.Plutus.Contract.Effects.ExposeEndpoint as Endpoint
 import qualified Language.Plutus.Contract.Effects.WatchAddress   as Addr
@@ -120,8 +120,8 @@ fundsAtAddressGt addr' vl = loopM go mempty where
 --   on the given 'Event' (or 'Nothing'). If it fails, return a description
 --   of the data that is needed (the 'Hooks'). If it succeeds, return the
 --   result. See note [Contract Effects]
-convertStep :: Eff PlutusEffects a -> Step Event Hooks a
+convertStep :: Eff ContractEffects a -> Step Event Hooks a
 convertStep st = Step $ \i -> first hooks . run . runError . runReader i . runEffects $ st
 
-convertContract :: Resumable (Eff PlutusEffects) a -> Resumable (Step Event Hooks) a
+convertContract :: Resumable (Eff ContractEffects) a -> Resumable (Step Event Hooks) a
 convertContract = mapStep convertStep

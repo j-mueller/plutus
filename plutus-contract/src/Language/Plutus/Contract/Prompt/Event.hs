@@ -14,6 +14,7 @@ module Language.Plutus.Contract.Prompt.Event(
     , ledgerUpdate
     , slotChange
     , endpointEvent
+    , txSubmissionEvent
     ) where
 
 import qualified Data.Aeson        as Aeson
@@ -64,4 +65,9 @@ slotChange = \case
 endpointEvent :: Event -> Maybe (String, Aeson.Value)
 endpointEvent = \case
     Endpoint s v -> Just (s, v)
+    _ -> Nothing
+
+txSubmissionEvent :: Event -> Maybe ()
+txSubmissionEvent = \case
+    TxSubmission -> Just ()
     _ -> Nothing

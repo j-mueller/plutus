@@ -4,8 +4,8 @@
 {-# LANGUAGE TypeOperators    #-}
 module Language.Plutus.Contract.Effects(
     module X
-    , Plutus
-    , PlutusEffects
+    , ContractActions
+    , ContractEffects
     , runEffects
     ) where
 
@@ -27,9 +27,9 @@ We model effects of Plutus contracts using 'Control.Eff'. The ones
 exported here are the basic effects that we need for our use cases (wait for a
 slot, expose an endpoint, watch an address on the blockchain, and submit
 transactions). To make these easier to use we export them as the
-'Plutus' constraint.
+'ContractActions' constraint.
 
-To our users, the signatures of our contracts look like '(Plutus r) =>
+To our users, the signatures of our contracts look like '(ContractActions r) =>
 Contract r ()'.
 
 Internally, all effects are interpreted as request-response pairs. The four
@@ -42,19 +42,19 @@ in '[Reader (Maybe Event), Exc (Hook ())]]' -- effectively 'Maybe Event -> Eithe
 -}
 
 -- | Basic interactions with the app platform (write transactions, wait for
---   slot changes, watch addresses, and expose endpoints).
-type Plutus r = [WriteTx, AwaitSlot, WatchAddress, ExposeEndpoint] <:: r
+--   slot changes, watch addresses, expose endpoints).
+type ContractActions r = [WriteTx, AwaitSlot, WatchAddress, ExposeEndpoint] <:: r
 
 -- | List of effects that this interpreter ('Maybe Event -> Either Hooks a')
 --   supports.
-type PlutusEffects =
+type ContractEffects =
     WriteTx ': AwaitSlot ': WatchAddress ': ExposeEndpoint ': PromptEffects
 
 type PromptEffects = '[Reader (Maybe Event), Exc (Hook ())]
 
 -- | Interpret the 'PlutusEffects' in 'Reader' and 'Exc'. See note [Contract
 --   Effects]
-runEffects :: Eff PlutusEffects a -> Eff PromptEffects a
+runEffects :: Eff ContractEffects a -> Eff PromptEffects a
 runEffects =
         runExposeEndpoint
         . runWatchAddress

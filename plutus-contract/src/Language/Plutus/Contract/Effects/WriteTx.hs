@@ -35,7 +35,7 @@ runWriteTx = fix (handle_relay pure)
 
 promptTx :: (Member (Reader (Maybe Event)) r, Member (Exc (Hook ())) r) => UnbalancedTx -> Eff r ()
 promptTx t = do
-  sl <- ask @(Maybe Event)
+  sl <- reader (>>= Event.txSubmissionEvent)
   case sl of
-    Just TxSubmission -> pure ()
-    _                 -> throwError @(Hook ()) (Hooks.txHook t)
+    Just () -> pure ()
+    _       -> throwError @(Hook ()) (Hooks.txHook t)

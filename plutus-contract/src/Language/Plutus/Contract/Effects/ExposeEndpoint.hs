@@ -41,9 +41,9 @@ instance (Member (Reader (Maybe Event)) r, Member (Exc (Hook ())) r) => Handle E
 
 promptEndpoint :: (FromJSON a, Member (Reader (Maybe Event)) r, Member (Exc (Hook ())) r) => String -> Eff r a
 promptEndpoint ep = do
-  sl <- ask @(Maybe Event)
+  sl <- reader (>>= Event.endpointEvent)
   case sl of
-    Just (Endpoint ep' vl)
+    Just (ep', vl)
       | ep' == ep ->
         case Aeson.fromJSON vl of
                     Aeson.Success r -> pure r

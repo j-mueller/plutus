@@ -32,7 +32,7 @@ import qualified Test.Tasty.HUnit                      as HUnit
 import           Test.Tasty.Providers                  (TestTree)
 
 import           Language.Plutus.Contract              (Contract, convertContract)
-import           Language.Plutus.Contract.Effects      (Plutus, PlutusEffects)
+import           Language.Plutus.Contract.Effects      (ContractEffects)
 import           Language.Plutus.Contract.Prompt.Event (Event)
 import           Language.Plutus.Contract.Prompt.Hooks (Hooks (..))
 import qualified Language.Plutus.Contract.Prompt.Hooks as Hooks
@@ -70,13 +70,13 @@ not p a = Predicate $ \b -> Prelude.not (getPredicate (p a) b)
 
 checkPredicate
     :: String
-    -> Contract PlutusEffects a
+    -> Contract ContractEffects a
     -> TracePredicate a
     -> ContractTrace EmulatorAction a ()
     -> TestTree
 checkPredicate nm con predicate action =
     HUnit.testCase nm $
-        case runTrace con action of -- action of
+        case runTrace con action of
             (Left err, _) ->
                 HUnit.assertFailure $ "EmulatorAction failed. " ++ show err
             (Right (_, st), ms) ->

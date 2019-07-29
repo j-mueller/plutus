@@ -43,7 +43,7 @@ import qualified Data.Sequence                         as Seq
 import qualified Data.Set                              as Set
 
 import           Language.Plutus.Contract              (Contract, convertContract)
-import           Language.Plutus.Contract.Effects      (PlutusEffects)
+import           Language.Plutus.Contract.Effects      (ContractEffects)
 import           Language.Plutus.Contract.Prompt.Event (Event)
 import qualified Language.Plutus.Contract.Prompt.Event as Event
 import           Language.Plutus.Contract.Prompt.Hooks (Hooks (..))
@@ -68,13 +68,13 @@ data ContractTraceState a =
     ContractTraceState
         { _ctsEvents   :: Map Wallet (Seq Event)
         -- ^ Events that were fed to the contract
-        , _ctsContract :: Contract PlutusEffects a
+        , _ctsContract :: Contract ContractEffects a
         -- ^ Current state of the contract
         }
 
 makeLenses ''ContractTraceState
 
-initState :: [Wallet] -> Contract PlutusEffects a -> ContractTraceState a
+initState :: [Wallet] -> Contract ContractEffects a -> ContractTraceState a
 initState wllts = ContractTraceState wallets where
     wallets = Map.fromList $ fmap (,mempty) wllts
 
@@ -110,7 +110,7 @@ addEventAll e = traverse_ (flip addEvent e) allWallets
 -- | Run a trace in the emulator and return the
 --   final events for each wallet.
 execTrace
-    :: Contract PlutusEffects a
+    :: Contract ContractEffects a
     -> ContractTrace EmulatorAction a ()
     -> Map Wallet [Event]
 execTrace con action =
@@ -121,7 +121,7 @@ execTrace con action =
 -- | Run a trace in the emulator and return the final state alongside the
 --   result
 runTrace
-    :: Contract PlutusEffects a
+    :: Contract ContractEffects a
     -> ContractTrace EmulatorAction a ()
     -> (Either AssertionError ((), ContractTraceState a), EmulatorState)
 runTrace con action =

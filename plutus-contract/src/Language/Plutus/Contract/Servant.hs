@@ -25,7 +25,7 @@ import           Servant                               ((:<|>) ((:<|>)), (:>), G
 import           Servant.Server                        (Application, Server, serve)
 
 import           Language.Plutus.Contract
-import           Language.Plutus.Contract.Effects      (PlutusEffects)
+import           Language.Plutus.Contract.Effects      (ContractEffects)
 import           Language.Plutus.Contract.Prompt.Event (Event)
 import           Language.Plutus.Contract.Prompt.Hooks (Hooks)
 import           Language.Plutus.Contract.Record
@@ -55,7 +55,7 @@ type ContractAPI =
   :<|> "run" :> ReqBody '[JSON] Request :> Post '[JSON] Response
 
 -- | Serve a 'PlutusContract' via the contract API.
-contractServer :: Contract PlutusEffects () -> Server ContractAPI
+contractServer :: Contract ContractEffects () -> Server ContractAPI
 contractServer con = initialise :<|> run where
     initialise = pure (initialResponse con)
     run req =
@@ -66,15 +66,15 @@ contractServer con = initialise :<|> run where
             Right r -> pure r
 
 -- | A servant 'Application' that serves a Plutus contract
-contractApp :: Contract PlutusEffects () -> Application
+contractApp :: Contract ContractEffects () -> Application
 contractApp = serve (Proxy @ContractAPI) . contractServer
 
-runUpdate :: Contract PlutusEffects () -> Request -> Either String Response
+runUpdate :: Contract ContractEffects () -> Request -> Either String Response
 runUpdate con (Request o e) =
     (\(r, h) -> Response (State r) h)
     <$> State.insertAndUpdate (convertContract con) (record o) e
 
-initialResponse :: Contract PlutusEffects () -> Response
+initialResponse :: Contract ContractEffects () -> Response
 initialResponse =
     uncurry Response
     . first (State . fmap fst)
