@@ -37,8 +37,9 @@ import           Language.Plutus.Contract.Prompt.Event (Event)
 import           Language.Plutus.Contract.Prompt.Hooks (Hooks (..))
 import qualified Language.Plutus.Contract.Prompt.Hooks as Hooks
 import           Language.Plutus.Contract.Record       (Record)
+import           Language.Plutus.Contract.Resumable    (ResumableError)
 import qualified Language.Plutus.Contract.Resumable    as State
-import           Language.Plutus.Contract.Transaction  (UnbalancedTx)
+import           Language.Plutus.Contract.Tx           (UnbalancedTx)
 
 import qualified Ledger.Ada                            as Ada
 import qualified Ledger.AddressMap                     as AM
@@ -59,7 +60,7 @@ hooks w rs =
         con  = rs ^. ctrTraceState . ctsContract . to convertContract
     in either (const mempty) id (State.execResumable evts con)
 
-record :: Wallet -> ContractTraceResult a -> Either String (Record Event)
+record :: Wallet -> ContractTraceResult a -> Either ResumableError (Record Event)
 record w rs =
     let evts = rs ^. ctrTraceState . ctsEvents . at w . folded . to toList
         con  = rs ^. ctrTraceState . ctsContract . to convertContract

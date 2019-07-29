@@ -10,7 +10,7 @@
 --   balancing and signing.
 module Language.Plutus.Contract.Effects.WriteTx where
 
-import           Language.Plutus.Contract.Transaction
+import           Language.Plutus.Contract.Tx
 
 import           Control.Eff
 import           Control.Eff.Exception

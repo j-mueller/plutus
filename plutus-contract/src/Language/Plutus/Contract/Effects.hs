@@ -50,7 +50,7 @@ type ContractActions r = [WriteTx, AwaitSlot, WatchAddress, ExposeEndpoint] <:: 
 type ContractEffects r =
     WriteTx ': AwaitSlot ': WatchAddress ': ExposeEndpoint ': PromptEffects r
 
-type PromptEffects r = Reader (Maybe Event) ': Exc (Hook ()) ': r
+type PromptEffects r = Reader (Maybe Event) ': Exc (Hook ()) ': Exc String ': r
 
 -- | Interpret the 'PlutusEffects' in 'Reader' and 'Exc'. See note [Contract
 --   Effects]

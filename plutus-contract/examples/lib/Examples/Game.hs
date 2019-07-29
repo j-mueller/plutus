@@ -28,7 +28,7 @@ import           GHC.Generics                                  (Generic)
 
 import           Language.Plutus.Contract
 import           Language.Plutus.Contract.Emulator
-import           Language.Plutus.Contract.Transaction          (unbalancedTx)
+import           Language.Plutus.Contract.Tx                   (unbalancedTx)
 import           Language.PlutusTx.Coordination.Contracts.Game (gameAddress, gameDataScript, gameRedeemerScript,
                                                                 gameValidator)
 import           Wallet.Emulator                               (MonadEmulator)

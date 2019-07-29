@@ -17,7 +17,7 @@ import           Control.Lens                                          ((&), (.~
 import           Control.Monad                                         (void)
 
 import           Language.Plutus.Contract
-import           Language.Plutus.Contract.Transaction                  (collectFromScript, collectFromScriptFilter,
+import           Language.Plutus.Contract.Tx                           (collectFromScript, collectFromScriptFilter,
                                                                         inputs, payToScript, validityRange)
 import           Language.PlutusTx.Coordination.Contracts.CrowdFunding (Campaign (..))
 import qualified Language.PlutusTx.Coordination.Contracts.CrowdFunding as CF
