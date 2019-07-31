@@ -53681,12 +53681,14 @@ license = stdenv.lib.licenses.asl20;
 , containers
 , doctest
 , extensible-effects
+, hedgehog
 , language-plutus-core
 , lens
 , mmorph
 , monad-control
 , mtl
 , plutus-emulator
+, plutus-tx
 , plutus-wallet-api
 , prettyprinter
 , profunctors
@@ -53694,6 +53696,8 @@ license = stdenv.lib.licenses.asl20;
 , servant
 , servant-server
 , stdenv
+, tasty
+, tasty-hunit
 , template-haskell
 , text
 , transformers
@@ -53722,99 +53726,36 @@ profunctors
 semigroupoids
 servant
 servant-server
+tasty
+tasty-hunit
 text
 transformers
 transformers-base
 warp
 ];
 testHaskellDepends = [
+aeson
 base
 bytestring
 containers
+extensible-effects
+hedgehog
 language-plutus-core
+lens
+mtl
+plutus-emulator
+plutus-tx
 plutus-wallet-api
 prettyprinter
+tasty
+tasty-hunit
 template-haskell
+text
+transformers
 ];
 testToolDepends = [
 doctest
 unlit
-];
-doHaddock = false;
-homepage = "https://github.com/iohk/plutus#readme";
-license = stdenv.lib.licenses.asl20;
-
-}) {};
-"plutus-contract-test" = callPackage
-({
-  mkDerivation
-, aeson
-, base
-, bytestring
-, containers
-, extensible-effects
-, hedgehog
-, lens
-, mmorph
-, monad-control
-, mtl
-, plutus-contract
-, plutus-emulator
-, plutus-tx
-, plutus-wallet-api
-, profunctors
-, semigroupoids
-, stdenv
-, tasty
-, tasty-hunit
-, text
-, transformers
-, transformers-base
-, warp
-}:
-mkDerivation {
-
-pname = "plutus-contract-test";
-version = "0.1.0.0";
-src = .././plutus-contract-test;
-libraryHaskellDepends = [
-aeson
-base
-bytestring
-containers
-extensible-effects
-lens
-mmorph
-monad-control
-mtl
-plutus-contract
-plutus-emulator
-plutus-wallet-api
-profunctors
-semigroupoids
-tasty
-tasty-hunit
-text
-transformers
-transformers-base
-warp
-];
-testHaskellDepends = [
-aeson
-base
-containers
-extensible-effects
-hedgehog
-lens
-mtl
-plutus-contract
-plutus-emulator
-plutus-tx
-plutus-wallet-api
-tasty
-tasty-hunit
-text
-transformers
 ];
 doHaddock = false;
 homepage = "https://github.com/iohk/plutus#readme";
@@ -54436,7 +54377,6 @@ license = stdenv.lib.licenses.asl20;
 , lens
 , mtl
 , plutus-contract
-, plutus-contract-test
 , plutus-emulator
 , plutus-tx
 , plutus-wallet-api
@@ -54481,7 +54421,6 @@ hedgehog
 lens
 mtl
 plutus-contract
-plutus-contract-test
 plutus-emulator
 plutus-tx
 plutus-wallet-api

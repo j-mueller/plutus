@@ -48,6 +48,7 @@ library
         Language.Plutus.Contract.Effects.ExposeEndpoint
         Language.Plutus.Contract.Effects.WatchAddress
         Language.Plutus.Contract.Effects.WriteTx
+        Language.Plutus.Contract.Test
         Language.Plutus.Contract.Trace
         Language.Plutus.Contract.Prompt.Event
         Language.Plutus.Contract.Prompt.Hooks
@@ -78,7 +79,9 @@ library
         extensible-effects -any,
         transformers-base -any,
         monad-control -any,
-        mmorph -any
+        mmorph -any,
+        tasty -any,
+        tasty-hunit -any
 
 test-suite contract-doctests
     type: exitcode-stdio-1.0
@@ -98,3 +101,28 @@ test-suite contract-doctests
       plutus-wallet-api -any,
       prettyprinter -any,
       containers -any
+
+test-suite plutus-contract-test
+    import: lang
+    type: exitcode-stdio-1.0
+    main-is: Spec.hs
+    hs-source-dirs: test
+    other-modules:
+        Spec.Contract
+        Spec.State
+    build-depends:
+        base >=4.9 && <5,
+        containers -any,
+        hedgehog -any,
+        tasty -any,
+        tasty-hunit -any,
+        text -any,
+        mtl -any,
+        aeson -any,
+        lens -any,
+        transformers -any,
+        extensible-effects -any,
+        plutus-emulator -any,
+        plutus-contract -any,
+        plutus-wallet-api -any,
+        plutus-tx -any

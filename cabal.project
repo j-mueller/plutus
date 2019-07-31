@@ -14,7 +14,6 @@ packages: language-plutus-core
           playground-common
           marlowe-playground-server
           plutus-contract
-          plutus-contract-test
           deployment-server
 optimization: 2
 constraints: language-plutus-core +development

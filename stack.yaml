@@ -16,7 +16,6 @@ packages:
 - plutus-tutorial
 - plutus-book
 - plutus-contract
-- plutus-contract-test
 - plutus-emulator
 - deployment-server
 

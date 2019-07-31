@@ -89,7 +89,6 @@ test-suite plutus-use-cases-test
     build-depends:
         plutus-tx -any,
         plutus-contract -any,
-        plutus-contract-test -any,
         plutus-wallet-api -any,
         plutus-use-cases -any,
         plutus-emulator -any
