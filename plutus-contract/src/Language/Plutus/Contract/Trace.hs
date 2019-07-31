@@ -3,9 +3,10 @@
 {-# LANGUAGE KindSignatures   #-}
 {-# LANGUAGE TemplateHaskell  #-}
 {-# LANGUAGE TupleSections    #-}
--- | Some conveniences for running Plutus contracts
---   in the emulator.
-module Language.Plutus.Contract.Emulator(
+-- | A trace is a sequence of actions by simulated wallets that can be run
+--   on the mockchain. This module contains the functions needed to build
+--   traces.
+module Language.Plutus.Contract.Trace(
     ContractTraceState
     , ContractTrace
     , EmulatorAction
@@ -25,9 +26,13 @@ module Language.Plutus.Contract.Emulator(
     , addEventAll
     , notifyInterestingAddresses
     -- * Running 'MonadEmulator' actions
+    , MonadEmulator
     , InitialDistribution
     , withInitialDistribution
     , defaultDist
+    -- * Wallets
+    , EM.Wallet(..)
+    , EM.walletPubKey
     ) where
 
 import           Control.Lens
