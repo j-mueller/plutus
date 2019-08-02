@@ -19,11 +19,12 @@ module Ledger.AddressMap(
     updateAddresses,
     restrict,
     addressesTouched,
-    outRefMap
+    outRefMap,
+    spendScriptOutputs
     ) where
 
 import           Codec.Serialise.Class (Serialise)
-import           Control.Lens          (At (..), Index, IxValue, Ixed (..), lens, view, (&), (.~), (^.))
+import           Control.Lens          (At (..), Index, IxValue, Ixed (..), lens, view, (&), (.~), (^.), to, folded)
 import           Data.Aeson            (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson            as JSON
 import qualified Data.Aeson.Extras     as JSON
@@ -37,8 +38,9 @@ import qualified Data.Set              as Set
 import           GHC.Generics          (Generic)
 
 import           Ledger                (Address, Tx (..), TxInOf (..), TxOut, TxOutOf (..), TxOutRef, TxOutRefOf (..),
-                                        Value, hashTx)
+                                        Value, ValidatorScript, RedeemerScript, TxIn)
 import           Ledger.Index          (UtxoIndex)
+import qualified Ledger
 import qualified Ledger.Index          as Index
 import           Ledger.Tx             (outAddress)
 
@@ -107,7 +109,7 @@ fromTxOutputs :: Tx -> AddressMap
 fromTxOutputs tx =
     AddressMap . Map.fromListWith Map.union . fmap mkUtxo . zip [0..] . txOutputs $ tx where
     mkUtxo (i, t) = (txOutAddress t, Map.singleton (TxOutRefOf h i) t)
-    h = hashTx tx
+    h = Ledger.hashTx tx
 
 -- | Take all unspent outputs from the 'UtxoIndex' and put them in
 --   an 'AddressMap'.
@@ -171,3 +173,15 @@ addressesTouched :: AddressMap -> Tx -> Set.Set Address
 addressesTouched utxo t = ins <> outs where
     ins = Map.keysSet (inputs (knownAddresses utxo) t)
     outs = Map.keysSet (getAddressMap (fromTxOutputs t))
+
+-- | Given a validator script and a redeemer script, create one
+--   'TxIn' transaction input for each output at the script address
+--   in the 'AddressMap'.
+spendScriptOutputs ::
+       ValidatorScript
+    -> RedeemerScript
+    -> AddressMap
+    -> [TxIn]
+spendScriptOutputs validator redeemer am = fmap mkTxIn outRefs where
+    mkTxIn r = Ledger.scriptTxIn r validator redeemer
+    outRefs = am ^. at (Ledger.scriptAddress validator) . folded . to Map.keys
