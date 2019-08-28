@@ -29,8 +29,11 @@ type SlotPrompt ρ σ =
 --   current slot.
 awaitSlot :: Slot -> Contract SlotResp SlotReq Slot
 awaitSlot sl =
-  let s = Just $ Min sl in
-  mkRequest s $ \sl' -> if sl' >= sl then Just sl' else Nothing
+  let s = Just $ Min sl
+      check :: Slot -> Maybe Slot
+      check sl' = if sl' >= sl then Just sl' else Nothing
+  in
+  requestMaybe s check
 
 event
     :: forall ρ.

@@ -23,7 +23,7 @@ import qualified Ledger.Value                               as V
 
 import           Language.Plutus.Contract.Effects.AwaitSlot
 import           Language.Plutus.Contract.Events            (Event (..), Hooks (..))
-import           Language.Plutus.Contract.Request           (Contract, mkRequest)
+import           Language.Plutus.Contract.Request           (Contract, requestMaybe)
 
 type AddrReq = "interesting addresses" .== Set Address
 type AddrResp = "address change" .== (Address, Tx)
@@ -34,8 +34,11 @@ type AddressPrompt ρ σ =
 -- | Wait for the next transaction that changes an address.
 nextTransactionAt :: Address -> Contract AddrResp AddrReq Tx
 nextTransactionAt addr =
-    let s = Set.singleton addr in
-    mkRequest s $ \(addr', tx) -> if addr == addr' then Just tx else Nothing
+    let s = Set.singleton addr
+        check :: (Address, Tx) -> Maybe Tx
+        check (addr', tx) = if addr == addr' then Just tx else Nothing
+    in
+    requestMaybe s check
 
 -- | Watch an address until the given slot, then return all known outputs
 --   at the address.

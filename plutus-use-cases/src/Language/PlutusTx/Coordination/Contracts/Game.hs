@@ -52,6 +52,10 @@ import qualified Prelude
 import qualified Data.ByteString.Lazy.Char8     as C
 import Language.PlutusTx.Coordination.Contracts.Game.Types
 
+newtype HashedString = HashedString ByteString
+
+PlutusTx.makeLift ''HashedString
+
 correctGuess :: HashedString -> ClearString -> Bool
 correctGuess (HashedString actual) (ClearString guess') = actual == sha2_256 guess'
 

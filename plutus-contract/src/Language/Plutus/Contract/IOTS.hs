@@ -34,8 +34,7 @@ import           GHC.TypeLits          (symbolVal)
 import           IOTS                  (IotsType (..), export)
 import           Ledger.Crypto         (Signature)
 import           Ledger.Scripts        (DataScript, RedeemerScript, ValidatorScript)
-import           Ledger.Slot           (Slot)
-import           Ledger.Tx             (Address, Tx, TxIn, TxInType, TxOut, TxOutOf, TxOutRefOf, TxOutType)
+import           Ledger.Tx             (Address, Tx, TxIn, TxInType, TxOutOf, TxOutRefOf, TxOutType)
 
 
 mksConst :: forall l a. (KnownSymbol l, IotsType a) => Label l -> (Const (Seq Text)) a

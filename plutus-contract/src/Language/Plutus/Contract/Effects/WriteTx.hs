@@ -21,7 +21,7 @@ type TxPrompt ρ σ =
 
 --  | Send an unbalanced transaction to the wallet.
 writeTx :: UnbalancedTx -> Contract TxResp TxReq ()
-writeTx t = mkRequest [t] Just
+writeTx t = request [t]
 
 event
   :: forall ρ. (HasType "tx" () ρ, AllUniqueLabels ρ)

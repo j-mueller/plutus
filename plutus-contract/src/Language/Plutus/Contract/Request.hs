@@ -34,7 +34,7 @@ import qualified Prelude
 --
 type Contract (ρ :: Row *) (σ :: Row *) a = Resumable (Step (Maybe (Event ρ)) (Hooks σ)) a
 
-mkRequest
+requestMaybe
   :: forall sReq sResp req resp a.
      ( KnownSymbol sReq
      , KnownSymbol sResp
@@ -42,11 +42,24 @@ mkRequest
     => req
     -> (resp -> Maybe a)
     -> Contract (sResp .== resp) (sReq .== req) a
-mkRequest out check = CStep (Step go) where
+requestMaybe out check = do
+  rsp <- request out
+  case check rsp of
+    Nothing -> requestMaybe out check
+    Just a  -> pure a
+
+request
+  :: forall sReq sResp req resp.
+     ( KnownSymbol sReq
+     , KnownSymbol sResp
+     )
+    => req
+    -> Contract (sResp .== resp) (sReq .== req) resp
+request out = CStep (Step go) where
   upd = Left $ Hooks $ (Label @sReq) .==  out
   go Nothing = upd
   go (Just (Event rho)) = case trial rho (Label @sResp) of
-    Left resp -> maybe upd Right (check resp)
+    Left resp -> Right resp
     _         -> upd
 
 type Join ρ₁ σ₁ ρ₂ σ₂ =
