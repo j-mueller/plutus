@@ -17,6 +17,7 @@ module Language.Plutus.Contract.Request where
 
 import qualified Control.Applicative                as Applicative
 import qualified Data.Aeson                         as Aeson
+import           Data.Constraint
 import           Data.Row
 import           Data.Row.Internal                  (Subset, Unconstrained1)
 import qualified Data.Row.Records                   as Records
@@ -77,6 +78,28 @@ type Join ρ₁ σ₁ ρ₂ σ₂ =
   , Forall σ₂ Unconstrained1
   , Subset ρ₁ (ρ₁ .\/ ρ₂)
   , Subset ρ₂ (ρ₁ .\/ ρ₂))
+
+type Forall2 c σ₁ σ₂ = Forall (σ₁ .\/ σ₂) c
+
+distForall :: forall c ρ σ₁ σ₂. Forall (σ₁ .\/ σ₂) c :- (Forall σ₁ c, Forall σ₂ c)
+distForall = Sub $ unDistForall $ bimetamorph @_ @σ₁ @σ₂ @(Forall2 c) @(DistForall c)
+-- f = ( .\/ )
+-- g = DistForall c f
+
+-- class BiForall (r1 :: Row k1) (r2 :: Row k2) (c :: k1 -> k2 -> Constraint)
+-- forall (f :: Row k1 -> Row k2 -> *) (g :: Row k1 -> Row k2 -> *)
+--                         (h :: k1 -> k2 -> *).
+--                  Proxy h
+--               -> (f Empty Empty -> g Empty Empty)
+--               -> (forall ℓ τ1 τ2 ρ1 ρ2. (KnownSymbol ℓ, c τ1 τ2)
+--                   => Label ℓ
+--                   -> f ('R (ℓ :-> τ1 ': ρ1)) ('R (ℓ :-> τ2 ': ρ2))
+--                   -> (h τ1 τ2, f ('R ρ1) ('R ρ2)))
+--               -> (forall ℓ τ1 τ2 ρ1 ρ2. (KnownSymbol ℓ, c τ1 τ2)
+--                   => Label ℓ -> h τ1 τ2 -> g ('R ρ1) ('R ρ2) -> g ('R (ℓ :-> τ1 ': ρ1)) ('R (ℓ :-> τ2 ': ρ2)))
+--               -> f r1 r2 -> g r1 r2
+
+newtype DistForall c (σ₁ :: Row k) (σ₂ :: Row k) = DistForall { unDistForall :: Dict (Forall σ₁ c, Forall σ₂ c) }
 
 joinBoth :: forall ρ₁ σ₁ ρ₂ σ₂ a b. Join ρ₁ σ₁ ρ₂ σ₂ => Contract ρ₁ σ₁ a -> Contract ρ₂ σ₂ b -> (Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) a, Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) b)
 joinBoth l r = (mapStep (mapO s1 . mapI g1) l, mapStep (mapO s2 . mapI g2) r) where
