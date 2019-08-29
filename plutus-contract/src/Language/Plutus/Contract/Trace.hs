@@ -53,7 +53,6 @@ import qualified Data.Map                                        as Map
 import           Data.Row
 import           Data.Sequence                                   (Seq)
 import qualified Data.Sequence                                   as Seq
-import           Data.Set                                        (Set)
 import qualified Data.Set                                        as Set
 
 import           Language.Plutus.Contract                        (AddressPrompt, Contract, TxPrompt)
@@ -81,15 +80,15 @@ import qualified Wallet.Emulator                                 as EM
 
 type InitialDistribution = [(Wallet, Ada)]
 
-type ContractTrace ρ σ m a = StateT (ContractTraceState ρ σ a) m
+type ContractTrace i o m a = StateT (ContractTraceState i o a) m
 
-data ContractTraceState ρ σ a =
+data ContractTraceState i o a =
     ContractTraceState
-        { _ctsEvents   :: Map Wallet (Seq (Event ρ))
+        { _ctsEvents   :: Map Wallet (Seq (Event i))
         -- ^ The state of the contract instance (per wallet). To get
         --   the 'Record' of a sequence of events, use
         --   'Language.Plutus.Contract.Resumable.runResumable'.
-        , _ctsContract :: Contract ρ σ a
+        , _ctsContract :: Contract i o a
         -- ^ Current state of the contract
         }
 
@@ -97,34 +96,34 @@ makeLenses ''ContractTraceState
 
 initState
     :: [Wallet]
-    -> Contract ρ σ a
-    -> ContractTraceState ρ σ a
+    -> Contract i o a
+    -> ContractTraceState i o a
 initState wllts = ContractTraceState wallets where
     wallets = Map.fromList $ fmap (,mempty) wllts
 
 -- | Add an event to the wallet's trace
-addEvent :: MonadState (ContractTraceState ρ σ a) m => Wallet -> Event ρ -> m ()
+addEvent :: MonadState (ContractTraceState i o a) m => Wallet -> Event i -> m ()
 addEvent w e = ctsEvents %= Map.alter go w where
     go = Just . maybe (Seq.singleton e) (|> e)
 
 -- | Get the hooks that a contract is currently waiting for
 getHooks
     :: ( Monad m
-       , Forall σ Monoid
-       , Forall σ Semigroup
-       , AllUniqueLabels σ
+       , Forall o Monoid
+       , Forall o Semigroup
+       , AllUniqueLabels o
        )
-    => Wallet -> ContractTrace ρ σ m a (Either ResumableError (Hooks σ))
+    => Wallet -> ContractTrace i o m a (Either ResumableError (Hooks o))
 getHooks w = do
     contract <- use ctsContract
     evts <- gets (foldMap toList . view (at w) . _ctsEvents)
     return $ State.execResumable evts contract
 
-data ContractTraceResult ρ σ a =
+data ContractTraceResult i o a =
     ContractTraceResult
         { _ctrEmulatorState :: EmulatorState
         -- ^ The emulator state at the end of the test
-        , _ctrTraceState    :: ContractTraceState ρ σ a
+        , _ctrTraceState    :: ContractTraceState i o a
         -- ^ Final 'ContractTraceState'
         }
 
@@ -134,15 +133,15 @@ defaultDist :: InitialDistribution
 defaultDist = [(EM.Wallet x, 100) | x <- [1..10]]
 
 -- | Add an event to every wallet's trace
-addEventAll :: Monad m => Event ρ -> ContractTrace ρ σ m a ()
+addEventAll :: Monad m => Event i -> ContractTrace i o m a ()
 addEventAll e = traverse_ (flip addEvent e) allWallets
 
 -- | Run a trace in the emulator and return the
 --   final events for each wallet.
 execTrace
-    :: Contract ρ σ a
-    -> ContractTrace ρ σ EmulatorAction a ()
-    -> Map Wallet [Event ρ]
+    :: Contract i o a
+    -> ContractTrace i o EmulatorAction a ()
+    -> Map Wallet [Event i]
 execTrace con action =
     let (e, _) = runTrace con action
     in
@@ -151,9 +150,9 @@ execTrace con action =
 -- | Run a trace in the emulator and return the final state alongside the
 --   result
 runTrace
-    :: Contract ρ σ a
-    -> ContractTrace ρ σ EmulatorAction a ()
-    -> (Either AssertionError ((), ContractTraceState ρ σ a), EmulatorState)
+    :: Contract i o a
+    -> ContractTrace i o EmulatorAction a ()
+    -> (Either AssertionError ((), ContractTraceState i o a), EmulatorState)
 runTrace con action =
     withInitialDistribution defaultDist (runStateT action (initState allWallets con))
 
@@ -184,27 +183,27 @@ runWallet w t = do
 
 -- | Call the endpoint on the contract
 callEndpoint
-    :: forall s a b ρ σ m.
+    :: forall s a b i o m.
        ( MonadEmulator m
        , KnownSymbol s
-       , HasType s a ρ
-       , AllUniqueLabels ρ)
+       , HasType s a i
+       , AllUniqueLabels i)
     => Wallet
     -> a
-    -> ContractTrace ρ σ m b ()
+    -> ContractTrace i o m b ()
 callEndpoint w = addEvent w . Endpoint.event @s
 
 -- | Balance, sign and submit the unbalanced transaction in the context
 --   of the wallet
 submitUnbalancedTx
-    :: forall a ρ σ m.
+    :: forall a i o m.
       ( MonadEmulator m
-      , HasType "tx" () ρ
-      , AllUniqueLabels ρ
+      , HasType "tx" () i
+      , AllUniqueLabels i
       )
     => Wallet
     -> UnbalancedTx
-    -> ContractTrace ρ σ m a [Tx]
+    -> ContractTrace i o m a [Tx]
 submitUnbalancedTx wllt tx =
     addEvent wllt WriteTx.event >> lift (runWallet wllt (Wallet.handleTx tx))
 
@@ -212,11 +211,10 @@ submitUnbalancedTx wllt tx =
 --   the traces of all wallets.
 addTxEvent
     :: ( MonadEmulator m
-       , HasType "address change" (Address, Tx) ρ
-       , AllUniqueLabels ρ
+       , AddressPrompt i o
        )
     => Tx
-    -> ContractTrace ρ σ m a ()
+    -> ContractTrace i o m a ()
 addTxEvent tx = do
     idx <- lift (gets (AM.fromUtxoIndex . view EM.index))
     let event = fmap snd $ Map.toList $ WatchAddress.events idx tx
@@ -226,25 +224,22 @@ addTxEvent tx = do
 --   would like to submit to the blockchain.
 unbalancedTransactions
     :: ( MonadEmulator m
-       , HasType "tx" [UnbalancedTx] σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
-       , AllUniqueLabels σ
+       , HasType "tx" [UnbalancedTx] o
+       , Forall o Monoid
+       , Forall o Semigroup
+       , AllUniqueLabels o
        )
     => Wallet
-    -> ContractTrace ρ σ m a [UnbalancedTx]
+    -> ContractTrace i o m a [UnbalancedTx]
 unbalancedTransactions w = WriteTx.transactions . either (const mempty) id <$> getHooks w
 
 -- | Get the addresses that are of interest to the wallet's contract instance
 interestingAddresses
     :: ( MonadEmulator m
-       , HasType "interesting addresses" (Set Address) σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
-       , AllUniqueLabels σ
+       , AddressPrompt i o
        )
     => Wallet
-    -> ContractTrace ρ σ m a [Address]
+    -> ContractTrace i o m a [Address]
 interestingAddresses =
     fmap (Set.toList . WatchAddress.addresses . either (const mempty) id) . getHooks
 
@@ -252,11 +247,11 @@ interestingAddresses =
 --   contract of the current slot
 notifySlot
     :: ( MonadEmulator m
-       , HasType "slot" Slot ρ
-       , AllUniqueLabels ρ
+       , HasType "slot" Slot i
+       , AllUniqueLabels i
        )
     => Wallet
-    -> ContractTrace ρ σ m a ()
+    -> ContractTrace i o m a ()
 notifySlot w = do
     st <- lift $ gets (view (EM.walletStates . at w))
     addEvent w $ AwaitSlot.event (maybe 0 (view EM.walletSlot) st)
@@ -265,7 +260,7 @@ notifySlot w = do
 addBlocks
     :: ( MonadEmulator m )
     => Integer
-    -> ContractTrace ρ σ m a ()
+    -> ContractTrace i o m a ()
 addBlocks i =
     void $ lift $ EM.processEmulated (EM.addBlocksAndNotify allWallets i)
 
@@ -273,15 +268,11 @@ addBlocks i =
 --   and inform all wallets about new transactions
 handleBlockchainEvents
     :: ( MonadEmulator m
-       , AddressPrompt ρ σ
-       , TxPrompt ρ σ
-       , AllUniqueLabels σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
-       , AllUniqueLabels ρ
+       , AddressPrompt i o
+       , TxPrompt i o
        )
     => Wallet
-    -> ContractTrace ρ σ m a ()
+    -> ContractTrace i o m a ()
 handleBlockchainEvents wllt = do
     utxs <- unbalancedTransactions wllt
     traverse_ (submitUnbalancedTx wllt >=> traverse_ addTxEvent) utxs
@@ -289,13 +280,10 @@ handleBlockchainEvents wllt = do
 -- | Notify the wallet of all interesting addresses
 notifyInterestingAddresses
     :: ( MonadEmulator m
-       , AddressPrompt ρ σ
-       , AllUniqueLabels σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
+       , AddressPrompt i o
        )
     => Wallet
-    -> ContractTrace ρ σ m a ()
+    -> ContractTrace i o m a ()
 notifyInterestingAddresses wllt =
     void $ interestingAddresses wllt >>= lift . runWallet wllt . traverse_ Wallet.startWatching
 

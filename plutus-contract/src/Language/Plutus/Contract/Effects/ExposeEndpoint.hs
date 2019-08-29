@@ -29,25 +29,32 @@ newtype EndpointDescription = EndpointDescription { getEndpointDescription :: St
     deriving newtype (ToJSON, FromJSON)
     deriving anyclass (IotsType)
 
-type EndpointReq s = s .== Set EndpointDescription
-type EndpointResp s a = s .== a
-type HasEndpoint s a ρ σ =
-    ( HasType s (Set EndpointDescription) σ
-    , HasType s a ρ)
+type EndpointPrompt s a i o =
+  ( HasType s a i
+  , HasType s (Set EndpointDescription) o
+  , KnownSymbol s
+  , ContractRow i o
+  )
+
+type EndpointIn s a = s .== a
+type EndpointOut s = s .== Set EndpointDescription
 
 -- | Expose an endpoint, return the data that was entered
-endpoint :: forall s a. (KnownSymbol s) => Contract (EndpointResp s a) (EndpointReq s) a
-endpoint = request s where
+endpoint 
+  :: forall s a i o. 
+     ( EndpointPrompt s a i o )
+  => Contract i o a
+endpoint = request @s s where
   s = Set.singleton $ EndpointDescription $ symbolVal (Proxy @s)
 
 event
-  :: forall (s :: Symbol) ρ a. (KnownSymbol s, HasType s a ρ, AllUniqueLabels ρ)
+  :: forall (s :: Symbol) i a. (KnownSymbol s, HasType s a i, AllUniqueLabels i)
   => a
-  -> Event ρ
+  -> Event i
 event = Event . IsJust (Label @s)
 
 isActive
-  :: forall (s :: Symbol) ρ. (KnownSymbol s, HasType s (Set EndpointDescription) ρ)
-  => Hooks ρ
+  :: forall (s :: Symbol) o. (KnownSymbol s, HasType s (Set EndpointDescription) o)
+  => Hooks o
   -> Bool
 isActive (Hooks r) = not $ Set.null $ r .! Label @s

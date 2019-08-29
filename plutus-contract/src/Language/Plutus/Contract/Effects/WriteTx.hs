@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ConstraintKinds  #-}
 {-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -12,25 +13,25 @@ import           Language.Plutus.Contract.Events  (Event (..), Hooks (..))
 import           Language.Plutus.Contract.Request as Req
 import           Language.Plutus.Contract.Tx      (UnbalancedTx)
 
+type TxPrompt i o =
+    ( HasType "tx" () i
+    , HasType "tx" [UnbalancedTx] o
+    , ContractRow i o)
 
-type TxReq = ("tx" .== [UnbalancedTx])
-type TxResp = ("tx" .== ())
-type TxPrompt ρ σ =
-    ( HasType "tx" () ρ
-    , HasType "tx" [UnbalancedTx] σ)
+type WriteTxIn = "tx" .== ()
+type WriteTxOut = "tx" .== [UnbalancedTx]
 
 --  | Send an unbalanced transaction to the wallet.
-writeTx :: UnbalancedTx -> Contract TxResp TxReq ()
-writeTx t = request [t]
+writeTx :: TxPrompt i o => UnbalancedTx -> Contract i o ()
+writeTx t = request @"tx" [t]
 
 event
-  :: forall ρ. (HasType "tx" () ρ, AllUniqueLabels ρ)
-  => Event ρ
+  :: forall i. (HasType "tx" () i, AllUniqueLabels i)
+  => Event i
 event = Event (IsJust #tx ())
 
 transactions
-  :: forall ρ.
-  ( HasType "tx" [UnbalancedTx] ρ )
-   => Hooks ρ
+  :: forall i. ( HasType "tx" [UnbalancedTx] i )
+   => Hooks i
    -> [UnbalancedTx]
 transactions (Hooks r) = r .! #tx

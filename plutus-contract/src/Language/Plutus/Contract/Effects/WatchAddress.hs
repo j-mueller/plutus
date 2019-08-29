@@ -23,32 +23,40 @@ import qualified Ledger.Value                               as V
 
 import           Language.Plutus.Contract.Effects.AwaitSlot
 import           Language.Plutus.Contract.Events            (Event (..), Hooks (..))
-import           Language.Plutus.Contract.Request           (Contract, requestMaybe)
+import           Language.Plutus.Contract.Request           (Contract, requestMaybe, ContractRow)
 
-type AddrReq = "interesting addresses" .== Set Address
-type AddrResp = "address change" .== (Address, Tx)
-type AddressPrompt ρ σ =
-    ( HasType "interesting addresses" (Set Address) σ
-    , HasType "address change" (Address, Tx) ρ)
+type AddressPrompt i o =
+    ( HasType "address" (Set Address) o
+    , HasType "address" (Address, Tx) i
+    , ContractRow i o)
+
+type AddressIn = "address" .== (Address, Tx)
+type AddressOut = "address" .== Set Address
 
 -- | Wait for the next transaction that changes an address.
-nextTransactionAt :: Address -> Contract AddrResp AddrReq Tx
+nextTransactionAt :: AddressPrompt i o => Address -> Contract i o Tx
 nextTransactionAt addr =
     let s = Set.singleton addr
         check :: (Address, Tx) -> Maybe Tx
         check (addr', tx) = if addr == addr' then Just tx else Nothing
     in
-    requestMaybe s check
+    requestMaybe @"address" s check
 
 -- | Watch an address until the given slot, then return all known outputs
 --   at the address.
-watchAddressUntil :: Address -> Slot -> Contract (SlotResp .\/ AddrResp) (SlotReq .\/ AddrReq) AddressMap
+watchAddressUntil 
+    :: ( SlotPrompt i o
+       , AddressPrompt i o
+       )
+    => Address
+    -> Slot
+    -> Contract i o AddressMap
 watchAddressUntil a = collectUntil AM.updateAddresses (AM.addAddress a mempty) (nextTransactionAt a)
 
 -- | Watch an address for changes, and return the outputs
 --   at that address when the total value at the address
 --   has surpassed the given value.
-fundsAtAddressGt :: Address -> Value -> Contract AddrResp AddrReq AddressMap
+fundsAtAddressGt :: AddressPrompt i o => Address -> Value -> Contract i o AddressMap
 fundsAtAddressGt addr' vl = loopM go mempty where
     go cur = do
         delta <- AM.fromTxOutputs <$> nextTransactionAt addr'
@@ -58,20 +66,21 @@ fundsAtAddressGt addr' vl = loopM go mempty where
         then pure (Right cur') else pure (Left cur')
 
 events
-    :: forall ρ.
-    ( HasType "address change" (Address, Tx) ρ
-    , AllUniqueLabels ρ)
+    :: forall i.
+       ( HasType "address" (Address, Tx) i
+       , AllUniqueLabels i
+       )
     => AddressMap
     -> Tx
-    -> Map Address (Event ρ)
+    -> Map Address (Event i)
 events utxo tx =
     Map.fromSet
-        (\addr -> Event $ IsJust (Label @"address change") (addr, tx))
+        (\addr -> Event $ IsJust (Label @"address") (addr, tx))
         (AM.addressesTouched utxo tx)
 
 addresses
-    :: forall ρ.
-    ( HasType "interesting addresses" (Set Address) ρ)
-    => Hooks ρ
+    :: forall i.
+    ( HasType "address" (Set Address) i)
+    => Hooks i
     -> Set Address
-addresses (Hooks r) = r .! Label @"interesting addresses"
+addresses (Hooks r) = r .! Label @"address"

@@ -6,7 +6,6 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE GADTs                #-}
 {-# LANGUAGE KindSignatures       #-}
-{-# LANGUAGE NoImplicitPrelude    #-}
 {-# LANGUAGE OverloadedLabels     #-}
 {-# LANGUAGE PolyKinds            #-}
 {-# LANGUAGE RankNTypes           #-}
@@ -15,157 +14,58 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Language.Plutus.Contract.Request where
 
-import qualified Control.Applicative                as Applicative
 import qualified Data.Aeson                         as Aeson
-import           Data.Constraint
 import           Data.Row
-import           Data.Row.Internal                  (Subset, Unconstrained1)
-import qualified Data.Row.Records                   as Records
-import qualified Data.Row.Variants                  as Variants
-import           Language.Plutus.Contract.Events    (Event (..), Hooks (..), generalise)
+import           Language.Plutus.Contract.Events    (Event (..), Hooks (..))
+import qualified Language.Plutus.Contract.Events    as Events
 import           Language.Plutus.Contract.Resumable
-import qualified Language.Plutus.Contract.Util      as Util
 
-import           Prelude                            hiding (return, (>>=))
-import qualified Prelude
-
--- | @Contract ρ σ a@ is a contract that expects input events of type @ρ@ and produces
---   requests (describing the acceptable input) of type @σ@. The two type parameters
+-- | @Contract i o a@ is a contract that expects input events of type @i@ and produces
+--   requests (describing the acceptable input) of type @o@. The two type parameters
 --   are 'Data.Row.Row' rows
 --
-type Contract (ρ :: Row *) (σ :: Row *) a = Resumable (Step (Maybe (Event ρ)) (Hooks σ)) a
+type Contract i o a = Resumable (Step (Maybe (Event i)) (Hooks o)) a
+
+type ContractRow i o =
+  ( Forall o Monoid
+  , Forall o Semigroup
+  , AllUniqueLabels o
+  , AllUniqueLabels i)
 
 requestMaybe
-  :: forall sReq sResp req resp a.
-     ( KnownSymbol sReq
-     , KnownSymbol sResp
+  :: forall s req resp i o a.
+     ( KnownSymbol s
+     , HasType s resp i
+     , HasType s req o
+     , ContractRow i o
      )
     => req
     -> (resp -> Maybe a)
-    -> Contract (sResp .== resp) (sReq .== req) a
+    -> Contract i o a
 requestMaybe out check = do
-  rsp <- request out
+  rsp <- request @s out
   case check rsp of
-    Nothing -> requestMaybe out check
+    Nothing -> requestMaybe @s @req @resp @i @o out check
     Just a  -> pure a
 
 request
-  :: forall sReq sResp req resp.
-     ( KnownSymbol sReq
-     , KnownSymbol sResp
-     )
+  :: forall s req resp i o.
+    ( KnownSymbol s
+    , HasType s resp i
+    , HasType s req o
+    , ContractRow i o
+    )
     => req
-    -> Contract (sResp .== resp) (sReq .== req) resp
+    -> Contract i o resp
 request out = CStep (Step go) where
-  upd = Left $ Hooks $ (Label @sReq) .==  out
+  upd = Left $ Events.initialise @o @s out
   go Nothing = upd
-  go (Just (Event rho)) = case trial rho (Label @sResp) of
+  go (Just (Event rho)) = case trial rho (Label @s) of
     Left resp -> Right resp
     _         -> upd
 
-type Join ρ₁ σ₁ ρ₂ σ₂ =
-  ( AllUniqueLabels ρ₁
-  , AllUniqueLabels ρ₂
-  , AllUniqueLabels (σ₁ .\/ σ₂)
-  , Forall (σ₁ .\/ σ₂) Monoid
-  , Subset σ₁ (σ₁ .\/ σ₂)
-  , Subset σ₂ (σ₁ .\/ σ₂)
-  , (σ₁ .// (σ₁ .\/ σ₂)) ~ (σ₁ .\/ σ₂)
-  , (σ₂ .// (σ₁ .\/ σ₂)) ~ (σ₁ .\/ σ₂)
-  , Forall ρ₁ Unconstrained1
-  , Forall σ₁ Unconstrained1
-  , Forall ρ₂ Unconstrained1
-  , Forall σ₂ Unconstrained1
-  , Subset ρ₁ (ρ₁ .\/ ρ₂)
-  , Subset ρ₂ (ρ₁ .\/ ρ₂))
+select :: forall i o a. Contract i o a -> Contract i o a -> Contract i o a
+select = CAlt
 
-type Forall2 c σ₁ σ₂ = Forall (σ₁ .\/ σ₂) c
-
-distForall :: forall c ρ σ₁ σ₂. Forall (σ₁ .\/ σ₂) c :- (Forall σ₁ c, Forall σ₂ c)
-distForall = Sub $ unDistForall $ bimetamorph @_ @σ₁ @σ₂ @(Forall2 c) @(DistForall c)
--- f = ( .\/ )
--- g = DistForall c f
-
--- class BiForall (r1 :: Row k1) (r2 :: Row k2) (c :: k1 -> k2 -> Constraint)
--- forall (f :: Row k1 -> Row k2 -> *) (g :: Row k1 -> Row k2 -> *)
---                         (h :: k1 -> k2 -> *).
---                  Proxy h
---               -> (f Empty Empty -> g Empty Empty)
---               -> (forall ℓ τ1 τ2 ρ1 ρ2. (KnownSymbol ℓ, c τ1 τ2)
---                   => Label ℓ
---                   -> f ('R (ℓ :-> τ1 ': ρ1)) ('R (ℓ :-> τ2 ': ρ2))
---                   -> (h τ1 τ2, f ('R ρ1) ('R ρ2)))
---               -> (forall ℓ τ1 τ2 ρ1 ρ2. (KnownSymbol ℓ, c τ1 τ2)
---                   => Label ℓ -> h τ1 τ2 -> g ('R ρ1) ('R ρ2) -> g ('R (ℓ :-> τ1 ': ρ1)) ('R (ℓ :-> τ2 ': ρ2)))
---               -> f r1 r2 -> g r1 r2
-
-newtype DistForall c (σ₁ :: Row k) (σ₂ :: Row k) = DistForall { unDistForall :: Dict (Forall σ₁ c, Forall σ₂ c) }
-
-joinBoth :: forall ρ₁ σ₁ ρ₂ σ₂ a b. Join ρ₁ σ₁ ρ₂ σ₂ => Contract ρ₁ σ₁ a -> Contract ρ₂ σ₂ b -> (Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) a, Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) b)
-joinBoth l r = (mapStep (mapO s1 . mapI g1) l, mapStep (mapO s2 . mapI g2) r) where
-  g1 s = s Prelude.>>= fmap Event . Variants.restrict . unEvent
-  g2 s = s Prelude.>>= fmap Event . Variants.restrict . unEvent
-  s1 = generalise @σ₁ @(σ₁ .\/ σ₂)
-  s2 = generalise @σ₂ @(σ₁ .\/ σ₂)
-
-cMap :: forall ρ σ a b. (a -> b) -> Contract ρ σ a -> Contract ρ σ b
-cMap = CMap
-
-cAp :: forall ρ₁ σ₁ ρ₂ σ₂ a b. ( Join ρ₁ σ₁ ρ₂ σ₂) => Contract ρ₁ σ₁ (a -> b) -> Contract ρ₂ σ₂ a -> Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) b
-cAp l r = CAp l' r' where
-  (l', r') = joinBoth @ρ₁ @σ₁ @ρ₂ @σ₂ @(a -> b) @a l r
-
-cAlt :: forall ρ₁ σ₁ ρ₂ σ₂ a .
-  ( Join ρ₁ σ₁ ρ₂ σ₂)
-  => Contract ρ₁ σ₁ a
-  -> Contract ρ₂ σ₂ a
-  -> Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) a
-cAlt l r = CAlt l' r' where
-  (l', r') = joinBoth @ρ₁ @σ₁ @ρ₂ @σ₂ @a @a l r
-
-cEmpty :: forall a. Contract Empty Empty a
-cEmpty = CEmpty
-
-cBind :: forall ρ₁ σ₁ ρ₂ σ₂ a b. (Join ρ₁ σ₁ ρ₂ σ₂) => Contract ρ₁ σ₁ a -> (a -> Contract ρ₂ σ₂ b) -> Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) b
-cBind l f = CBind (mapStep (mapO s1 . mapI g1) l) (fmap (mapStep (mapO s2 . mapI g2)) f) where
-  g1 s = s Prelude.>>= fmap Event . Variants.restrict . unEvent
-  g2 s = s Prelude.>>= fmap Event . Variants.restrict . unEvent
-  s1 = generalise @σ₁ @(σ₁ .\/ σ₂)
-  s2 = generalise @σ₂ @(σ₁ .\/ σ₂)
-
-(>>=) :: forall ρ₁ σ₁ ρ₂ σ₂ a b. ( Join ρ₁ σ₁ ρ₂ σ₂) => Contract ρ₁ σ₁ a -> (a -> Contract ρ₂ σ₂ b) -> Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) b
-(>>=) = cBind
-
-(>>) :: forall ρ₁ σ₁ ρ₂ σ₂ a b. ( Join ρ₁ σ₁ ρ₂ σ₂) => Contract ρ₁ σ₁ a -> Contract ρ₂ σ₂ b -> Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) b
-l >> r = l >>= const r
-
-select :: forall ρ₁ σ₁ ρ₂ σ₂ a. ( Join ρ₁ σ₁ ρ₂ σ₂) => Contract ρ₁ σ₁ a -> Contract ρ₂ σ₂ a -> Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) a
-select l r = l' Applicative.<|> r' where
-  (l', r') = joinBoth l r
-
-(<|>) :: forall ρ₁ σ₁ ρ₂ σ₂ a. ( Join ρ₁ σ₁ ρ₂ σ₂) => Contract ρ₁ σ₁ a -> Contract ρ₂ σ₂ a -> Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) a
-l <|> r = select l r
-
-selectEither :: forall ρ₁ σ₁ ρ₂ σ₂ a b. ( Join ρ₁ σ₁ ρ₂ σ₂) => Contract ρ₁ σ₁ a -> Contract ρ₂ σ₂ b -> Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) (Either a b)
-selectEither l r = Util.selectEither l' r' where
-  (l', r') = joinBoth l r
-
-both :: forall ρ₁ σ₁ ρ₂ σ₂ a b. ( Join ρ₁ σ₁ ρ₂ σ₂) => Contract ρ₁ σ₁ a -> Contract ρ₂ σ₂ b -> Contract (ρ₁ .\/ ρ₂) (σ₁ .\/ σ₂) (a, b)
-both l r = Util.both l' r' where
-  (l', r') = joinBoth l r
-
-return :: forall a. a -> Contract Empty Empty a
-return = CStep . Prelude.return
-
-cStep :: forall ρ σ a. Step (Maybe (Event ρ)) (Hooks σ) a -> Contract ρ σ a
-cStep = CStep
-
-cJSONCheckpoint :: forall ρ σ a. (Aeson.FromJSON a, Aeson.ToJSON a) => Contract ρ σ a -> Contract ρ σ a
+cJSONCheckpoint :: forall i o a. (Aeson.FromJSON a, Aeson.ToJSON a) => Contract i o a -> Contract i o a
 cJSONCheckpoint = CJSONCheckpoint
-
-emptyRec :: forall ρ. (Forall ρ Monoid, AllUniqueLabels ρ) => Rec ρ
-emptyRec = Records.default' @Monoid @ρ mempty
-
-ifThenElse :: Bool -> a -> a -> a
-ifThenElse True a _  = a
-ifThenElse False _ b = b

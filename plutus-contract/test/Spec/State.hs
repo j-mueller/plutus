@@ -1,7 +1,9 @@
 {-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators    #-}
 module Spec.State where
 
+import           Control.Applicative                             (Alternative(..))
 import           Control.Monad                                   (foldM)
 import           Control.Monad.Except                            (runExcept)
 import           Control.Monad.Writer                            (runWriterT)
@@ -13,15 +15,21 @@ import qualified Test.Tasty.HUnit                                as HUnit
 
 import qualified Language.Plutus.Contract.Effects.ExposeEndpoint as Endpoint
 import qualified Language.Plutus.Contract.Resumable              as S
-import           Prelude                                         hiding ((>>))
+
+type Req = 
+    BlockchainIn 
+        .\/ EndpointIn "endpoint" String
+
+type Resp =
+    BlockchainOut
+        .\/ EndpointOut "endpoint"
 
 tests :: TestTree
 tests =
-    let ep = Con.endpoint @"endpoint" @String
+    let ep = Con.endpoint @"endpoint" @String @Req @Resp
         initRecord = fmap fst . fst . fromRight (error "initialise failed") . runExcept . runWriterT . S.initialise
         inp = Endpoint.event @"endpoint" "asd"
         run con =
-            -- let con' = Con.convertContract con in
             foldM (fmap (fmap fst) . S.insertAndUpdate con) (initRecord con)
     in
     testGroup "stateful contract"

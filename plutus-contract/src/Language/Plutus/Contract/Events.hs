@@ -21,6 +21,7 @@ module Language.Plutus.Contract.Events(
       Hooks(..)
     , Event(..)
     , generalise
+    , initialise
     ) where
 
 import           Data.Aeson            (FromJSON, ToJSON, (.:))
@@ -57,6 +58,11 @@ instance Forall ρ Semigroup => Semigroup (Hooks ρ) where
 instance (AllUniqueLabels ρ, Forall ρ Semigroup, Forall ρ Monoid) => Monoid (Hooks ρ) where
   mempty = Hooks (Records.default' @Monoid @ρ mempty)
   mappend = (<>)
+
+initialise :: forall (ρ :: Row *) s a. (AllUniqueLabels ρ, Forall ρ Semigroup, Forall ρ Monoid, KnownSymbol s, HasType s a ρ) => a -> Hooks ρ
+initialise a = 
+  let Hooks h = mempty
+  in Hooks (Records.update (Label @s) a h)
 
 generalise :: forall ρ ρ'. (AllUniqueLabels ρ', Forall ρ' Monoid, (ρ .// ρ') ~ ρ') => Hooks ρ -> Hooks ρ'
 generalise (Hooks l) = Hooks $ l .// (Records.default' @Monoid @ρ' mempty)
