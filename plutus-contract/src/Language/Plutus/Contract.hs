@@ -62,4 +62,10 @@ import Data.Row
 type BlockchainActions =
   AwaitSlot
   .\/ WatchAddress
-  .\/  WriteTx
+  .\/ WriteTx
+
+type HasBlockchainActions s =
+  ( HasAwaitSlot s
+  , HasWatchAddress s
+  , HasWriteTx s
+  )
