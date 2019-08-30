@@ -22,7 +22,7 @@ import qualified Language.Plutus.Contract.Effects.AwaitSlot as AwaitSlot
 
 tests :: TestTree
 tests = 
-    let cp = checkPredicate @Req @Resp in
+    let cp = checkPredicate @Schema in
     testGroup "contracts"
         [ cp "awaitSlot"
             (awaitSlot 10)
@@ -113,18 +113,10 @@ someAddress =
     Ledger.scriptAddress $
         Ledger.ValidatorScript $$(Ledger.compileScript [|| \(i :: Integer) -> i ||])
 
-type Req = 
-    BlockchainIn 
-        .\/ EndpointIn "1" Int
-        .\/ EndpointIn "2" Int
-        .\/ EndpointIn "3" Int
-        .\/ EndpointIn "4" Int
-        .\/ EndpointIn "ep" ()
-
-type Resp =
-    BlockchainOut
-        .\/ EndpointOut "1"
-        .\/ EndpointOut "2"
-        .\/ EndpointOut "3"
-        .\/ EndpointOut "4"
-        .\/ EndpointOut "ep"
+type Schema = 
+    BlockchainSchema 
+        .\/ EndpointSchema "1" Int
+        .\/ EndpointSchema "2" Int
+        .\/ EndpointSchema "3" Int
+        .\/ EndpointSchema "4" Int
+        .\/ EndpointSchema "ep" ()

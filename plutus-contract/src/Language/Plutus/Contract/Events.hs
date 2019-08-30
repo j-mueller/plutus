@@ -17,11 +17,14 @@
 {-# LANGUAGE UndecidableInstances    #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors #-}
 module Language.Plutus.Contract.Events(
       Hooks(..)
     , Event(..)
     , generalise
     , initialise
+    , First
+    , Second
     ) where
 
 import           Data.Aeson            (FromJSON, ToJSON, (.:))
@@ -31,52 +34,77 @@ import           Data.Functor.Identity
 import           Data.Functor.Product
 import           Data.Proxy            (Proxy (..))
 import           Data.Row
-import           Data.Row.Internal     (metamorph)
+import           Data.Row.Internal
 import qualified Data.Row.Records      as Records
 import qualified Data.Row.Variants     as Variants
 import           Data.Text             (Text)
 import qualified Data.Text             as Text
 
-newtype Event ρ = Event { unEvent :: Var ρ }
+import           GHC.TypeLits
 
-deriving instance Forall ρ Show => Show (Event ρ)
-deriving instance Forall ρ Eq => Eq (Event ρ)
+newtype Event s = Event { unEvent :: Var (First s) }
 
-newtype Hooks ρ = Hooks { unHooks :: Rec ρ }
+deriving instance Forall (First s) Show => Show (Event s)
+deriving instance Forall (First s) Eq => Eq (Event s)
 
-deriving instance Forall ρ Show => Show (Hooks ρ)
+newtype Hooks s = Hooks { unHooks :: Rec (Second s) }
 
-instance Forall ρ ToJSON => ToJSON (Hooks ρ) where
-  toJSON = Aeson.object . Records.eraseWithLabels @ToJSON @ρ @Text @Aeson.Value Aeson.toJSON . unHooks
+deriving instance Forall (Second s) Show => Show (Hooks s)
 
-instance (AllUniqueLabels ρ, Forall ρ FromJSON) => FromJSON (Hooks ρ) where
-  parseJSON vl = fmap Hooks $ Records.fromLabelsA @FromJSON @Aeson.Parser @ρ  (\lbl -> Aeson.withObject "Rec" (\obj -> obj .: (Text.pack $ show lbl) >>= Aeson.parseJSON) vl)
+instance Forall (Second s) ToJSON => ToJSON (Hooks s) where
+  toJSON = Aeson.object . Records.eraseWithLabels @ToJSON @(Second s) @Text @Aeson.Value Aeson.toJSON . unHooks
 
-instance Forall ρ Semigroup => Semigroup (Hooks ρ) where
-  (<>) = merge
+instance (AllUniqueLabels (Second s), Forall (Second s) FromJSON) => FromJSON (Hooks s) where
+  parseJSON vl = fmap Hooks $ Records.fromLabelsA @FromJSON @Aeson.Parser @(Second s)  (\lbl -> Aeson.withObject "Rec" (\obj -> obj .: (Text.pack $ show lbl) >>= Aeson.parseJSON) vl)
 
-instance (AllUniqueLabels ρ, Forall ρ Semigroup, Forall ρ Monoid) => Monoid (Hooks ρ) where
-  mempty = Hooks (Records.default' @Monoid @ρ mempty)
+instance Forall (Second s) Semigroup => Semigroup (Hooks s) where
+  (<>) = merge @s
+
+instance (AllUniqueLabels (Second s), Forall (Second s) Semigroup, Forall (Second s) Monoid) => Monoid (Hooks s) where
+  mempty = Hooks (Records.default' @Monoid @(Second s) mempty)
   mappend = (<>)
 
-initialise :: forall (ρ :: Row *) s a. (AllUniqueLabels ρ, Forall ρ Semigroup, Forall ρ Monoid, KnownSymbol s, HasType s a ρ) => a -> Hooks ρ
+initialise :: forall (s :: Row *) l a. (AllUniqueLabels (Second s), Forall (Second s) Semigroup, Forall (Second s) Monoid, KnownSymbol l, HasType l a (Second s)) => a -> Hooks s
 initialise a = 
-  let Hooks h = mempty
-  in Hooks (Records.update (Label @s) a h)
+  let Hooks h = mempty @(Hooks s)
+  in Hooks (Records.update (Label @l) a h)
 
-generalise :: forall ρ ρ'. (AllUniqueLabels ρ', Forall ρ' Monoid, (ρ .// ρ') ~ ρ') => Hooks ρ -> Hooks ρ'
-generalise (Hooks l) = Hooks $ l .// (Records.default' @Monoid @ρ' mempty)
+generalise :: forall s s'. (AllUniqueLabels (Second s'), Forall (Second s') Monoid, ((Second s) .// (Second s')) ~ (Second s')) => Hooks s -> Hooks s'
+generalise (Hooks l) = Hooks $ l .// (Records.default' @Monoid @(Second s') mempty)
 
-merge :: forall ρ. Forall ρ Semigroup => Hooks ρ -> Hooks ρ -> Hooks ρ
-merge (Hooks rec1) (Hooks rec2) = Hooks $ metamorph @_ @ρ @Semigroup @(Product Rec Rec) @Rec @Identity Proxy doNil doUncons doCons (Pair rec1 rec2)
+merge :: forall s. Forall (Second s) Semigroup => Hooks s -> Hooks s -> Hooks s
+merge (Hooks rec1) (Hooks rec2) = Hooks $ metamorph @_ @(Second s) @Semigroup @(Product Rec Rec) @Rec @Identity Proxy doNil doUncons doCons (Pair rec1 rec2)
   where
     doNil _ = empty
     doUncons l (Pair r1 r2) = (Identity $ r1 .! l <> r2 .! l, Pair (Records.unsafeRemove l r1) (Records.unsafeRemove l r2))
     doCons l (Identity v) r = Records.unsafeInjectFront l v r
 
 
-instance (AllUniqueLabels ρ, Forall ρ FromJSON) => FromJSON (Event ρ) where
-  parseJSON vl = fmap Event $ Variants.fromLabels @FromJSON @ρ @Aeson.Parser (\lbl -> Aeson.withObject "Var" (\obj -> do { tg <- obj .: "tag"; if tg == show lbl then (obj .: "value") >>= Aeson.parseJSON else fail "Wrong label" }) vl)
+instance (AllUniqueLabels (First s), Forall (First s) FromJSON) => FromJSON (Event s) where
+  parseJSON vl = fmap Event $ Variants.fromLabels @FromJSON @(First s) @Aeson.Parser (\lbl -> Aeson.withObject "Var" (\obj -> do { tg <- obj .: "tag"; if tg == show lbl then (obj .: "value") >>= Aeson.parseJSON else fail "Wrong label" }) vl)
 
-instance Forall ρ ToJSON => ToJSON (Event ρ) where
-  toJSON (Event v) = Aeson.object [Variants.eraseWithLabels @ToJSON @ρ @Text @Aeson.Value Aeson.toJSON v]
+instance Forall (First s) ToJSON => ToJSON (Event s) where
+  toJSON (Event v) = Aeson.object [Variants.eraseWithLabels @ToJSON @(First s)  @Text @Aeson.Value Aeson.toJSON v]
+
+type family First (r :: Row *) where
+  First ('R r) = 'R (FirstR r)
+
+type family FirstR (r :: [LT *]) where
+  FirstR '[] = '[]
+  FirstR (l ':-> (t1, _) ': r) =
+    l ':-> t1 ': FirstR r
+  FirstR (l ':-> t ': _) =
+    TypeError ('Text "First requires all types to be tuples."
+                :$$: 'Text "For one, the label " :<>: ShowType l :<>: 'Text " has type " :<>: ShowType t)
+
+type family Second (r :: Row *) where
+  Second ('R r) = 'R (SecondR r)
+
+type family SecondR (r :: [LT *]) where
+  SecondR '[] = '[]
+  SecondR (l ':-> (_, t2) ': r) =
+    l ':-> t2 ': SecondR r
+  SecondR (l ':-> t ': _) =
+    TypeError ('Text "Second requires all types to be tuples."
+                :$$: 'Text "For one, the label " :<>: ShowType l :<>: 'Text " has type " :<>: ShowType t)
+  

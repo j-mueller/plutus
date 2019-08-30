@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes  #-}
 {-# LANGUAGE DataKinds            #-}
 {-# LANGUAGE DeriveAnyClass       #-}
 {-# LANGUAGE DeriveGeneric        #-}
@@ -19,7 +20,7 @@ module Language.Plutus.Contract.Servant(
     ) where
 
 import           Control.Monad.Except               (MonadError (..), runExcept)
-import           Control.Monad.Writer
+import           Control.Monad.Writer               (runWriterT)
 import           Data.Aeson                         (FromJSON, ToJSON)
 import           Data.Bifunctor
 import           Data.Proxy                         (Proxy (..))
@@ -40,42 +41,42 @@ newtype State e = State { record :: Record e }
     deriving stock (Generic, Eq)
     deriving newtype (ToJSON, FromJSON)
 
-data Request ρ = Request
-    { oldState :: State (Event ρ)
-    , event    :: Event ρ
+data Request s = Request
+    { oldState :: State (Event s)
+    , event    :: Event s
     }
     deriving stock (Generic)
 
-instance (AllUniqueLabels ρ, Forall ρ FromJSON) => FromJSON (Request ρ)
-instance (Forall ρ ToJSON) => ToJSON (Request ρ)
+instance (AllUniqueLabels (First s), Forall (First s) FromJSON) => FromJSON (Request s)
+instance (Forall (First s) ToJSON) => ToJSON (Request s)
 
-data Response ρ σ = Response
-    { newState :: State (Event ρ)
-    , hooks    :: Hooks σ
+data Response s = Response
+    { newState :: State (Event s)
+    , hooks    :: Hooks s
     }
     deriving stock (Generic)
 
-instance (AllUniqueLabels ρ, AllUniqueLabels σ, Forall ρ FromJSON, Forall σ FromJSON) => FromJSON (Response ρ σ)
-instance (Forall ρ ToJSON, Forall σ ToJSON) => ToJSON (Response ρ σ)
+instance (AllUniqueLabels (First s), AllUniqueLabels (Second s), Forall (First s) FromJSON, Forall (Second s) FromJSON) => FromJSON (Response s)
+instance (Forall (First s) ToJSON, Forall (Second s) ToJSON) => ToJSON (Response s)
 
-type ContractAPI ρ σ =
-       "initialise" :> Get '[JSON] (Response ρ σ)
-  :<|> "run" :> ReqBody '[JSON] (Request ρ) :> Post '[JSON] (Response ρ σ)
+type ContractAPI s =
+       "initialise" :> Get '[JSON] (Response s)
+  :<|> "run" :> ReqBody '[JSON] (Request s) :> Post '[JSON] (Response s)
 
 -- | Serve a 'PlutusContract' via the contract API.
 contractServer
-    :: forall ρ σ.
-       ( AllUniqueLabels σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
+    :: forall s.
+       ( AllUniqueLabels (Second s)
+       , Forall (Second s) Monoid
+       , Forall (Second s) Semigroup
        )
-    => Contract ρ σ ()
-    -> Server (ContractAPI ρ σ)
+    => Contract s ()
+    -> Server (ContractAPI s)
 contractServer con = initialise :<|> run where
     initialise = servantResp (initialResponse con)
     run req = servantResp (runUpdate con req)
 
-servantResp :: MonadError ServantErr m => Either ResumableError (Response ρ σ) -> m (Response ρ σ)
+servantResp :: MonadError ServantErr m => Either ResumableError (Response s) -> m (Response s)
 servantResp = \case
         Left err ->
             let bd = "'insertAndUpdate' failed. " in
@@ -84,36 +85,36 @@ servantResp = \case
 
 -- | A servant 'Application' that serves a Plutus contract
 contractApp
-    :: forall ρ σ.
-       ( AllUniqueLabels ρ
-       , AllUniqueLabels σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
-       , Forall σ ToJSON
-       , Forall ρ FromJSON
-       , Forall ρ ToJSON )
-    => Contract ρ σ () -> Application
-contractApp = serve (Proxy @(ContractAPI ρ σ)) . contractServer
+    :: forall s.
+       ( AllUniqueLabels (Second s)
+       , AllUniqueLabels (First s)
+       , Forall (Second s) Monoid
+       , Forall (Second s) Semigroup
+       , Forall (First s) FromJSON
+       , Forall (First s) ToJSON
+       , Forall (Second s) ToJSON )
+    => Contract s () -> Application
+contractApp = serve (Proxy @(ContractAPI s)) . contractServer @s
 
 runUpdate
-    :: forall ρ σ.
-       (AllUniqueLabels σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
+    :: forall s.
+       (AllUniqueLabels (Second s)
+       , Forall (Second s) Monoid
+       , Forall (Second s) Semigroup
        )
-    => Contract ρ σ () -> Request ρ -> Either ResumableError (Response ρ σ)
+    => Contract s () -> Request s -> Either ResumableError (Response s)
 runUpdate con (Request o e) =
     ((\(r, h) -> Response (State r) h))
     <$> Resumable.insertAndUpdate con (record o) e
 
 initialResponse
-    :: forall ρ σ.
-       ( AllUniqueLabels σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
+    :: forall s.
+       ( AllUniqueLabels (Second s)
+       , Forall (Second s) Monoid
+       , Forall (Second s) Semigroup
        )
-    => Contract ρ σ ()
-    -> Either ResumableError (Response ρ σ)
+    => Contract s ()
+    -> Either ResumableError (Response s)
 initialResponse =
     fmap (uncurry Response)
     . fmap (first (State . fmap fst))

@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE AllowAmbiguousTypes  #-}
 {-# LANGUAGE ConstraintKinds      #-}
 {-# LANGUAGE DataKinds            #-}
@@ -16,7 +17,8 @@ module Language.Plutus.Contract.Request where
 
 import qualified Data.Aeson                         as Aeson
 import           Data.Row
-import           Language.Plutus.Contract.Events    (Event (..), Hooks (..))
+
+import           Language.Plutus.Contract.Events    (Event (..), Hooks (..), First, Second)
 import qualified Language.Plutus.Contract.Events    as Events
 import           Language.Plutus.Contract.Resumable
 
@@ -24,48 +26,49 @@ import           Language.Plutus.Contract.Resumable
 --   requests (describing the acceptable input) of type @o@. The two type parameters
 --   are 'Data.Row.Row' rows
 --
-type Contract i o a = Resumable (Step (Maybe (Event i)) (Hooks o)) a
+type Contract s a = Resumable (Step (Maybe (Event s)) (Hooks s)) a
 
-type ContractRow i o =
-  ( Forall o Monoid
-  , Forall o Semigroup
-  , AllUniqueLabels o
-  , AllUniqueLabels i)
+type ContractRow s =
+  ( Forall (Second s) Monoid
+  , Forall (Second s) Semigroup
+  , AllUniqueLabels (First s)
+  , AllUniqueLabels (Second s)
+  )
 
 requestMaybe
-  :: forall s req resp i o a.
-     ( KnownSymbol s
-     , HasType s resp i
-     , HasType s req o
-     , ContractRow i o
+  :: forall l req resp s a.
+     ( KnownSymbol l
+     , HasType l resp (First s)
+     , HasType l req (Second s)
+     , ContractRow s
      )
     => req
     -> (resp -> Maybe a)
-    -> Contract i o a
+    -> Contract s a
 requestMaybe out check = do
-  rsp <- request @s out
+  rsp <- request @l @req @resp @s out
   case check rsp of
-    Nothing -> requestMaybe @s @req @resp @i @o out check
+    Nothing -> requestMaybe @l @req @resp @s out check
     Just a  -> pure a
 
 request
-  :: forall s req resp i o.
-    ( KnownSymbol s
-    , HasType s resp i
-    , HasType s req o
-    , ContractRow i o
+  :: forall l req resp s.
+    ( KnownSymbol l
+    , HasType l resp (First s)
+    , HasType l req (Second s)
+    , ContractRow s
     )
     => req
-    -> Contract i o resp
+    -> Contract s resp
 request out = CStep (Step go) where
-  upd = Left $ Events.initialise @o @s out
+  upd = Left $ Events.initialise @s @l out
   go Nothing = upd
-  go (Just (Event rho)) = case trial rho (Label @s) of
+  go (Just (Event rho)) = case trial rho (Label @l) of
     Left resp -> Right resp
     _         -> upd
 
-select :: forall i o a. Contract i o a -> Contract i o a -> Contract i o a
+select :: forall s a. Contract s a -> Contract s a -> Contract s a
 select = CAlt
 
-cJSONCheckpoint :: forall i o a. (Aeson.FromJSON a, Aeson.ToJSON a) => Contract i o a -> Contract i o a
+cJSONCheckpoint :: forall s a. (Aeson.FromJSON a, Aeson.ToJSON a) => Contract s a -> Contract s a
 cJSONCheckpoint = CJSONCheckpoint

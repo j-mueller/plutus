@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 -- | Run a Plutus contract as a servant application.
 module Language.Plutus.Contract.App(
       run
@@ -31,34 +32,34 @@ import           Language.Plutus.Contract.IOTS    (IotsType, schemaMap)
 
 -- | Run the contract as an HTTP server with servant/warp
 run
-    :: forall ρ σ.
-       ( AllUniqueLabels ρ
-       , AllUniqueLabels σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
-       , Forall σ ToJSON
-       , Forall ρ IotsType
-       , Forall ρ Unconstrained1
-       , Forall ρ FromJSON
-       , Forall ρ ToJSON )
-    => Contract ρ σ () -> IO ()
-run st = runWithTraces st []
+    :: forall s.
+       ( AllUniqueLabels (First s)
+       , AllUniqueLabels (Second s)
+       , Forall (Second s) Monoid
+       , Forall (Second s) Semigroup
+       , Forall (Second s) ToJSON
+       , Forall (First s) IotsType
+       , Forall (First s) Unconstrained1
+       , Forall (First s) FromJSON
+       , Forall (First s) ToJSON )
+    => Contract s () -> IO ()
+run st = runWithTraces @s st []
 
 -- | Run the contract as an HTTP server with servant/warp, and
 --   print the 'Request' values for the given traces.
 runWithTraces
-    :: forall ρ σ.
-       ( AllUniqueLabels ρ
-       , AllUniqueLabels σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
-       , Forall σ ToJSON
-       , Forall ρ IotsType
-       , Forall ρ Unconstrained1
-       , Forall ρ FromJSON
-       , Forall ρ ToJSON )
-    => Contract ρ σ ()
-    -> [(String, (Wallet, ContractTrace ρ σ EmulatorAction () ()))]
+    :: forall s.
+       ( AllUniqueLabels (First s)
+       , AllUniqueLabels (Second s)
+       , Forall (Second s) Monoid
+       , Forall (Second s) Semigroup
+       , Forall (Second s) ToJSON
+       , Forall (First s) IotsType
+       , Forall (First s) Unconstrained1
+       , Forall (First s) FromJSON
+       , Forall (First s) ToJSON )
+    => Contract s ()
+    -> [(String, (Wallet, ContractTrace s EmulatorAction () ()))]
     -> IO ()
 runWithTraces con traces = do
     let mp = Map.fromList traces
@@ -67,8 +68,8 @@ runWithTraces con traces = do
         [] -> do
             let p = 8080
             putStrLn $ "Starting server on port " ++ show p
-            Warp.run p (contractApp con)
-        ["schema"] -> printSchemaAndExit (getConst $ schemaMap @ρ)
+            Warp.run p (contractApp @s con)
+        ["schema"] -> printSchemaAndExit (getConst $ schemaMap @(First s))
         ["trace", t] -> maybe (printTracesAndExit mp) (uncurry (printTrace con)) (Map.lookup t mp)
         _ -> printTracesAndExit mp
 
@@ -86,14 +87,14 @@ printTracesAndExit mp = do
 -- | Run a trace on the mockchain and print the 'Request' JSON objects
 --   for each intermediate state to stdout.
 printTrace
-    :: forall ρ σ.
-       ( AllUniqueLabels σ
-       , Forall σ Monoid
-       , Forall σ Semigroup
-       , Forall ρ ToJSON )
-    => Contract ρ σ ()
+    :: forall s.
+       ( AllUniqueLabels (Second s)
+       , Forall (Second s) Monoid
+       , Forall (Second s) Semigroup
+       , Forall (First s) ToJSON )
+    => Contract s ()
     -> Wallet
-    -> ContractTrace ρ σ EmulatorAction () ()
+    -> ContractTrace s EmulatorAction () ()
     -> IO ()
 printTrace con wllt ctr = do
     let events = Map.findWithDefault [] wllt $ execTrace con ctr
@@ -103,6 +104,6 @@ printTrace con wllt ctr = do
             BSL.putStrLn (Aeson.encode newRequest)
             either (error . show) pure (runUpdate con newRequest)
 
-    initial <- either (error . show) pure (initialResponse con)
+    initial <- either (error . show) pure (initialResponse @s con)
     foldM_ go initial events
 

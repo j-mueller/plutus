@@ -19,8 +19,7 @@ module Language.Plutus.Contract(
     , collectUntil
     -- * Endpoints
     , EndpointPrompt
-    , EndpointIn
-    , EndpointOut
+    , EndpointSchema
     , endpoint
     -- * Transactions
     , TxPrompt
@@ -34,10 +33,11 @@ module Language.Plutus.Contract(
     , module Tx
     -- * Row-related things
     , HasType
-    , BlockchainIn
-    , BlockchainOut
+    , BlockchainSchema
     , type (.==)
     , type (.\/)
+    , type First
+    , type Second
     ) where
 
 import           Control.Applicative                             (Alternative(..))
@@ -50,20 +50,16 @@ import           Language.Plutus.Contract.Effects.WriteTx
 import           Language.Plutus.Contract.Util                   (both, selectEither)
 
 import           Language.Plutus.Contract.Request                (Contract, ContractRow, select)
+import           Language.Plutus.Contract.Events (First, Second)
 import           Language.Plutus.Contract.Tx                     as Tx
 
 import           Prelude                                         hiding (until)
 
 import Data.Row
 
-type BlockchainIn =
-  ( SlotIn
-  .\/ AddressIn
-  .\/ WriteTxIn
-  )
-
-type BlockchainOut =
-  ( SlotOut
-  .\/ AddressOut
-  .\/ WriteTxOut
-  )
+-- | Schema for contracts that can interact with the blockchain (via a wallet)
+type BlockchainSchema =
+  SlotSchema
+  .\/ AddressSchema
+  .\/  WriteTxSchema
+  

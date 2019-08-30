@@ -59,15 +59,10 @@ newtype ClearString = ClearString ByteString
 
 PlutusTx.makeLift ''ClearString
 
-type Req =
-    BlockchainIn
-        .\/ EndpointIn "lock" LockParams
-        .\/ EndpointIn "guess" GuessParams
-
-type Resp =
-    BlockchainOut
-        .\/ EndpointOut "lock"
-        .\/ EndpointOut "guess"
+type GameSchema =
+    BlockchainSchema
+        .\/ EndpointSchema "lock" LockParams
+        .\/ EndpointSchema "guess" GuessParams
 
 correctGuess :: HashedString -> ClearString -> Bool
 correctGuess (HashedString actual) (ClearString guess') = actual == sha2_256 guess'
@@ -106,7 +101,7 @@ newtype GuessParams = GuessParams
     deriving stock (Prelude.Eq, Prelude.Ord, Prelude.Show, Generic)
     deriving anyclass (Aeson.FromJSON, Aeson.ToJSON, IotsType)
 
-guess :: Contract Req Resp ()
+guess :: Contract GameSchema ()
 guess = do
     st <- nextTransactionAt gameAddress
     let mp = AM.fromTxOutputs st
@@ -118,7 +113,7 @@ guess = do
         tx         = unbalancedTx inp []
     void (writeTx tx)
 
-lock :: Contract Req Resp ()
+lock :: Contract GameSchema ()
 lock = do
     LockParams secret amt <- endpoint @"lock" @LockParams
     let
@@ -128,12 +123,12 @@ lock = do
         tx         = unbalancedTx [] [output]
     void (writeTx tx)
 
-game :: Contract Req Resp ()
+game :: Contract GameSchema ()
 game = guess <|> lock
 
 lockTrace
     :: ( MonadEmulator m )
-    => ContractTrace Req Resp m a ()
+    => ContractTrace GameSchema m a ()
 lockTrace =
     let w1 = Trace.Wallet 1 
         w2 = Trace.Wallet 2 in
@@ -143,7 +138,7 @@ lockTrace =
 
 guessTrace
     :: ( MonadEmulator m )
-    => ContractTrace Req Resp m a ()
+    => ContractTrace GameSchema m a ()
 guessTrace =
     let w2 = Trace.Wallet 2 in
     lockTrace 
@@ -152,7 +147,7 @@ guessTrace =
 
 guessWrongTrace
     :: ( MonadEmulator m )
-    => ContractTrace Req Resp m a ()
+    => ContractTrace GameSchema m a ()
 guessWrongTrace =
     let w2 = Trace.Wallet 2 in
     lockTrace 

@@ -84,15 +84,10 @@ data CampaignAction = Collect | Refund
 
 PlutusTx.makeLift ''CampaignAction
 
-type Req =
-    BlockchainIn
-        .\/ EndpointIn "schedule collection" ()
-        .\/ EndpointIn "contribute" (PubKey, Value)
-
-type Resp =
-    BlockchainOut
-        .\/ EndpointOut "schedule collection"
-        .\/ EndpointOut "contribute"
+type CrowdfundingSchema =
+    BlockchainSchema
+        .\/ EndpointSchema "schedule collection" ()
+        .\/ EndpointSchema "contribute" (PubKey, Value)
 
 -- | Construct a 'Campaign' value from the campaign parameters,
 --   using the wallet's public key.
@@ -151,7 +146,7 @@ campaignAddress :: Campaign -> Ledger.Address
 campaignAddress = Typed.scriptAddress . scriptInstance
 
 -- | The crowdfunding contract for the 'Campaign'.
-crowdfunding :: Campaign -> Contract Req Resp ()
+crowdfunding :: Campaign -> Contract CrowdfundingSchema ()
 crowdfunding c = contribute c <|> scheduleCollection c
 
 -- | A sample campaign with a target of 20 Ada by slot 20
@@ -167,7 +162,7 @@ theCampaign = Campaign
 --   an endpoint that allows the user to enter their public key and the
 --   contribution. Then waits until the campaign is over, and collects the
 --   refund if the funding target was not met.
-contribute :: Campaign -> Contract Req Resp ()
+contribute :: Campaign -> Contract CrowdfundingSchema ()
 contribute cmp = do
     (ownPK, contribution) <- endpoint @"contribute"
     let ds = Ledger.DataScript (Ledger.lifted ownPK)
@@ -193,7 +188,7 @@ contribute cmp = do
 -- | The campaign owner's branch of the contract for a given 'Campaign'. It
 --   watches the campaign address for contributions and collects them if
 --   the funding goal was reached in time.
-scheduleCollection :: Campaign -> Contract Req Resp ()
+scheduleCollection :: Campaign -> Contract CrowdfundingSchema ()
 scheduleCollection cmp = do
 
     -- Expose an endpoint that lets the user fire the starting gun on the
@@ -220,7 +215,7 @@ scheduleCollection cmp = do
 --   wallet (wallet 1) to start watching the campaign address.
 startCampaign
     :: ( MonadEmulator m  )
-    => ContractTrace Req Resp m a ()
+    => ContractTrace CrowdfundingSchema m a ()
 startCampaign =
     Trace.callEndpoint @"schedule collection" (Trace.Wallet 1)  ()
         >> Trace.notifyInterestingAddresses (Trace.Wallet 1)
@@ -230,7 +225,7 @@ makeContribution
     :: ( MonadEmulator m )
     => Wallet
     -> Value
-    -> ContractTrace Req Resp m a ()
+    -> ContractTrace CrowdfundingSchema m a ()
 makeContribution w v =
     Trace.callEndpoint @"contribute" w (Trace.walletPubKey w, v)
         >> Trace.handleBlockchainEvents w
@@ -238,7 +233,7 @@ makeContribution w v =
 -- | Run a successful campaign with contributions from wallets 2, 3 and 4.
 successfulCampaign
     :: ( MonadEmulator m )
-    => ContractTrace Req Resp m a ()
+    => ContractTrace CrowdfundingSchema m a ()
 successfulCampaign =
     startCampaign
         >> makeContribution (Trace.Wallet 2) (Ada.lovelaceValueOf 10)

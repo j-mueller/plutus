@@ -16,17 +16,13 @@ import qualified Test.Tasty.HUnit                                as HUnit
 import qualified Language.Plutus.Contract.Effects.ExposeEndpoint as Endpoint
 import qualified Language.Plutus.Contract.Resumable              as S
 
-type Req = 
-    BlockchainIn 
-        .\/ EndpointIn "endpoint" String
-
-type Resp =
-    BlockchainOut
-        .\/ EndpointOut "endpoint"
+type Schema = 
+    BlockchainSchema
+        .\/ EndpointSchema "endpoint" String
 
 tests :: TestTree
 tests =
-    let ep = Con.endpoint @"endpoint" @String @Req @Resp
+    let ep = Con.endpoint @"endpoint" @String @Schema
         initRecord = fmap fst . fst . fromRight (error "initialise failed") . runExcept . runWriterT . S.initialise
         inp = Endpoint.event @"endpoint" "asd"
         run con =
