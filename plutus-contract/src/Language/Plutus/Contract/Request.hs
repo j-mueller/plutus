@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE AllowAmbiguousTypes  #-}
 {-# LANGUAGE ConstraintKinds      #-}
 {-# LANGUAGE DataKinds            #-}
@@ -11,6 +10,7 @@
 {-# LANGUAGE PolyKinds            #-}
 {-# LANGUAGE RankNTypes           #-}
 {-# LANGUAGE TypeApplications     #-}
+{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Language.Plutus.Contract.Request where
@@ -18,7 +18,7 @@ module Language.Plutus.Contract.Request where
 import qualified Data.Aeson                         as Aeson
 import           Data.Row
 
-import           Language.Plutus.Contract.Events    (Event (..), Hooks (..), First, Second)
+import           Language.Plutus.Contract.Events    (Event (..), First, Hooks (..), Second)
 import qualified Language.Plutus.Contract.Events    as Events
 import           Language.Plutus.Contract.Resumable
 

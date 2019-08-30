@@ -1,11 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds  #-}
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MonoLocalBinds   #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators    #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE MonoLocalBinds      #-}
+{-# LANGUAGE OverloadedLabels    #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeOperators       #-}
 module Language.Plutus.Contract.Effects.WatchAddress where
 
 import           Control.Lens                               (at, (^.))
@@ -23,8 +23,8 @@ import           Ledger.Tx                                  (Tx)
 import qualified Ledger.Value                               as V
 
 import           Language.Plutus.Contract.Effects.AwaitSlot
-import           Language.Plutus.Contract.Events            (Event (..), Hooks (..), First, Second)
-import           Language.Plutus.Contract.Request           (Contract, requestMaybe, ContractRow)
+import           Language.Plutus.Contract.Events            (Event (..), First, Hooks (..), Second)
+import           Language.Plutus.Contract.Request           (Contract, ContractRow, requestMaybe)
 
 type AddressPrompt s =
     ( HasType "address" (Address, Tx) (First s)
@@ -44,7 +44,7 @@ nextTransactionAt addr =
 
 -- | Watch an address until the given slot, then return all known outputs
 --   at the address.
-watchAddressUntil 
+watchAddressUntil
     :: forall s.
        ( SlotPrompt s
        , AddressPrompt s
@@ -57,8 +57,8 @@ watchAddressUntil a = collectUntil @s AM.updateAddresses (AM.addAddress a mempty
 -- | Watch an address for changes, and return the outputs
 --   at that address when the total value at the address
 --   has surpassed the given value.
-fundsAtAddressGt 
-    :: forall s. 
+fundsAtAddressGt
+    :: forall s.
        AddressPrompt s
     => Address
     -> Value

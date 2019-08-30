@@ -1,15 +1,15 @@
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ConstraintKinds  #-}
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MonoLocalBinds   #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE TypeOperators    #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE MonoLocalBinds      #-}
+{-# LANGUAGE OverloadedLabels    #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeOperators       #-}
 module Language.Plutus.Contract.Effects.WriteTx where
 
 import           Data.Row
-import           Language.Plutus.Contract.Events  (Event (..), Hooks (..), First, Second)
+import           Language.Plutus.Contract.Events  (Event (..), First, Hooks (..), Second)
 import           Language.Plutus.Contract.Request as Req
 import           Language.Plutus.Contract.Tx      (UnbalancedTx)
 

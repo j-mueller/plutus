@@ -65,7 +65,7 @@ instance (AllUniqueLabels (Second s), Forall (Second s) Semigroup, Forall (Secon
   mappend = (<>)
 
 initialise :: forall (s :: Row *) l a. (AllUniqueLabels (Second s), Forall (Second s) Semigroup, Forall (Second s) Monoid, KnownSymbol l, HasType l a (Second s)) => a -> Hooks s
-initialise a = 
+initialise a =
   let Hooks h = mempty @(Hooks s)
   in Hooks (Records.update (Label @l) a h)
 
@@ -107,4 +107,4 @@ type family SecondR (r :: [LT *]) where
   SecondR (l ':-> t ': _) =
     TypeError ('Text "Second requires all types to be tuples."
                 :$$: 'Text "For one, the label " :<>: ShowType l :<>: 'Text " has type " :<>: ShowType t)
-  
+

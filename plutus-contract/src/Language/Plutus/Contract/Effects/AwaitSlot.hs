@@ -1,19 +1,19 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ConstraintKinds  #-}
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE TypeFamilies     #-}
-{-# LANGUAGE TypeOperators    #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE OverloadedLabels    #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TypeOperators       #-}
 module Language.Plutus.Contract.Effects.AwaitSlot where
 
 import           Data.Row
-import           Data.Semigroup (Min(..))
+import           Data.Semigroup                   (Min (..))
 import           Prelude                          hiding (until)
 
-import           Language.Plutus.Contract.Events  (Event (..), Hooks (..), First, Second)
+import           Language.Plutus.Contract.Events  (Event (..), First, Hooks (..), Second)
 import           Language.Plutus.Contract.Request as Req
 import           Language.Plutus.Contract.Util    (foldMaybe, selectEither)
 
@@ -64,7 +64,7 @@ until
   => Contract s a
   -> Slot
   -> Contract s (Maybe a)
-until c sl = 
+until c sl =
   fmap (either (const Nothing) Just) (selectEither (awaitSlot @s sl) c)
 
 -- | Run a contract when the given slot has been reached.

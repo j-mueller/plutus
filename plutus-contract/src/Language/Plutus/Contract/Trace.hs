@@ -55,7 +55,7 @@ import           Data.Sequence                                   (Seq)
 import qualified Data.Sequence                                   as Seq
 import qualified Data.Set                                        as Set
 
-import           Language.Plutus.Contract                        (AddressPrompt, Contract, TxPrompt, First, Second)
+import           Language.Plutus.Contract                        (AddressPrompt, Contract, First, Second, TxPrompt)
 import           Language.Plutus.Contract.Resumable              (ResumableError)
 import qualified Language.Plutus.Contract.Resumable              as State
 import           Language.Plutus.Contract.Tx                     (UnbalancedTx)

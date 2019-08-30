@@ -20,7 +20,7 @@ import qualified Data.Set                         as Set
 import           GHC.Generics                     (Generic)
 import           GHC.TypeLits                     (Symbol, symbolVal)
 
-import           Language.Plutus.Contract.Events  (Event (..), Hooks (..), First, Second)
+import           Language.Plutus.Contract.Events  (Event (..), First, Hooks (..), Second)
 import           Language.Plutus.Contract.IOTS
 import           Language.Plutus.Contract.Request as Req
 
@@ -39,8 +39,8 @@ type EndpointPrompt l a s =
 type EndpointSchema l a = l .== (a, Set EndpointDescription)
 
 -- | Expose an endpoint, return the data that was entered
-endpoint 
-  :: forall l a s. 
+endpoint
+  :: forall l a s.
      ( EndpointPrompt l a s )
   => Contract s a
 endpoint = request @l @_ @_ @s s where

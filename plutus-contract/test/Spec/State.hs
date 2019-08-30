@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeOperators    #-}
 module Spec.State where
 
-import           Control.Applicative                             (Alternative(..))
+import           Control.Applicative                             (Alternative (..))
 import           Control.Monad                                   (foldM)
 import           Control.Monad.Except                            (runExcept)
 import           Control.Monad.Writer                            (runWriterT)
@@ -16,7 +16,7 @@ import qualified Test.Tasty.HUnit                                as HUnit
 import qualified Language.Plutus.Contract.Effects.ExposeEndpoint as Endpoint
 import qualified Language.Plutus.Contract.Resumable              as S
 
-type Schema = 
+type Schema =
     BlockchainSchema
         .\/ EndpointSchema "endpoint" String
 
