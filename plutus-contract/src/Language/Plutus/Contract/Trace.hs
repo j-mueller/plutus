@@ -55,9 +55,10 @@ import           Data.Sequence                                   (Seq)
 import qualified Data.Sequence                                   as Seq
 import qualified Data.Set                                        as Set
 
-import           Language.Plutus.Contract                        (AddressPrompt, Contract, First, Second, TxPrompt)
+import           Language.Plutus.Contract                        (Contract, HasWatchAddress, HasWriteTx)
 import           Language.Plutus.Contract.Resumable              (ResumableError)
 import qualified Language.Plutus.Contract.Resumable              as State
+import           Language.Plutus.Contract.Schema                 (First, Second)
 import           Language.Plutus.Contract.Tx                     (UnbalancedTx)
 import qualified Language.Plutus.Contract.Wallet                 as Wallet
 
@@ -213,7 +214,7 @@ submitUnbalancedTx wllt tx =
 --   the traces of all wallets.
 addTxEvent
     :: ( MonadEmulator m
-       , AddressPrompt s
+       , HasWatchAddress s
        )
     => Tx
     -> ContractTrace s m a ()
@@ -239,7 +240,7 @@ unbalancedTransactions w = WriteTx.transactions . either (const mempty) id <$> g
 -- | Get the addresses that are of interest to the wallet's contract instance
 interestingAddresses
     :: ( MonadEmulator m
-       , AddressPrompt s
+       , HasWatchAddress s
        )
     => Wallet
     -> ContractTrace s m a [Address]
@@ -272,8 +273,8 @@ addBlocks i =
 --   and inform all wallets about new transactions
 handleBlockchainEvents
     :: ( MonadEmulator m
-       , AddressPrompt s
-       , TxPrompt s
+       , HasWatchAddress s
+       , HasWriteTx s
        )
     => Wallet
     -> ContractTrace s m a ()
@@ -284,7 +285,7 @@ handleBlockchainEvents wllt = do
 -- | Notify the wallet of all interesting addresses
 notifyInterestingAddresses
     :: ( MonadEmulator m
-       , AddressPrompt s
+       , HasWatchAddress s
        )
     => Wallet
     -> ContractTrace s m a ()

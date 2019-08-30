@@ -3,14 +3,15 @@
 {-# LANGUAGE TypeOperators    #-}
 module Language.Plutus.Contract(
       Contract
-    , ContractRow
+    , BlockchainActions
     , both
     , selectEither
     , select
     , (>>)
     , (<|>)
     -- * Dealing with time
-    , SlotPrompt
+    , HasAwaitSlot
+    , AwaitSlot
     , awaitSlot
     , until
     , when
@@ -18,14 +19,16 @@ module Language.Plutus.Contract(
     , between
     , collectUntil
     -- * Endpoints
-    , EndpointPrompt
+    , HasEndpoint
     , Endpoint
     , endpoint
     -- * Transactions
-    , TxPrompt
+    , HasWriteTx
+    , WriteTx
     , writeTx
     -- * Blockchain events
-    , AddressPrompt
+    , HasWatchAddress
+    , WatchAddress
     , nextTransactionAt
     , watchAddressUntil
     , fundsAtAddressGt
@@ -33,11 +36,9 @@ module Language.Plutus.Contract(
     , module Tx
     -- * Row-related things
     , HasType
-    , BlockchainSchema
-    , type (.==)
+    , ContractRow
     , type (.\/)
-    , type First
-    , type Second
+    , type Empty
     ) where
 
 import           Control.Applicative                             (Alternative(..))
@@ -50,7 +51,7 @@ import           Language.Plutus.Contract.Effects.WriteTx
 import           Language.Plutus.Contract.Util                   (both, selectEither)
 
 import           Language.Plutus.Contract.Request                (Contract, ContractRow, select)
-import           Language.Plutus.Contract.Schema (First, Second)
+
 import           Language.Plutus.Contract.Tx                     as Tx
 
 import           Prelude                                         hiding (until)
@@ -58,8 +59,7 @@ import           Prelude                                         hiding (until)
 import Data.Row
 
 -- | Schema for contracts that can interact with the blockchain (via a wallet)
-type BlockchainSchema =
-  SlotSchema
-  .\/ AddressSchema
-  .\/  WriteTxSchema
-  
+type BlockchainActions =
+  AwaitSlot
+  .\/ WatchAddress
+  .\/  WriteTx

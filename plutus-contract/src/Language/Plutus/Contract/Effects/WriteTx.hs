@@ -13,15 +13,15 @@ import           Language.Plutus.Contract.Request as Req
 import           Language.Plutus.Contract.Schema  (Event (..), First, Hooks (..), Second)
 import           Language.Plutus.Contract.Tx      (UnbalancedTx)
 
-type TxPrompt s =
+type HasWriteTx s =
     ( HasType "tx" () (First s)
     , HasType "tx" [UnbalancedTx] (Second s)
     , ContractRow s)
 
-type WriteTxSchema = "tx" .== ((), [UnbalancedTx])
+type WriteTx = "tx" .== ((), [UnbalancedTx])
 
 --  | Send an unbalanced transaction to the wallet.
-writeTx :: forall s. TxPrompt s => UnbalancedTx -> Contract s ()
+writeTx :: forall s. HasWriteTx s => UnbalancedTx -> Contract s ()
 writeTx t = request @"tx" @_ @_ @s [t]
 
 event

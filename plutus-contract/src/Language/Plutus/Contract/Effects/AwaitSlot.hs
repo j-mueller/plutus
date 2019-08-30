@@ -19,19 +19,19 @@ import           Language.Plutus.Contract.Util    (foldMaybe, selectEither)
 
 import           Ledger.Slot                      (Slot)
 
-type SlotPrompt s =
+type HasAwaitSlot s =
   ( HasType "slot" Slot (First s)
   , HasType "slot" (Maybe (Min Slot)) (Second s)
   , ContractRow s
   )
 
-type SlotSchema = "slot" .== (Slot, Maybe (Min Slot))
+type AwaitSlot = "slot" .== (Slot, Maybe (Min Slot))
 
 -- | A contract that waits until the slot is reached, then returns the
 --   current slot.
 awaitSlot
     :: forall s.
-       (SlotPrompt s)
+       (HasAwaitSlot s)
     => Slot
     -> Contract s Slot
 awaitSlot sl =
@@ -60,7 +60,7 @@ nextSlot (Hooks r) = fmap getMin (r .! #slot)
 -- | Run a contract until the given slot has been reached.
 until
   :: forall s a.
-     (SlotPrompt s)
+     (HasAwaitSlot s)
   => Contract s a
   -> Slot
   -> Contract s (Maybe a)
@@ -70,7 +70,7 @@ until c sl =
 -- | Run a contract when the given slot has been reached.
 when
   :: forall s a.
-     (SlotPrompt s)
+     (HasAwaitSlot s)
   => Slot
   -> Contract s a
   -> Contract s a
@@ -80,7 +80,7 @@ when s c = awaitSlot @s s >> c
 --   @timeout = flip until@
 timeout
   :: forall s a.
-     (SlotPrompt s)
+     (HasAwaitSlot s)
   => Slot
   -> Contract s a
   -> Contract s (Maybe a)
@@ -90,7 +90,7 @@ timeout = flip (until @s)
 --   the second slot is reached.
 between
   :: forall s a.
-     (SlotPrompt s)
+     (HasAwaitSlot s)
   => Slot
   -> Slot
   -> Contract s a
@@ -103,7 +103,7 @@ between a b = timeout @s b . when @s a
 --   return the last result.
 collectUntil
   :: forall s a b.
-     (SlotPrompt s)
+     (HasAwaitSlot s)
   => (a -> b -> b)
   -> b
   -> Contract s a

@@ -85,7 +85,7 @@ data CampaignAction = Collect | Refund
 PlutusTx.makeLift ''CampaignAction
 
 type CrowdfundingSchema =
-    BlockchainSchema
+    BlockchainActions
         .\/ Endpoint "schedule collection" ()
         .\/ Endpoint "contribute" (PubKey, Value)
 

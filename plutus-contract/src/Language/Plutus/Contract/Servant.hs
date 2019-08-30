@@ -34,6 +34,7 @@ import           Language.Plutus.Contract
 import           Language.Plutus.Contract.Record
 import           Language.Plutus.Contract.Resumable (ResumableError)
 import qualified Language.Plutus.Contract.Resumable as Resumable
+import           Language.Plutus.Contract.Schema    (First, Second)
 
 import           Language.Plutus.Contract.Schema    (Event, Hooks)
 

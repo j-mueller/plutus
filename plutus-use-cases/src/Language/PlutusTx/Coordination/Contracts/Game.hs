@@ -60,7 +60,7 @@ newtype ClearString = ClearString ByteString
 PlutusTx.makeLift ''ClearString
 
 type GameSchema =
-    BlockchainSchema
+    BlockchainActions
         .\/ Endpoint "lock" LockParams
         .\/ Endpoint "guess" GuessParams
 

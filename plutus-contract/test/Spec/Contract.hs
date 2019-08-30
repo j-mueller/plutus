@@ -114,7 +114,7 @@ someAddress =
         Ledger.ValidatorScript $$(Ledger.compileScript [|| \(i :: Integer) -> i ||])
 
 type Schema = 
-    BlockchainSchema 
+    BlockchainActions 
         .\/ Endpoint "1" Int
         .\/ Endpoint "2" Int
         .\/ Endpoint "3" Int

@@ -26,15 +26,15 @@ import           Language.Plutus.Contract.Effects.AwaitSlot
 import           Language.Plutus.Contract.Request           (Contract, ContractRow, requestMaybe)
 import           Language.Plutus.Contract.Schema            (Event (..), First, Hooks (..), Second)
 
-type AddressPrompt s =
+type HasWatchAddress s =
     ( HasType "address" (Address, Tx) (First s)
     , HasType "address" (Set Address) (Second s)
     , ContractRow s)
 
-type AddressSchema = "address" .== ((Address, Tx), Set Address)
+type WatchAddress = "address" .== ((Address, Tx), Set Address)
 
 -- | Wait for the next transaction that changes an address.
-nextTransactionAt :: forall s. AddressPrompt s => Address -> Contract s Tx
+nextTransactionAt :: forall s. HasWatchAddress s => Address -> Contract s Tx
 nextTransactionAt addr =
     let s = Set.singleton addr
         check :: (Address, Tx) -> Maybe Tx
@@ -46,8 +46,8 @@ nextTransactionAt addr =
 --   at the address.
 watchAddressUntil
     :: forall s.
-       ( SlotPrompt s
-       , AddressPrompt s
+       ( HasAwaitSlot s
+       , HasWatchAddress s
        )
     => Address
     -> Slot
@@ -59,7 +59,7 @@ watchAddressUntil a = collectUntil @s AM.updateAddresses (AM.addAddress a mempty
 --   has surpassed the given value.
 fundsAtAddressGt
     :: forall s.
-       AddressPrompt s
+       HasWatchAddress s
     => Address
     -> Value
     -> Contract s AddressMap

@@ -29,7 +29,7 @@ newtype EndpointDescription = EndpointDescription { getEndpointDescription :: St
     deriving newtype (ToJSON, FromJSON)
     deriving anyclass (IotsType)
 
-type EndpointPrompt l a s =
+type HasEndpoint l a s =
   ( HasType l a (First s)
   , HasType l (Set EndpointDescription) (Second s)
   , KnownSymbol l
@@ -41,7 +41,7 @@ type Endpoint l a = l .== (a, Set EndpointDescription)
 -- | Expose an endpoint, return the data that was entered
 endpoint
   :: forall l a s.
-     ( EndpointPrompt l a s )
+     ( HasEndpoint l a s )
   => Contract s a
 endpoint = request @l @_ @_ @s s where
   s = Set.singleton $ EndpointDescription $ symbolVal (Proxy @l)

@@ -17,7 +17,7 @@ import qualified Language.Plutus.Contract.Effects.ExposeEndpoint as Endpoint
 import qualified Language.Plutus.Contract.Resumable              as S
 
 type Schema =
-    BlockchainSchema
+    BlockchainActions
         .\/ Endpoint "endpoint" String
 
 tests :: TestTree

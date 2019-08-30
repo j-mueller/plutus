@@ -45,7 +45,8 @@ import           GHC.TypeLits                                    (Symbol, KnownS
 import qualified Test.Tasty.HUnit                                as HUnit
 import           Test.Tasty.Providers                            (TestTree)
 
-import           Language.Plutus.Contract                        (Contract, First, Second)
+import           Language.Plutus.Contract                        (Contract)
+import           Language.Plutus.Contract.Schema (First, Second)
 import           Language.Plutus.Contract.Record                 (Record)
 import           Language.Plutus.Contract.Resumable              (ResumableError)
 import qualified Language.Plutus.Contract.Resumable              as State
@@ -149,7 +150,7 @@ endpointAvailable w = PredF $ \(_, r) -> do
 
 interestingAddress
     :: forall s a.
-       ( WatchAddress.AddressPrompt s )
+       ( WatchAddress.HasWatchAddress s )
     => Wallet
     -> Address
     -> TracePredicate s a

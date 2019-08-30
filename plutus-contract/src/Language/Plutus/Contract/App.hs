@@ -22,6 +22,7 @@ import           Data.Sequence                    (Seq)
 import           Data.Text                        (Text)
 import qualified Data.Text.IO                     as Text
 import           Language.Plutus.Contract
+import           Language.Plutus.Contract.Schema  (First, Second)
 import           Language.Plutus.Contract.Servant (Request (..), Response (..), contractApp, initialResponse, runUpdate)
 import           Language.Plutus.Contract.Trace   (ContractTrace, EmulatorAction, execTrace)
 import qualified Network.Wai.Handler.Warp         as Warp
