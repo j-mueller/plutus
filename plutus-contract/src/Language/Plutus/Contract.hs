@@ -19,7 +19,7 @@ module Language.Plutus.Contract(
     , collectUntil
     -- * Endpoints
     , EndpointPrompt
-    , EndpointSchema
+    , Endpoint
     , endpoint
     -- * Transactions
     , TxPrompt
@@ -50,7 +50,7 @@ import           Language.Plutus.Contract.Effects.WriteTx
 import           Language.Plutus.Contract.Util                   (both, selectEither)
 
 import           Language.Plutus.Contract.Request                (Contract, ContractRow, select)
-import           Language.Plutus.Contract.Events (First, Second)
+import           Language.Plutus.Contract.Schema (First, Second)
 import           Language.Plutus.Contract.Tx                     as Tx
 
 import           Prelude                                         hiding (until)

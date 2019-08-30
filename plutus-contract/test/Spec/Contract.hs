@@ -115,8 +115,8 @@ someAddress =
 
 type Schema = 
     BlockchainSchema 
-        .\/ EndpointSchema "1" Int
-        .\/ EndpointSchema "2" Int
-        .\/ EndpointSchema "3" Int
-        .\/ EndpointSchema "4" Int
-        .\/ EndpointSchema "ep" ()
+        .\/ Endpoint "1" Int
+        .\/ Endpoint "2" Int
+        .\/ Endpoint "3" Int
+        .\/ Endpoint "4" Int
+        .\/ Endpoint "ep" ()

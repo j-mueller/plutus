@@ -61,8 +61,8 @@ PlutusTx.makeLift ''ClearString
 
 type GameSchema =
     BlockchainSchema
-        .\/ EndpointSchema "lock" LockParams
-        .\/ EndpointSchema "guess" GuessParams
+        .\/ Endpoint "lock" LockParams
+        .\/ Endpoint "guess" GuessParams
 
 correctGuess :: HashedString -> ClearString -> Bool
 correctGuess (HashedString actual) (ClearString guess') = actual == sha2_256 guess'

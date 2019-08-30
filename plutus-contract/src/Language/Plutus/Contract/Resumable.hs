@@ -12,7 +12,7 @@ module Language.Plutus.Contract.Resumable(
     Resumable(..)
     , ResumableError(..)
     , Step(..)
-    , mapI
+    , contramapI
     , mapO
     , step
     , checkpoint
@@ -87,8 +87,8 @@ newtype Step i o a = Step { runStep :: i -> Either o a }
     deriving stock Functor
     deriving (Applicative, Monad, MonadReader i, MonadError o) via (ReaderT i (Either o))
 
-mapI :: (i -> j) -> Step j o a -> Step i o a
-mapI f (Step a) = Step (a . f)
+contramapI :: (i -> j) -> Step j o a -> Step i o a
+contramapI f (Step a) = Step (a . f)
 
 mapO :: (o -> p) -> Step i o a -> Step i p a
 mapO f (Step a) = Step (fmap (first f) a)

@@ -18,16 +18,19 @@ module Language.Plutus.Contract.Request where
 import qualified Data.Aeson                         as Aeson
 import           Data.Row
 
-import           Language.Plutus.Contract.Events    (Event (..), First, Hooks (..), Second)
-import qualified Language.Plutus.Contract.Events    as Events
 import           Language.Plutus.Contract.Resumable
+import           Language.Plutus.Contract.Schema    (Event (..), First, Hooks (..), Second)
+import qualified Language.Plutus.Contract.Schema    as Events
 
--- | @Contract i o a@ is a contract that expects input events of type @i@ and produces
---   requests (describing the acceptable input) of type @o@. The two type parameters
---   are 'Data.Row.Row' rows
+-- | @Contract s a@ is a contract with schema 's', producing a value of
+--  type 'a'. See note [Contract Schema].
 --
 type Contract s a = Resumable (Step (Maybe (Event s)) (Hooks s)) a
 
+-- | Constraints on the contract schema, ensuring that the requests produced
+--   by the contracts are 'Monoid's (so that we can produce a record with
+--   requests from different branches) and that the labels of the schema are
+--   unique.
 type ContractRow s =
   ( Forall (Second s) Monoid
   , Forall (Second s) Semigroup
@@ -35,22 +38,9 @@ type ContractRow s =
   , AllUniqueLabels (Second s)
   )
 
-requestMaybe
-  :: forall l req resp s a.
-     ( KnownSymbol l
-     , HasType l resp (First s)
-     , HasType l req (Second s)
-     , ContractRow s
-     )
-    => req
-    -> (resp -> Maybe a)
-    -> Contract s a
-requestMaybe out check = do
-  rsp <- request @l @req @resp @s out
-  case check rsp of
-    Nothing -> requestMaybe @l @req @resp @s out check
-    Just a  -> pure a
-
+-- | Given a schema @s@ with an entry @l .== (resp, req)@, @request r@
+--   is a contract that writes the request @r@ and waits for a response of type
+--   @resp@.
 request
   :: forall l req resp s.
     ( KnownSymbol l
@@ -67,6 +57,26 @@ request out = CStep (Step go) where
     Left resp -> Right resp
     _         -> upd
 
+-- | Write a request repeatedly until the desired response is returned.
+requestMaybe
+  :: forall l req resp s a.
+     ( KnownSymbol l
+     , HasType l resp (First s)
+     , HasType l req (Second s)
+     , ContractRow s
+     )
+    => req
+    -> (resp -> Maybe a)
+    -> Contract s a
+requestMaybe out check = do
+  rsp <- request @l @req @resp @s out
+  case check rsp of
+    Nothing -> requestMaybe @l @req @resp @s out check
+    Just a  -> pure a
+
+-- | @select@ returns the contract that finished first, discarding the other
+--   one.
+--
 select :: forall s a. Contract s a -> Contract s a -> Contract s a
 select = CAlt
 

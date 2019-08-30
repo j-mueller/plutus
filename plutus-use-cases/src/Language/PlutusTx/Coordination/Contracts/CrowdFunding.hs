@@ -86,8 +86,8 @@ PlutusTx.makeLift ''CampaignAction
 
 type CrowdfundingSchema =
     BlockchainSchema
-        .\/ EndpointSchema "schedule collection" ()
-        .\/ EndpointSchema "contribute" (PubKey, Value)
+        .\/ Endpoint "schedule collection" ()
+        .\/ Endpoint "contribute" (PubKey, Value)
 
 -- | Construct a 'Campaign' value from the campaign parameters,
 --   using the wallet's public key.

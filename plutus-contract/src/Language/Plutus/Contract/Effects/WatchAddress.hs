@@ -23,8 +23,8 @@ import           Ledger.Tx                                  (Tx)
 import qualified Ledger.Value                               as V
 
 import           Language.Plutus.Contract.Effects.AwaitSlot
-import           Language.Plutus.Contract.Events            (Event (..), First, Hooks (..), Second)
 import           Language.Plutus.Contract.Request           (Contract, ContractRow, requestMaybe)
+import           Language.Plutus.Contract.Schema            (Event (..), First, Hooks (..), Second)
 
 type AddressPrompt s =
     ( HasType "address" (Address, Tx) (First s)

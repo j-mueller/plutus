@@ -18,7 +18,7 @@
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors #-}
-module Language.Plutus.Contract.Events(
+module Language.Plutus.Contract.Schema(
       Hooks(..)
     , Event(..)
     , generalise
@@ -41,6 +41,26 @@ import           Data.Text             (Text)
 import qualified Data.Text             as Text
 
 import           GHC.TypeLits
+
+{- Note [Contract Schema]
+
+Every contract has a schema that describes the data types used by the contract
+to interact with the outside world. Conceptually the schema is a map of symbols
+to pairs of types. Each entry in this map stands for a named request-response
+pair.
+
+For example, the 'WriteTx' interaction is defined as
+
+  type WriteTxSchema = "tx" .== ((), [UnbalancedTx])
+
+Meaning that the output produced by the contract (2nd element) is a list of
+unbalanced transactions, and the input the contract expects as a result (1st
+element) is the unit value, telling it that the transactions have been
+submitted.
+
+In practice the schema is a type of the 'Data.Row.Row' kind.
+
+-}
 
 newtype Event s = Event { unEvent :: Var (First s) }
 

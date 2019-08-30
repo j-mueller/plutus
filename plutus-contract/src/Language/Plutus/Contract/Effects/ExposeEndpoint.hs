@@ -20,9 +20,9 @@ import qualified Data.Set                         as Set
 import           GHC.Generics                     (Generic)
 import           GHC.TypeLits                     (Symbol, symbolVal)
 
-import           Language.Plutus.Contract.Events  (Event (..), First, Hooks (..), Second)
 import           Language.Plutus.Contract.IOTS
 import           Language.Plutus.Contract.Request as Req
+import           Language.Plutus.Contract.Schema  (Event (..), First, Hooks (..), Second)
 
 newtype EndpointDescription = EndpointDescription { getEndpointDescription :: String }
     deriving stock (Eq, Ord, Generic)
@@ -36,7 +36,7 @@ type EndpointPrompt l a s =
   , ContractRow s
   )
 
-type EndpointSchema l a = l .== (a, Set EndpointDescription)
+type Endpoint l a = l .== (a, Set EndpointDescription)
 
 -- | Expose an endpoint, return the data that was entered
 endpoint

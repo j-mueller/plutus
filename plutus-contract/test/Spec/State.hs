@@ -18,7 +18,7 @@ import qualified Language.Plutus.Contract.Resumable              as S
 
 type Schema =
     BlockchainSchema
-        .\/ EndpointSchema "endpoint" String
+        .\/ Endpoint "endpoint" String
 
 tests :: TestTree
 tests =

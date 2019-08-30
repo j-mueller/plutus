@@ -13,8 +13,8 @@ import           Data.Row
 import           Data.Semigroup                   (Min (..))
 import           Prelude                          hiding (until)
 
-import           Language.Plutus.Contract.Events  (Event (..), First, Hooks (..), Second)
 import           Language.Plutus.Contract.Request as Req
+import           Language.Plutus.Contract.Schema  (Event (..), First, Hooks (..), Second)
 import           Language.Plutus.Contract.Util    (foldMaybe, selectEither)
 
 import           Ledger.Slot                      (Slot)

@@ -9,8 +9,8 @@
 module Language.Plutus.Contract.Effects.WriteTx where
 
 import           Data.Row
-import           Language.Plutus.Contract.Events  (Event (..), First, Hooks (..), Second)
 import           Language.Plutus.Contract.Request as Req
+import           Language.Plutus.Contract.Schema  (Event (..), First, Hooks (..), Second)
 import           Language.Plutus.Contract.Tx      (UnbalancedTx)
 
 type TxPrompt s =

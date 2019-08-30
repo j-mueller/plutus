@@ -35,7 +35,7 @@ import           Language.Plutus.Contract.Record
 import           Language.Plutus.Contract.Resumable (ResumableError)
 import qualified Language.Plutus.Contract.Resumable as Resumable
 
-import           Language.Plutus.Contract.Events    (Event, Hooks)
+import           Language.Plutus.Contract.Schema    (Event, Hooks)
 
 newtype State e = State { record :: Record e }
     deriving stock (Generic, Eq)
