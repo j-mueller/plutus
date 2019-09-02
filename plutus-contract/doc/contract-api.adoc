@@ -12,6 +12,7 @@ When you have a `PlutusContract` you can compile it to a contract bundle (a form
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE TypeOperators    #-}
 module ContractAPI where
 import           Language.Plutus.Contract
 import           Language.Plutus.Contract.Tx (UnbalancedTx)
