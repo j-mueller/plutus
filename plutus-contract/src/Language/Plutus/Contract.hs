@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeOperators    #-}
 module Language.Plutus.Contract(
       Contract
+    , HasBlockchainActions
     , BlockchainActions
     , both
     , selectEither

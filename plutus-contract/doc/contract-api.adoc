@@ -11,6 +11,7 @@ When you have a `PlutusContract` you can compile it to a contract bundle (a form
 ----
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DataKinds        #-}
 module ContractAPI where
 import           Language.Plutus.Contract
 import           Language.Plutus.Contract.Tx (UnbalancedTx)
@@ -41,7 +42,7 @@ For example, `awaitSlot {2c} (HasAwaitSlot s) => Slot -> Contract s Slot` is a f
 
 [source,haskell]
 ----
-c2 :: (Member AwaitSlot s) => Contract s Slot
+c2 :: (HasAwaitSlot s) => Contract s Slot
 c2 = awaitSlot 2765 -- <1>
 ----
 <1> `c2` waits until slot 2765 and then returns the current slot. The value returns may be greater than 2765, for example if execution of the contract was suspended for a while.
@@ -142,7 +143,7 @@ buy = undefined
 sell :: HasBlockchainActions s => Contract s Sell
 sell = undefined
 
-buyOrSell :: ContractActions r => Contract r (Either Buy Sell)
+buyOrSell :: HasBlockchainActions r => Contract r (Either Buy Sell)
 buyOrSell = selectEither buy sell
 ----
 
