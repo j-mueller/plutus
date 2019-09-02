@@ -53744,6 +53744,7 @@ license = stdenv.lib.licenses.asl20;
 , doctest
 , extensible-effects
 , hedgehog
+, iots-export
 , language-plutus-core
 , lens
 , mmorph
@@ -53778,7 +53779,7 @@ aeson
 base
 bytestring
 containers
-extensible-effects
+iots-export
 lens
 mmorph
 monad-control
