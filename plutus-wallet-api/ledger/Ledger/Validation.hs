@@ -69,7 +69,6 @@ import qualified Prelude                      as Haskell
 import           Ledger.Ada                   (Ada)
 import qualified Ledger.Ada                   as Ada
 import           Ledger.Crypto                (PubKey (..), Signature (..), plcDigest)
-import qualified Ledger.Interval              as I
 import           Ledger.Scripts
 import           Ledger.Slot                  (Slot, SlotRange)
 import           Ledger.Tx                    (Address, getAddress, scriptAddress)
