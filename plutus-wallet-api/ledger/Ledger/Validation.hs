@@ -18,7 +18,6 @@ module Ledger.Validation
     (
     -- * Pending transactions and related types
       PendingTx'(..)
-    , example
     , PendingTx
     , PendingTxOut(..)
     , PendingTxOutRef(..)
@@ -128,7 +127,7 @@ toLedgerTxIn = fmap Just
 
 -- | A pending transaction. This is the view as seen by validator scripts, so some details are stripped out.
 data PendingTx' i = PendingTx
-    { pendingTxInputs     :: [PendingTxIn] -- ^ Transaction inputs
+    { pendingTxInputs     :: [PendingTxIn' (Maybe (ValidatorHash, RedeemerHash))] -- ^ Transaction inputs
     , pendingTxOutputs    :: [PendingTxOut] -- ^ Transaction outputs
     , pendingTxFee        :: Ada -- ^ The fee paid by this transaction.
     , pendingTxForge      :: Value -- ^ The 'Value' forged by this transaction.
@@ -143,36 +142,7 @@ data PendingTx' i = PendingTx
 instance Functor PendingTx' where
     fmap f p = p { pendingTxIn = f (pendingTxIn p) }
 
-type PendingTx = PendingTx' PendingTxInScript
-
-example :: PendingTx
-example =
-    let ref :: PendingTxOutRef
-        ref = PendingTxOutRef "aa00aa00" 2
-        i1 :: PendingTxInScript
-        i1 = PendingTxIn 
-                { pendingTxInRef = ref
-                , pendingTxInWitness = ("123123", "343434")
-                , pendingTxInValue = mempty
-                }
-        i2 :: PendingTxIn
-        i2 = PendingTxIn 
-                { pendingTxInRef = ref
-                , pendingTxInWitness = Nothing
-                , pendingTxInValue = mempty
-                }
-        hsh :: TxHash
-        hsh = "aa00aa00"
-    in PendingTx
-        { pendingTxInputs  = [toLedgerTxIn i1, i2]
-        , pendingTxOutputs = []
-        , pendingTxFee     = mempty
-        , pendingTxForge   = mempty
-        , pendingTxIn      = i1
-        , pendingTxValidRange = I.always
-        , pendingTxSignatures = []
-        , pendingTxHash = hsh
-        }
+type PendingTx = PendingTx' (PendingTxIn' (ValidatorHash, RedeemerHash))
 
 {-# INLINABLE findDataScriptOutputs #-}
 -- | Look up a 'DataScriptHash' in the transaction outputs, returning the indexs of the outputs that have

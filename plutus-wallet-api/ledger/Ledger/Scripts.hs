@@ -45,8 +45,7 @@ module Ledger.Scripts(
     HashedDataScript (..),
     -- * Example scripts
     unitRedeemer,
-    unitData,
-    typecheckScript
+    unitData
     ) where
 
 import qualified Prelude                                  as Haskell
