@@ -243,7 +243,7 @@ checkMatch (pendingTx, dataScripts) = \case
                 throwError $ InvalidScriptHash d
         | otherwise -> do
             pTxIn <- pendingTxInScript (txInRef txin) vl r
-            let 
+            let
                 ptx' = fmap (const pTxIn) pendingTx
                 vd = ValidationData (lifted ptx')
             case runExcept $ runScript Typecheck vd dataScripts vl d r of
