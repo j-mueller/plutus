@@ -306,6 +306,16 @@ let
           Cmd = ["${server-invoker}/bin/marlowe-playground" "--config" "${defaultPlaygroundConfig}/etc/playground.yaml" "webserver" "-b" "0.0.0.0" "-p" "8080" "${client}"];
         };
       };
+
+      development = pkgs.dockerTools.buildImage {
+        name = "plutus-development";
+        contents = [ 
+            haskellPackages.ghc
+            localPackages.dev.withDevTools (localPackages.haskellPackages.shellFor { packages = p: (map (x: p.${x}) localPackages.localLib.plutusPkgList); }),
+            pkgs.coreutils
+            pkgs.bash
+        ];
+      }
     };
 
     plutus-contract = rec {
