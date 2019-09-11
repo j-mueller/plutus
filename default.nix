@@ -309,12 +309,7 @@ let
 
       development = pkgs.dockerTools.buildImage {
         name = "plutus-development";
-        contents = [ 
-            haskellPackages.ghc
-            (dev.withDevTools (haskellPackages.shellFor { packages = p: (map (x: p.${x}) localLib.plutusPkgList); }))
-            pkgs.coreutils
-            pkgs.bash
-        ];
+        contents = haskellPackages ++ [packages.cabal-install pkgs.coreutils pkgs.bash ];
       };
     };
 
