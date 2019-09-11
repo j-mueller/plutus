@@ -309,7 +309,7 @@ let
 
       development = pkgs.dockerTools.buildImage {
         name = "plutus-development";
-        contents = haskellPackages ++ [packages.cabal-install pkgs.coreutils pkgs.bash ];
+        contents = (attrValues haskellPackages) ++ [packages.cabal-install pkgs.coreutils pkgs.bash ];
       };
     };
 
