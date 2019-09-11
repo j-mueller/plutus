@@ -315,7 +315,7 @@ let
             pkgs.coreutils
             pkgs.bash
         ];
-      }
+      };
     };
 
     plutus-contract = rec {
