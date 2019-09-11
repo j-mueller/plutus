@@ -321,7 +321,13 @@ let
                   haskellPackages.plutus-ir
                   haskellPackages.plutus-contract
                 ]);
-          in  [ runtimeGhc pkgs.coreutils pkgs.bash pkgs.git ];
+          in  [ 
+                runtimeGhc
+                pkgs.coreutils
+                pkgs.bash
+                pkgs.git # needed by cabal-install
+                haskellPackages.cabal-install 
+              ];
         config = {
           Cmd = ["bash"];
         };
