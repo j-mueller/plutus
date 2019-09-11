@@ -311,7 +311,7 @@ let
         name = "plutus-development";
         contents = [ 
             haskellPackages.ghc
-            (localPackages.dev.withDevTools (localPackages.haskellPackages.shellFor { packages = p: (map (x: p.${x}) localPackages.localLib.plutusPkgList); }))
+            (dev.withDevTools (haskellPackages.shellFor { packages = p: (map (x: p.${x}) localLib.plutusPkgList); }))
             pkgs.coreutils
             pkgs.bash
         ];
