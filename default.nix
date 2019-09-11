@@ -323,6 +323,7 @@ let
                 ]);
           in  [ 
                 runtimeGhc
+                pkgs.binutils
                 pkgs.coreutils
                 pkgs.bash
                 pkgs.git # needed by cabal-install
