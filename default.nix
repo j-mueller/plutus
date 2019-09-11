@@ -310,6 +310,9 @@ let
       development = pkgs.dockerTools.buildImage {
         name = "plutus-development";
         contents = (attrValues localPackages) ++ (attrValues dev.packages) ++ [haskellPackages.ghc pkgs.coreutils pkgs.bash pkgs.git ];
+        config = {
+          Cmd = ["bash"]
+        };
       };
     };
 
