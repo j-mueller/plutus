@@ -309,7 +309,19 @@ let
 
       development = pkgs.dockerTools.buildImage {
         name = "plutus-development";
-        contents = (attrValues localPackages) ++ (attrValues dev.packages) ++ [haskellPackages.ghc pkgs.coreutils pkgs.bash pkgs.git ];
+        contents =         
+          let runtimeGhc = 
+                haskellPackages.ghcWithPackages (ps: [
+                  haskellPackages.language-plutus-core
+                  haskellPackages.plutus-core-interpreter
+                  haskellPackages.plutus-emulator
+                  haskellPackages.plutus-wallet-api
+                  haskellPackages.plutus-tx
+                  haskellPackages.plutus-use-cases
+                  haskellPackages.plutus-ir
+                  haskellPackages.plutus-contract
+                ]);
+          in  [ runtimeGhc pkgs.coreutils pkgs.bash pkgs.git ];
         config = {
           Cmd = ["bash"];
         };
