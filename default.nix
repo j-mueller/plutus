@@ -329,6 +329,7 @@ let
                 pkgs.git # needed by cabal-install
                 pkgs.gnutar # needed for vscode
                 pkgs.gzip # needed for vscode
+                pkgs.nodejs # needed for vscode
                 haskellPackages.cabal-install
               ];
         
