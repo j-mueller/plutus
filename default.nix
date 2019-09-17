@@ -334,6 +334,7 @@ let
                 pkgs.libgcc
                 pkgs.libstdcxx5
                 pkgs.musl
+                pkgs.which
                 haskellPackages.cabal-install
               ];
         
