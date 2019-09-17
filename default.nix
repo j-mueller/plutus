@@ -345,6 +345,7 @@ let
           useradd --system --gid vscode vscodedoc
         '';
         config = {
+          Env = [ "PATH=${pkgs.which}/bin/";]
           Cmd = ["${pkgs.bash}/bin/bash"];
         };
       };
