@@ -82,7 +82,6 @@ import           Language.Plutus.Contract                          (Contract (..
                                                                     waitingForBlockchainActions, withContractError)
 import qualified Language.Plutus.Contract.Resumable                as State
 import           Language.Plutus.Contract.Schema                   (Event, Handlers, Input, Output)
-import           Language.Plutus.Contract.Tx                       (UnbalancedTx)
 import           Language.Plutus.Contract.Wallet                   (SigningProcess)
 import qualified Language.Plutus.Contract.Wallet                   as Wallet
 
@@ -104,6 +103,7 @@ import qualified Ledger.Ada                                        as Ada
 import           Ledger.Address                                    (Address)
 import qualified Ledger.AddressMap                                 as AM
 import qualified Ledger.Blockchain                                 as Blockchain
+import           Ledger.Constraints.OffChain                       (UnbalancedTx)
 import           Ledger.Slot                                       (Slot (..))
 import           Ledger.Tx                                         (Tx, txId)
 import           Ledger.TxId                                       (TxId)
@@ -550,7 +550,7 @@ handleBlockchainEventsTimeout (MaxIterations i) wallet = go 0 where
             hks <- getHooks wallet
             if waitingForBlockchainActions hks
                 then do
-                    submitUnbalancedTxns wallet
+                    submitLedgerTxConstraints wallet
                     handleUtxoQueries wallet
                     handleOwnPubKeyQueries wallet
                     go (j + 1)
@@ -559,7 +559,7 @@ handleBlockchainEventsTimeout (MaxIterations i) wallet = go 0 where
 -- | Submit the wallet's pending transactions to the blockchain
 --   and inform all wallets about new transactions and respond to
 --   UTXO queries
-submitUnbalancedTxns
+submitLedgerTxConstraints
     :: ( MonadEmulator (TraceError e) m
        , HasWatchAddress s
        , HasWriteTx s
@@ -567,7 +567,7 @@ submitUnbalancedTxns
        )
     => Wallet
     -> ContractTrace s e m a ()
-submitUnbalancedTxns wllt = do
+submitLedgerTxConstraints wllt = do
     utxs <- unbalancedTransactions wllt
     traverse_ (submitUnbalancedTx wllt >=> traverse_ addTxEvents) utxs
 

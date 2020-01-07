@@ -46,6 +46,7 @@ import           Language.PlutusTx.Prelude  hiding ((<>))
 import           Ledger                     (PubKeyHash (..), Slot (..))
 import           Ledger.Interval            (Extended (..), Interval (..), LowerBound (..), UpperBound (..))
 import           Ledger.Scripts             (DataValue (..))
+import           Ledger.Tx                  (TxOut (..), TxOutType (..))
 import           Ledger.Validation
 import           Ledger.Value               (CurrencySymbol, TokenName)
 import qualified Ledger.Value               as Val
@@ -717,11 +718,11 @@ totalBalance accounts = foldMap
 validatePayments :: PendingTx -> [Payment] -> Bool
 validatePayments pendingTx txOutPayments = let
 
-    collect outputs PendingTxOut{pendingTxOutValue,
-        pendingTxOutType=PubKeyTxOut pubKey} = let
+    collect outputs TxOut{txOutValue,
+        txOutType=PayToPubKey pubKey} = let
         newValue = case Map.lookup pubKey outputs of
-            Just value -> value + pendingTxOutValue
-            Nothing    -> pendingTxOutValue
+            Just value -> value + txOutValue
+            Nothing    -> txOutValue
         in Map.insert pubKey newValue outputs
     collect outputs _ = outputs
 
@@ -763,12 +764,12 @@ validateTxOutputs pendingTx creator expectedTxOutputs = case expectedTxOutputs o
             Close -> validatePayments pendingTx txOutPayments
             -- otherwise check the continuation
             _ -> case getContinuingOutputs pendingTx of
-                    [PendingTxOut
-                        { pendingTxOutType=(ScriptTxOut _ dsh)
-                        , pendingTxOutValue
+                    [TxOut
+                        { txOutType=(PayToScript dsh)
+                        , txOutValue
                         }] | Just (DataValue ds) <- findData dsh pendingTx -> case PlutusTx.fromData ds of
                             Just (MarloweData expectedCreator expectedState expectedContract) -> let
-                                scriptOutputValue = pendingTxOutValue
+                                scriptOutputValue = txOutValue
                                 validContract = expectedCreator == creator
                                     && txOutState == expectedState
                                     && txOutContract == expectedContract

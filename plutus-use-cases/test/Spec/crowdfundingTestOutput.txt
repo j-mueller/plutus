@@ -7,135 +7,153 @@ Events by wallet:
     - {slot:
        Slot: 27}
     - {utxo-at:
-       Utxo at ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69 =
-         12c8fd4448d33cc10c21c1121ed9ce3997b56761267afa755c4e1d54e57db40c!1: PayToScript: 4c592448cff8d2b2ee40a509e1d5224260ef29f5b22cd920616e39cad65f466c Value {getValue = Map {unMap = [(,Map {unMap = [(,1)]})]}}
-         40bba9774b4e847961264812c75e56889f3ee2659e55d5ee76138162be2c0fde!1: PayToScript: b8324180800f57f26dee2ad65990e0a762a5dab9424d32e49855abd495f7196b Value {getValue = Map {unMap = [(,Map {unMap = [(,10)]})]}}
-         60fa1705710e676d0b736d92131fd94a7ce855d05d25fb35ac3aaa44b7722884!1: PayToScript: 49cd69a6941f191e3d14ce83834e0f2ce175318995b40380854e3201171c0baa Value {getValue = Map {unMap = [(,Map {unMap = [(,10)]})]}}}
+       Utxo at ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537 =
+         3d997f0bc645bf08edc1b795b58cc49a413f75d56d36ae3c82a0d6914bcc9cef!1: PayToScript: b8324180800f57f26dee2ad65990e0a762a5dab9424d32e49855abd495f7196b Value {getValue = Map {unMap = [(,Map {unMap = [(,10)]})]}}
+         70b37d0684d66cea26cfeb22ced7713117c8a9b78d1cb6540d41ca49f6e3050d!1: PayToScript: 49cd69a6941f191e3d14ce83834e0f2ce175318995b40380854e3201171c0baa Value {getValue = Map {unMap = [(,Map {unMap = [(,10)]})]}}
+         92e17f0810b59beed206bee6b9bb396b2b1044475343930bf5dd380a5de633fe!1: PayToScript: 4c592448cff8d2b2ee40a509e1d5224260ef29f5b22cd920616e39cad65f466c Value {getValue = Map {unMap = [(,Map {unMap = [(,1)]})]}}}
     - {tx:
-       WriteTxSuccess: 5c8ca315e659ca58b2a25db294e26c9b357e059056ea55891de4d42e407115a3}
+       WriteTxSuccess: e21e2249fd76a9a86edf953b68e0decffb5599f88fec5f9d099ccbb061c34a7e}
   Events for W2:
     - {contribute:
        EndpointValue: Contribution {contribValue = Value {getValue = Map {unMap = [(,Map {unMap = [(,10)]})]}}}}
     - {own-pubkey:
        fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025}
     - {tx:
-       WriteTxSuccess: 40bba9774b4e847961264812c75e56889f3ee2659e55d5ee76138162be2c0fde}
+       WriteTxSuccess: 3d997f0bc645bf08edc1b795b58cc49a413f75d56d36ae3c82a0d6914bcc9cef}
     - {address:
-       ( ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
-       , Tx 40bba9774b4e847961264812c75e56889f3ee2659e55d5ee76138162be2c0fde:
+       ( ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
+       , Tx 3d997f0bc645bf08edc1b795b58cc49a413f75d56d36ae3c82a0d6914bcc9cef:
          {inputs:
             - baaf580880e12f5f48fc8a956b83a3706a4ead8df2a09836ef6a262662ca95d7!8
+              
          outputs:
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,9990)]})]}} addressed to
              PubKeyAddress: 03d200a81ee0feace8fb845e5ec950a6f9add83709244f7b81134654139f41a4
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,10)]})]}} addressed to
-             ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
+             ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
          forge: Value {getValue = Map {unMap = []}}
          fee: Value {getValue = Map {unMap = []}}
          mps:
          signatures:
            fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025
-         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}} )}
+         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}
+         data:
+           "\ETX\210\NUL\168\RS\224\254\172\232\251\132^^\201P\166\249\173\216\&7\t$O{\129\DC3FT\DC3\159A\164"} )}
     - {address:
-       ( ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
-       , Tx 60fa1705710e676d0b736d92131fd94a7ce855d05d25fb35ac3aaa44b7722884:
+       ( ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
+       , Tx 70b37d0684d66cea26cfeb22ced7713117c8a9b78d1cb6540d41ca49f6e3050d:
          {inputs:
             - baaf580880e12f5f48fc8a956b83a3706a4ead8df2a09836ef6a262662ca95d7!3
+              
          outputs:
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,9990)]})]}} addressed to
              PubKeyAddress: feb345e86b9c2a7add2bfc695fa8aecd4ac5b0dfaf3a477f6fa968cdd30571c7
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,10)]})]}} addressed to
-             ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
+             ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
          forge: Value {getValue = Map {unMap = []}}
          fee: Value {getValue = Map {unMap = []}}
          mps:
          signatures:
            98a5e3a36e67aaba89888bf093de1ad963e774013b3902bfab356d8b90178a63
-         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}} )}
+         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}
+         data:
+           "\254\179E\232k\156*z\221+\252i_\168\174\205J\197\176\223\175:G\DELo\169h\205\211\ENQq\199"} )}
     - {address:
-       ( ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
-       , Tx 12c8fd4448d33cc10c21c1121ed9ce3997b56761267afa755c4e1d54e57db40c:
+       ( ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
+       , Tx 92e17f0810b59beed206bee6b9bb396b2b1044475343930bf5dd380a5de633fe:
          {inputs:
             - baaf580880e12f5f48fc8a956b83a3706a4ead8df2a09836ef6a262662ca95d7!7
+              
          outputs:
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,9999)]})]}} addressed to
              PubKeyAddress: 5aebc31421e7af1bdb47326709c27f3fd9381b00b0aca127b8dccd5f8525a538
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,1)]})]}} addressed to
-             ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
+             ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
          forge: Value {getValue = Map {unMap = []}}
          fee: Value {getValue = Map {unMap = []}}
          mps:
          signatures:
            f81fb54a825fced95eb033afcd64314075abfb0abd20a970892503436f34b863
-         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}} )}
+         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}
+         data:
+           "Z\235\195\DC4!\231\175\ESC\219G2g\t\194\DEL?\217\&8\ESC\NUL\176\172\161'\184\220\205_\133%\165\&8"} )}
   Events for W3:
     - {contribute:
        EndpointValue: Contribution {contribValue = Value {getValue = Map {unMap = [(,Map {unMap = [(,10)]})]}}}}
     - {own-pubkey:
        98a5e3a36e67aaba89888bf093de1ad963e774013b3902bfab356d8b90178a63}
     - {tx:
-       WriteTxSuccess: 60fa1705710e676d0b736d92131fd94a7ce855d05d25fb35ac3aaa44b7722884}
+       WriteTxSuccess: 70b37d0684d66cea26cfeb22ced7713117c8a9b78d1cb6540d41ca49f6e3050d}
     - {address:
-       ( ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
-       , Tx 60fa1705710e676d0b736d92131fd94a7ce855d05d25fb35ac3aaa44b7722884:
+       ( ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
+       , Tx 70b37d0684d66cea26cfeb22ced7713117c8a9b78d1cb6540d41ca49f6e3050d:
          {inputs:
             - baaf580880e12f5f48fc8a956b83a3706a4ead8df2a09836ef6a262662ca95d7!3
+              
          outputs:
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,9990)]})]}} addressed to
              PubKeyAddress: feb345e86b9c2a7add2bfc695fa8aecd4ac5b0dfaf3a477f6fa968cdd30571c7
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,10)]})]}} addressed to
-             ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
+             ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
          forge: Value {getValue = Map {unMap = []}}
          fee: Value {getValue = Map {unMap = []}}
          mps:
          signatures:
            98a5e3a36e67aaba89888bf093de1ad963e774013b3902bfab356d8b90178a63
-         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}} )}
+         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}
+         data:
+           "\254\179E\232k\156*z\221+\252i_\168\174\205J\197\176\223\175:G\DELo\169h\205\211\ENQq\199"} )}
     - {address:
-       ( ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
-       , Tx 12c8fd4448d33cc10c21c1121ed9ce3997b56761267afa755c4e1d54e57db40c:
+       ( ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
+       , Tx 92e17f0810b59beed206bee6b9bb396b2b1044475343930bf5dd380a5de633fe:
          {inputs:
             - baaf580880e12f5f48fc8a956b83a3706a4ead8df2a09836ef6a262662ca95d7!7
+              
          outputs:
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,9999)]})]}} addressed to
              PubKeyAddress: 5aebc31421e7af1bdb47326709c27f3fd9381b00b0aca127b8dccd5f8525a538
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,1)]})]}} addressed to
-             ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
+             ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
          forge: Value {getValue = Map {unMap = []}}
          fee: Value {getValue = Map {unMap = []}}
          mps:
          signatures:
            f81fb54a825fced95eb033afcd64314075abfb0abd20a970892503436f34b863
-         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}} )}
+         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}
+         data:
+           "Z\235\195\DC4!\231\175\ESC\219G2g\t\194\DEL?\217\&8\ESC\NUL\176\172\161'\184\220\205_\133%\165\&8"} )}
   Events for W4:
     - {contribute:
        EndpointValue: Contribution {contribValue = Value {getValue = Map {unMap = [(,Map {unMap = [(,1)]})]}}}}
     - {own-pubkey:
        f81fb54a825fced95eb033afcd64314075abfb0abd20a970892503436f34b863}
     - {tx:
-       WriteTxSuccess: 12c8fd4448d33cc10c21c1121ed9ce3997b56761267afa755c4e1d54e57db40c}
+       WriteTxSuccess: 92e17f0810b59beed206bee6b9bb396b2b1044475343930bf5dd380a5de633fe}
     - {address:
-       ( ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
-       , Tx 12c8fd4448d33cc10c21c1121ed9ce3997b56761267afa755c4e1d54e57db40c:
+       ( ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
+       , Tx 92e17f0810b59beed206bee6b9bb396b2b1044475343930bf5dd380a5de633fe:
          {inputs:
             - baaf580880e12f5f48fc8a956b83a3706a4ead8df2a09836ef6a262662ca95d7!7
+              
          outputs:
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,9999)]})]}} addressed to
              PubKeyAddress: 5aebc31421e7af1bdb47326709c27f3fd9381b00b0aca127b8dccd5f8525a538
            - Value {getValue = Map {unMap = [(,Map {unMap = [(,1)]})]}} addressed to
-             ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69
+             ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537
          forge: Value {getValue = Map {unMap = []}}
          fee: Value {getValue = Map {unMap = []}}
          mps:
          signatures:
            f81fb54a825fced95eb033afcd64314075abfb0abd20a970892503436f34b863
-         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}} )}
+         validity range: Interval {ivFrom = LowerBound (Finite (Slot {getSlot = 1})) True, ivTo = UpperBound (Finite (Slot {getSlot = 20})) True}
+         data:
+           "Z\235\195\DC4!\231\175\ESC\219G2g\t\194\DEL?\217\&8\ESC\NUL\176\172\161'\184\220\205_\133%\165\&8"} )}
 Contract result by wallet:
     Wallet: W1
       Done
     Wallet: W2
       Running, waiting for input:
-        {address: [ ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69 ]
+        {address: [ ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537 ]
          contribute: []
          own-pubkey: NotWaitingForPubKey
          schedule collection: [ExposeEndpoint: schedule collection]
@@ -145,7 +163,7 @@ Contract result by wallet:
          utxo-at: []}
     Wallet: W3
       Running, waiting for input:
-        {address: [ ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69 ]
+        {address: [ ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537 ]
          contribute: []
          own-pubkey: NotWaitingForPubKey
          schedule collection: [ExposeEndpoint: schedule collection]
@@ -155,7 +173,7 @@ Contract result by wallet:
          utxo-at: []}
     Wallet: W4
       Running, waiting for input:
-        {address: [ ScriptAddress: df00e42e1b1b27d5ade43b542929ad767afe3c211480ed1897b6042894f7bb69 ]
+        {address: [ ScriptAddress: 626aeb840a5b9e8d75d0d7d545683232fc67af8f4115167ddff4b56abc8fb537 ]
          contribute: []
          own-pubkey: NotWaitingForPubKey
          schedule collection: [ExposeEndpoint: schedule collection]

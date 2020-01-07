@@ -32,7 +32,7 @@ import           Language.Plutus.Contract.Tx
 import qualified Language.PlutusTx           as PlutusTx
 import           Language.PlutusTx.Prelude   hiding (pure, (<$>))
 import           Ledger                      (Address, DataValue (DataValue), PendingTx, RedeemerValue (RedeemerValue),
-                                              Validator, Value, mkValidatorScript, scriptAddress)
+                                              Validator, Value, mkValidatorScript, scriptAddress, validatorHash)
 import           Ledger.Typed.Scripts        (wrapValidator)
 import           Playground.Contract
 import qualified Prelude
@@ -98,7 +98,7 @@ lock = do
     LockParams secret amt <- endpoint @"lock" @LockParams
     let
         dataValue = gameDataScript secret
-        tx         = payToScript amt gameAddress dataValue
+        tx         = payToScript amt (validatorHash gameValidator) dataValue
     void (submitTx tx)
 
 -- | The "guess" contract endpoint. See note [Contract endpoints]

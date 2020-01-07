@@ -5,8 +5,11 @@
 {-# LANGUAGE MonoLocalBinds       #-}
 {-# LANGUAGE NoImplicitPrelude    #-}
 {-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
+{-# OPTIONS_GHC -fno-strictness #-}
+{-# OPTIONS_GHC -fno-specialise #-}
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
 -- | A type for intervals and associated functions.
 module Ledger.Interval(
@@ -157,6 +160,10 @@ instance Ord a => BoundedMeetSemiLattice (Interval a) where
     {-# INLINABLE top #-}
     top = always
 
+instance Eq a => Eq (Interval a) where
+    {-# INLINABLE (==) #-}
+    l == r = ivFrom l == ivFrom r && ivTo l == ivTo r
+
 {-# INLINABLE interval #-}
 -- | @interval a b@ includes all values that are greater than or equal
 --   to @a@ and smaller than @b@. Therefore it includes @a@ but not it
@@ -188,7 +195,7 @@ always = Interval (LowerBound NegInf True) (UpperBound PosInf True)
 {-# INLINABLE never #-}
 -- | An 'Interval' that is empty.
 never :: Interval a
-never = Interval (LowerBound PosInf True) (UpperBound NegInf True)
+never = Interval (LowerBound NegInf True) (UpperBound PosInf True) :: Interval a
 
 {-# INLINABLE member #-}
 -- | Check whether a value is in an interval.

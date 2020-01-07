@@ -20,6 +20,7 @@ module Ledger.Value(
     -- ** Currency symbols
       CurrencySymbol(..)
     , currencySymbol
+    , mpsSymbol
     -- ** Token names
     , TokenName(..)
     , tokenName
@@ -62,6 +63,7 @@ import           Language.PlutusTx.Lift           (makeLift)
 import           Language.PlutusTx.Prelude
 import           Language.PlutusTx.These
 import           Ledger.Orphans                   ()
+import           Ledger.Scripts                   (MonetaryPolicyHash(..))
 import           LedgerBytes                      (LedgerBytes (LedgerBytes))
 
 newtype CurrencySymbol = CurrencySymbol { unCurrencySymbol :: Builtins.ByteString }
@@ -88,6 +90,13 @@ instance FromJSON CurrencySymbol where
       Haskell.pure . CurrencySymbol . BSL.fromStrict $ bytes
 
 makeLift ''CurrencySymbol
+
+{-# INLINABLE mpsSymbol #-}
+-- TODO (jm): Get rid of 'CurrencySymbol' and just use MPS Hash everywhere
+-- (likely affects the Playground so I'd like to do it in a separate PR)
+-- | The currency symbol of a monetay policy hash
+mpsSymbol :: MonetaryPolicyHash -> CurrencySymbol
+mpsSymbol (MonetaryPolicyHash h) = CurrencySymbol h
 
 {-# INLINABLE currencySymbol #-}
 currencySymbol :: ByteString -> CurrencySymbol

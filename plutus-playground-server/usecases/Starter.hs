@@ -29,7 +29,7 @@ import qualified Language.PlutusTx          as PlutusTx
 import           Language.PlutusTx.Prelude  hiding (Applicative (..))
 import           Ledger                     (Address, DataValue (DataValue), PendingTx,
                                              RedeemerValue (RedeemerValue), Validator, mkValidatorScript,
-                                             scriptAddress)
+                                             scriptAddress, validatorHash)
 import           Ledger.Typed.Scripts       (wrapValidator)
 import           Ledger.Value               (Value)
 import           Playground.Contract
@@ -83,7 +83,7 @@ contract = publish <|> redeem
 publish :: AsContractError e => Contract Schema e ()
 publish = do
     (myDataValue, lockedFunds) <- endpoint @"publish"
-    let tx = payToScript lockedFunds contractAddress (mkDataValue myDataValue)
+    let tx = payToScript lockedFunds (validatorHash contractValidator) (mkDataValue myDataValue)
     void $ submitTx tx
 
 -- | The "redeem" contract endpoint.

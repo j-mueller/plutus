@@ -65,7 +65,7 @@ import qualified Language.Plutus.Contract.Record                 as Rec
 import           Language.Plutus.Contract.Request                (Contract (..))
 import           Language.Plutus.Contract.Resumable              (ResumableError)
 import qualified Language.Plutus.Contract.Resumable              as State
-import           Language.Plutus.Contract.Tx                     (UnbalancedTx)
+import Ledger.Constraints.OffChain (UnbalancedTx)
 import           Language.PlutusTx.Lattice
 
 import           Language.Plutus.Contract.Effects.AwaitSlot      (SlotSymbol)

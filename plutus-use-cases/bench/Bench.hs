@@ -278,9 +278,9 @@ mockPendingTx = PendingTx
     , pendingTxFee = PlutusTx.zero
     , pendingTxForge = PlutusTx.zero
     , pendingTxItem = PendingTxIn
-        { pendingTxInRef = PendingTxOutRef
-            { pendingTxOutRefId = TxId P.emptyByteString
-            , pendingTxOutRefIdx = 0
+        { pendingTxInRef = TxOutRef
+            { txOutRefId = TxId P.emptyByteString
+            , txOutRefIdx = 0
             }
         , pendingTxInWitness = (ValidatorHash "", RedeemerHash "", DataValueHash "")
         , pendingTxInValue = PlutusTx.zero

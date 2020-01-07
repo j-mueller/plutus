@@ -156,8 +156,8 @@ vestingContract vesting = vest <|> retrieve
             Alive -> retrieve
             Dead  -> pure ()
 
-payIntoContract :: VestingParams -> Value -> UnbalancedTx
-payIntoContract vp value = payToScript value (contractAddress vp) unitData
+payIntoContract :: VestingParams -> Value -> LedgerTxConstraints
+payIntoContract vp value = payToScript value (Scripts.scriptHash $ scriptInstance vp) unitData
 
 vestFundsC
     :: ( HasWriteTx s
@@ -206,8 +206,8 @@ retrieveFundsC vesting payment = do
                             Dead  -> Haskell.mempty
         tx = Typed.collectFromScript unspentOutputs (scriptInstance vesting) ()
                 <> remainingOutputs
-                <> mustBeValidIn (Interval.from nextSlot)
-                <> mustBeSignedBy (vestingOwner vesting)
+                <> validIn (Interval.from nextSlot)
+                <> signedBy (vestingOwner vesting)
                 -- we don't need to add a pubkey output for 'vestingOwner' here
                 -- because this will be done by the wallet when it balances the
                 -- transaction.
