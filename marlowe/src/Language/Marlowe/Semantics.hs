@@ -43,7 +43,7 @@ import           Language.PlutusTx.AssocMap (Map)
 import qualified Language.PlutusTx.AssocMap as Map
 import           Language.PlutusTx.Lift     (makeLift)
 import           Language.PlutusTx.Prelude  hiding ((<>))
-import           Ledger                     (PubKeyHash (..), Slot (..))
+import           Ledger                     (Address(PubKeyAddress), PubKeyHash (..), Slot (..))
 import           Ledger.Interval            (Extended (..), Interval (..), LowerBound (..), UpperBound (..))
 import           Ledger.Scripts             (DataValue (..))
 import           Ledger.Tx                  (TxOut (..), TxOutType (..))
@@ -719,7 +719,7 @@ validatePayments :: PendingTx -> [Payment] -> Bool
 validatePayments pendingTx txOutPayments = let
 
     collect outputs TxOut{txOutValue,
-        txOutType=PayToPubKey pubKey} = let
+        txOutAddress=PubKeyAddress pubKey} = let
         newValue = case Map.lookup pubKey outputs of
             Just value -> value + txOutValue
             Nothing    -> txOutValue
