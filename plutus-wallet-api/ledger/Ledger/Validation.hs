@@ -64,7 +64,7 @@ import qualified Prelude                   as Haskell
 
 import           Ledger.Ada                (Ada)
 import qualified Ledger.Ada                as Ada
-import           Ledger.Address            (Address(..), scriptHashAddress)
+import           Ledger.Address            (Address (..), scriptHashAddress)
 import           Ledger.Crypto             (PubKey (..), PubKeyHash (..), Signature (..))
 import           Ledger.Scripts
 import           Ledger.Slot               (Slot, SlotRange)
@@ -233,7 +233,7 @@ txSignedBy PendingTx{pendingTxSignatories=sigs} k = case find ((==) k) sigs of
 pubKeyOutput :: TxOut -> Maybe PubKeyHash
 pubKeyOutput TxOut{txOutAddress} = case txOutAddress of
     PubKeyAddress pk -> Just pk
-    _              -> Nothing
+    _                -> Nothing
 
 {-# INLINABLE ownHashes #-}
 -- | Get the hashes of validator script and redeemer script that are
@@ -276,7 +276,7 @@ pubKeyOutputsAt pk p =
     let flt TxOut{txOutAddress, txOutValue} =
             case txOutAddress of
                 PubKeyAddress pk' | pk' == pk -> Just txOutValue
-                _                           -> Nothing
+                _                             -> Nothing
     in mapMaybe flt (pendingTxOutputs p)
 
 {-# INLINABLE valuePaidTo #-}

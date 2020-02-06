@@ -25,7 +25,7 @@ import           Language.Plutus.Contract.Request                  as Req
 import           Language.Plutus.Contract.Schema                   (Event (..), Handlers (..), Input, Output)
 import qualified Language.PlutusTx                                 as PlutusTx
 
-import           Ledger.AddressMap (UtxoMap)
+import           Ledger.AddressMap                                 (UtxoMap)
 import           Ledger.Constraints                                (TxConstraints)
 import           Ledger.Constraints.OffChain                       (ScriptLookups, UnbalancedTx)
 import qualified Ledger.Constraints.OffChain                       as Constraints
@@ -76,8 +76,8 @@ submitTx t =
   let req = request @TxSymbol @_ @_ @s (PendingTransactions [t]) in
   req >>= either (throwing Req._WalletError) pure . view writeTxResponse
 
--- | Build a transaction that satisfies the constraints, then submit it to the 
---   network. Using the current outputs at the contract address and the 
+-- | Build a transaction that satisfies the constraints, then submit it to the
+--   network. Using the current outputs at the contract address and the
 --   contract's own public key to solve the constraints.
 submitTxConstraints
   :: forall a s e.

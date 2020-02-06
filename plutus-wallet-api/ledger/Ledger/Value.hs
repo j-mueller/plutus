@@ -63,7 +63,7 @@ import           Language.PlutusTx.Lift           (makeLift)
 import           Language.PlutusTx.Prelude
 import           Language.PlutusTx.These
 import           Ledger.Orphans                   ()
-import           Ledger.Scripts                   (MonetaryPolicyHash(..))
+import           Ledger.Scripts                   (MonetaryPolicyHash (..))
 import           LedgerBytes                      (LedgerBytes (LedgerBytes))
 
 newtype CurrencySymbol = CurrencySymbol { unCurrencySymbol :: Builtins.ByteString }

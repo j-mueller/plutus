@@ -35,7 +35,7 @@ import           Language.PlutusTx                (IsData (..))
 import           Language.PlutusTx.Lattice
 import qualified Language.PlutusTx.Numeric        as N
 
-import           Ledger.Address                   (Address(..))
+import           Ledger.Address                   (Address (..))
 import qualified Ledger.Address                   as Address
 import           Ledger.Constraints.TxConstraints hiding (requiredSignatories)
 import           Ledger.Crypto                    (PubKeyHash)
@@ -97,7 +97,7 @@ scriptLookups inst =
 --   can be submitted to the ledeger.
 data UnbalancedTx =
     UnbalancedTx
-        { unBalancedTxTx                 :: Tx
+        { unBalancedTxTx                  :: Tx
         , unBalancedTxRequiredSignatories :: [PubKeyHash]
         }
     deriving stock (Eq, Generic)

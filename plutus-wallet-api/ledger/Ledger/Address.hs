@@ -14,17 +14,17 @@ module Ledger.Address (
     scriptHashAddress,
     ) where
 
-import           Codec.Serialise.Class      (Serialise)
-import           Data.Aeson                 (FromJSON, FromJSONKey (..), ToJSON, ToJSONKey (..))
-import           Data.Hashable              (Hashable)
+import           Codec.Serialise.Class     (Serialise)
+import           Data.Aeson                (FromJSON, FromJSONKey (..), ToJSON, ToJSONKey (..))
+import           Data.Hashable             (Hashable)
 import           Data.Text.Prettyprint.Doc
-import           GHC.Generics               (Generic)
-import           IOTS                       (IotsType)
-import qualified Language.PlutusTx          as PlutusTx
-import qualified Language.PlutusTx.Eq       as PlutusTx
+import           GHC.Generics              (Generic)
+import           IOTS                      (IotsType)
+import qualified Language.PlutusTx         as PlutusTx
+import qualified Language.PlutusTx.Eq      as PlutusTx
 
 import           Ledger.Crypto
-import           Ledger.Orphans             ()
+import           Ledger.Orphans            ()
 import           Ledger.Scripts
 
 -- | A payment address using a hash as the id.

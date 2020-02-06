@@ -10,7 +10,7 @@
 {-# LANGUAGE TypeOperators       #-}
 module Language.Plutus.Contract.Effects.WatchAddress where
 
-import           Control.Lens                               (at, (^.), view)
+import           Control.Lens                               (at, view, (^.))
 import           Data.Aeson                                 (FromJSON, ToJSON)
 import           Data.Map                                   (Map)
 import qualified Data.Map                                   as Map
