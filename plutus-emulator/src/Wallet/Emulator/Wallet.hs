@@ -104,15 +104,6 @@ emptyWalletState :: Wallet -> WalletState
 emptyWalletState w = WalletState pk where
     pk = walletPrivKey w
 
-data WalletEffect r where
-    SubmitTxn :: Tx -> WalletEffect ()
-    OwnPubKey :: WalletEffect PubKey
-    UpdatePaymentWithChange :: Value -> (Set.Set TxIn, Maybe TxOut) -> WalletEffect (Set.Set TxIn, Maybe TxOut)
-    WalletSlot :: WalletEffect Slot
-    WalletLogMsg :: T.Text -> WalletEffect ()
-    OwnOutputs :: WalletEffect UtxoMap
-makeEffect ''WalletEffect
-
 type WalletEffs = '[NC.NodeClientEffect, State WalletState, Error WAPI.WalletAPIError, Writer [WalletEvent]]
 
 handleWallet
@@ -150,47 +141,6 @@ handleWallet = interpret $ \case
     OwnOutputs -> do
         addr <- gets ownAddress
         view (at addr . non mempty) <$> NC.getClientIndex
-
--- HACK: these shouldn't exist, but WalletAPI needs to die first
-instance (Member WalletEffect effs) => WAPI.WalletAPI (Eff effs) where
-    ownPubKey = ownPubKey
-    updatePaymentWithChange = updatePaymentWithChange
-    ownOutputs = ownOutputs
-
-instance (Member WalletEffect effs) => WAPI.NodeAPI (Eff effs) where
-    submitTxn = submitTxn
-    slot = walletSlot
-
-instance (Member (Error WAPI.WalletAPIError) effs) => E.MonadError WAPI.WalletAPIError (Eff effs) where
-    throwError = throwError
-    catchError = catchError
-
-instance (Member WalletEffect effs) => WAPI.WalletDiagnostics (Eff effs) where
-    logMsg = walletLogMsg
-
--- FIXME: these are orphan instances for no reason, should move elsewhere
-
-instance WAPI.WalletDiagnostics m => WAPI.WalletDiagnostics (StateT state m) where
-    logMsg = lift . WAPI.logMsg
-
-instance (Monad m, WAPI.NodeAPI m) => WAPI.NodeAPI (StateT state m) where
-    submitTxn = lift . WAPI.submitTxn
-    slot = lift WAPI.slot
-
-instance WAPI.WalletAPI m => WAPI.WalletAPI (StateT state m) where
-    ownPubKey = lift WAPI.ownPubKey
-    updatePaymentWithChange val ins =
-        lift $ WAPI.updatePaymentWithChange val ins
-    ownOutputs = lift WAPI.ownOutputs
-
-instance (Monad m, WAPI.ChainIndexAPI m) => WAPI.ChainIndexAPI (StateT state m) where
-    watchedAddresses = lift WAPI.watchedAddresses
-    startWatching = lift . WAPI.startWatching
-
-instance (Monad m, WAPI.SigningProcessAPI m) => WAPI.SigningProcessAPI (StateT state m) where
-    addSignatures as = lift . WAPI.addSignatures as
-
--- UTILITIES: should probably be elsewhere
 
 -- Make a transaction output from a positive value.
 mkChangeOutput :: PubKey -> Value -> Maybe TxOut
