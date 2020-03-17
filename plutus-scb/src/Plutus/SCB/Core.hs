@@ -42,6 +42,7 @@ import           Cardano.Node.Types                         (FollowerID)
 import           Control.Error.Util                         (note)
 import           Control.Lens                               (assign, modifying, use, _1, _2)
 import           Control.Monad                              (void)
+import Control.Monad.Freer (Eff, Members, Member, LastMember)
 import           Control.Monad.Except                       (MonadError, throwError)
 import           Control.Monad.Except.Extras                (mapError)
 import           Control.Monad.IO.Class                     (MonadIO, liftIO)
@@ -101,6 +102,7 @@ import           Plutus.SCB.Types                           (ActiveContract (Act
                                                              partiallyDecodedResponse, toUUID)
 import           Plutus.SCB.Utils                           (liftError, render, tshow)
 import qualified Wallet.API                                 as WAPI
+import Wallet.Emulator.MultiAgent (EmulatedWalletEffects)
 
 newtype Connection =
     Connection (SqlEventStoreConfig SqlEvent JSONString, ConnectionPool)
@@ -149,21 +151,20 @@ activateContract filePath = do
     pure activeContractId
 
 updateContract ::
-       ( MonadLogger m
-       , MonadEventStore ChainEvent m
-       , MonadContract m
-       , MonadError SCBError m
-       , WalletAPI m
-       , NodeAPI m
-       , WalletDiagnostics m
-       , ChainIndexAPI m
-       , NodeFollowerAPI m
-       , SigningProcessAPI m
-       )
+       ( Members EmulatedWalletEffects effs)
+    --        MonadLogger m
+    --    , MonadEventStore ChainEvent m
+    --    , MonadContract m
+    --    , MonadError SCBError m
+    --    , WalletAPI m
+    --    , NodeAPI m
+    --    , WalletDiagnostics m
+    --    , ChainIndexAPI m
+    --    )
     => UUID
     -> Text
     -> JSON.Value
-    -> m ()
+    -> Eff effs ()
 updateContract uuid endpointName endpointPayload = do
     logInfoN "Finding Contract"
     oldContractState <- liftError $ lookupActiveContractState uuid
@@ -182,10 +183,10 @@ updateContract uuid endpointName endpointPayload = do
     logInfoN "Done"
 
 parseSingleHook ::
-       MonadError SCBError m
+       (Members EmulatedWalletEffects effs)
     => (JSON.Value -> Parser a)
     -> PartiallyDecodedResponse
-    -> m a
+    -> Eff effs a
 parseSingleHook parser response =
     case JSON.parseEither parser (hooks response) of
         Left err     -> throwError $ ContractCommandError 0 $ Text.pack err
@@ -212,29 +213,6 @@ handleContractHook i (UtxoAtHook addresses)  = handleUtxoAtHook i addresses
 handleContractHook i (OwnPubKeyHook request) = handleOwnPubKeyHook i request
 
 handleTxHook ::
-       ( MonadError SCBError m
-       , MonadLogger m
-       , MonadEventStore ChainEvent m
-       , WalletAPI m
-       , WalletDiagnostics m
-       , NodeAPI m
-       , ChainIndexAPI m
-       , SigningProcessAPI m
-       )
-    => UnbalancedTx
-    -> m ()
-handleTxHook unbalancedTx = do
-    logInfoN "Handling 'tx' hook."
-    logInfoN $ "Balancing unbalanced TX: " <> tshow unbalancedTx
-    balancedTx <- (mapError WalletError . Wallet.balanceWallet) unbalancedTx
-    signedTx <- WAPI.signWithOwnPublicKey balancedTx
-    logInfoN $ "Storing signed TX: " <> tshow signedTx
-    void $ runCommand saveBalancedTx WalletEventSource balancedTx
-    logInfoN $ "Submitting signed TX: " <> tshow signedTx
-    balanceResult <- submitTx signedTx
-    void $ runCommand saveBalancedTxResult NodeEventSource balanceResult
-
-handleUtxoAtHook ::
        ( MonadError SCBError m
        , MonadContract m
        , MonadState (ActiveContractState, [ContractHook]) m
@@ -275,9 +253,6 @@ handleOwnPubKeyHook ::
     -> m ()
 handleOwnPubKeyHook _ NotWaitingForPubKey = pure ()
 handleOwnPubKeyHook i WaitingForPubKey = do
-    logInfoN "Handling 'own-pubkey' hook."
-    key :: WAPI.PubKey <- WAPI.ownPubKey
-    invokeContractUpdate i $ EventPayload "own-pubkey" (JSON.toJSON key)
 
 -- | A wrapper around the NodeAPI function that returns some more
 -- useful evidence of the work done.
