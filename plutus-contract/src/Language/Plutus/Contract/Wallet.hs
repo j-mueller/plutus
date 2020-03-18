@@ -14,7 +14,7 @@ module Language.Plutus.Contract.Wallet(
 
 import           Control.Lens
 import           Control.Monad.Except
-import           Control.Monad.Freer         (Eff, Members)
+import           Control.Monad.Freer         (Eff, Member, Members)
 import qualified Control.Monad.Freer         as Eff
 import           Control.Monad.Freer.Error   (Error)
 import qualified Control.Monad.Freer.Error   as Eff
@@ -109,8 +109,10 @@ computeBalance tx = (P.-) <$> left <*> pure right  where
 
 -- | Balance an unbalanced transaction by adding public key inputs
 --   and outputs.
-balanceTx
-    :: Members '[WalletEffect, SigningProcessEffect, Error WalletAPIError, ChainIndexEffect] effs
+balanceTx ::
+    ( Members '[WalletEffect, SigningProcessEffect, Error WalletAPIError, ChainIndexEffect] effs
+       , Member (Error WalletAPIError) effs
+    )
     => UtxoMap
     -- ^ Unspent transaction outputs that may be used to balance the
     --   left hand side (inputs) of the transaction.
@@ -139,14 +141,14 @@ balanceTx utxo pk UnbalancedTx{unBalancedTxTx} = do
 --   @vl@ from the UTXO map @mp@ and adds them as inputs to @tx@. A public
 --   key output for @pk@ is added containing any leftover change.
 addInputs
-    :: MonadError WalletAPIError m
+    :: Member (Error WalletAPIError) effs
     => UtxoMap
     -> PubKey
     -> Value
     -> Tx
-    -> m Tx
+    -> Eff effs Tx
 addInputs mp pk vl tx = do
-    (spend, change) <- liftEither $ Eff.run $ Eff.runError $ E.selectCoin (second (Tx.txOutValue . Tx.txOutTxOut) <$> Map.toList mp) vl
+    (spend, change) <- E.selectCoin (second (Tx.txOutValue . Tx.txOutTxOut) <$> Map.toList mp) vl
     let
 
         addTxIns  =

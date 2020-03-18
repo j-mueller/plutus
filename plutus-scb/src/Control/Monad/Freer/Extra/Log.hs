@@ -10,6 +10,7 @@ module Control.Monad.Freer.Extra.Log(
       Log(..)
     , logDebug
     , logInfo
+    , logWarn
     , runStderrLog
     ) where
 
@@ -28,6 +29,9 @@ logInfo = Eff.send . Log LevelInfo
 
 logDebug :: Member Log effs => Text -> Eff effs ()
 logDebug = Eff.send . Log LevelDebug
+
+logWarn :: Member Log effs => Text -> Eff effs ()
+logWarn = Eff.send . Log LevelWarn
 
 runStderrLog :: (LastMember IO effs) => Eff (Log ': effs) ~> Eff effs
 runStderrLog =

@@ -27,7 +27,9 @@ import qualified Network.Wai.Handler.Warp       as Warp
 import           Servant                        (Application, hoistServer, serve)
 import           Servant.Client                 (BaseUrl (baseUrlPort))
 import qualified Wallet.API                     as WAPI
-import           Wallet.Emulator.SigningProcess (SigningProcess, SigningProcessEffect)
+import           Wallet.Effects                 (SigningProcessEffect)
+import qualified Wallet.Effects                 as WE
+import           Wallet.Emulator.SigningProcess (SigningProcess)
 import qualified Wallet.Emulator.SigningProcess as SP
 import           Wallet.Emulator.Wallet         (Wallet)
 
@@ -55,7 +57,7 @@ app stateVar =
     hoistServer
         (Proxy @API)
         (processSigningProcessEffects stateVar)
-        (uncurry SP.addSignatures)
+        (uncurry WE.addSignatures)
 
 main :: (MonadIO m, MonadLogger m) => SigningProcessConfig -> m ()
 main SigningProcessConfig{spWallet, spBaseUrl} = do

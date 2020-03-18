@@ -71,12 +71,14 @@ library
         Plutus.SCB.Command
         Plutus.SCB.ContractCLI
         Plutus.SCB.Core
+        Plutus.SCB.Effects.Contract
+        Plutus.SCB.Effects.EventLog
+        Plutus.SCB.Effects.UUID
         Plutus.SCB.Events
         Plutus.SCB.Query
         Plutus.SCB.Relation
         Plutus.SCB.Types
         Plutus.SCB.Utils
-        Plutus.SCB.EventLog
     other-modules:
         Plutus.SCB.Events.Contract
         Plutus.SCB.Events.Node

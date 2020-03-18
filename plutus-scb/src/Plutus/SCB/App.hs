@@ -65,26 +65,6 @@ newtype App a =
                      , MonadError SCBError
                      )
 
-instance NodeFollowerAPI App where
-    subscribe = runNodeClientM NodeClient.newFollower
-    blocks = runNodeClientM . NodeClient.getBlocks
-
-instance NodeAPI App where
-    submitTxn = void . runNodeClientM . NodeClient.addTx
-    slot = runNodeClientM NodeClient.getCurrentSlot
-
-instance WalletAPI App where
-    ownPubKey = runWalletClientM WalletClient.getOwnPubKey
-    updatePaymentWithChange _ _ = error "UNIMPLEMENTED: updatePaymentWithChange"
-    ownOutputs = runWalletClientM WalletClient.getOwnOutputs
-
-instance ChainIndexAPI App where
-    watchedAddresses = runWalletClientM WalletClient.getWatchedAddresses
-    startWatching = void . runWalletClientM . WalletClient.startWatching
-
-instance SigningProcessAPI App where
-    addSignatures sigs tx = runSigningProcessM (SigningProcessClient.addSignatures sigs tx)
-
 runAppClientM ::
        (Env -> ClientEnv) -> (ServantError -> SCBError) -> ClientM a -> App a
 runAppClientM f wrapErr action =
@@ -110,66 +90,66 @@ runApp Config {dbConfig, nodeServerConfig, walletServerConfig, signingProcessCon
         walletClientEnv <- mkEnv (WalletServer.baseUrl walletServerConfig)
         nodeClientEnv <- mkEnv (NodeServer.mscBaseUrl nodeServerConfig)
         signingProcessEnv <- mkEnv (SigningProcess.spBaseUrl signingProcessConfig)
-        dbConnection <- runReaderT dbConnect dbConfig
+        dbConnection <- dbConnect dbConfig
         runReaderT (runExceptT action) $ Env {..}
   where
     mkEnv baseUrl = do
         manager <- liftIO $ newManager defaultManagerSettings
         pure $ mkClientEnv manager baseUrl
 
-instance (FromJSON event, ToJSON event) => MonadEventStore event App where
-    refreshProjection projection =
-        App $ do
-            (Connection (sqlConfig, connectionPool)) <- asks dbConnection
-            let reader =
-                    serializedGlobalEventStoreReader jsonStringSerializer $
-                    sqlGlobalEventStoreReader sqlConfig
-            ExceptT . fmap Right . flip runSqlPool connectionPool $
-                getLatestStreamProjection reader projection
-    runCommand aggregate source input =
-        App $ do
-            (Connection (sqlConfig, connectionPool)) <- asks dbConnection
-            let reader =
-                    serializedVersionedEventStoreReader jsonStringSerializer $
-                    sqlEventStoreReader sqlConfig
-            let writer =
-                    addProcessBus
-                        (serializedEventStoreWriter jsonStringSerializer $
-                         sqliteEventStoreWriter sqlConfig)
-                        reader
-            ExceptT $
-                fmap Right . retryOnBusy . flip runSqlPool connectionPool $
-                commandStoredAggregate
-                    writer
-                    reader
-                    aggregate
-                    (toUUID source)
-                    input
+-- instance (FromJSON event, ToJSON event) => MonadEventStore event App where
+--     refreshProjection projection =
+--         App $ do
+--             (Connection (sqlConfig, connectionPool)) <- asks dbConnection
+--             let reader =
+--                     serializedGlobalEventStoreReader jsonStringSerializer $
+--                     sqlGlobalEventStoreReader sqlConfig
+--             ExceptT . fmap Right . flip runSqlPool connectionPool $
+--                 getLatestStreamProjection reader projection
+--     runCommand aggregate source input =
+--         App $ do
+--             (Connection (sqlConfig, connectionPool)) <- asks dbConnection
+--             let reader =
+--                     serializedVersionedEventStoreReader jsonStringSerializer $
+--                     sqlEventStoreReader sqlConfig
+--             let writer =
+--                     addProcessBus
+--                         (serializedEventStoreWriter jsonStringSerializer $
+--                          sqliteEventStoreWriter sqlConfig)
+--                         reader
+--             ExceptT $
+--                 fmap Right . retryOnBusy . flip runSqlPool connectionPool $
+--                 commandStoredAggregate
+--                     writer
+--                     reader
+--                     aggregate
+--                     (toUUID source)
+--                     input
 
-instance MonadContract App where
-    invokeContract contractCommand =
-        App $ do
-            (exitCode, stdout, stderr) <-
-                liftIO $
-                case contractCommand of
-                    InitContract contractPath ->
-                        readProcessWithExitCode contractPath ["init"] ""
-                    UpdateContract contractPath payload ->
-                        readProcessWithExitCode
-                            contractPath
-                            ["update"]
-                            (BSL8.unpack (JSON.encodePretty payload))
-            case exitCode of
-                ExitFailure code ->
-                    pure . Left $ ContractCommandError code (Text.pack stderr)
-                ExitSuccess ->
-                    case eitherDecode (BSL8.pack stdout) of
-                        Right value -> pure $ Right value
-                        Left err ->
-                            pure . Left $ ContractCommandError 0 (Text.pack err)
+-- instance MonadContract App where
+--     invokeContract contractCommand =
+--         App $ do
+--             (exitCode, stdout, stderr) <-
+--                 liftIO $
+--                 case contractCommand of
+--                     InitContract contractPath ->
+--                         readProcessWithExitCode contractPath ["init"] ""
+--                     UpdateContract contractPath payload ->
+--                         readProcessWithExitCode
+--                             contractPath
+--                             ["update"]
+--                             (BSL8.unpack (JSON.encodePretty payload))
+--             case exitCode of
+--                 ExitFailure code ->
+--                     pure . Left $ ContractCommandError code (Text.pack stderr)
+--                 ExitSuccess ->
+--                     case eitherDecode (BSL8.pack stdout) of
+--                         Right value -> pure $ Right value
+--                         Left err ->
+--                             pure . Left $ ContractCommandError 0 (Text.pack err)
 
-instance WalletDiagnostics App where
-    logMsg = App . logInfoN
+-- instance WalletDiagnostics App where
+--     logMsg = App . logInfoN
 
 -- | Initialize/update the database to hold events.
 migrate :: App ()
