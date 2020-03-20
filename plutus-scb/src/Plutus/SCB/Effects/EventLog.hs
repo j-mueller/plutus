@@ -14,26 +14,18 @@ import           Control.Monad.Freer.TH     (makeEffect)
 import qualified Control.Monad.IO.Unlift    as Unlift
 import qualified Control.Monad.Logger       as MonadLogger
 import           Data.Aeson                 (FromJSON, ToJSON)
-import qualified Data.UUID                  as UUID
 import           Database.Persist.Sqlite    hiding (Connection)
 import           Eventful
-import           Eventful                   (Aggregate (..), GlobalStreamProjection)
 import           Eventful.Store.Sql
 import           Eventful.Store.Sqlite      (sqliteEventStoreWriter)
 
 import           Plutus.SCB.Events          (ChainEvent (..))
 import           Plutus.SCB.Query           (nullProjection)
+import           Plutus.SCB.Types           (Source(..), toUUID)
 
 newtype Connection =
     Connection (SqlEventStoreConfig SqlEvent JSONString, ConnectionPool)
 
-------------------------------------------------------------
-data Source
-    = ContractEventSource
-    | WalletEventSource
-    | UserEventSource
-    | NodeEventSource
-    deriving (Show, Eq)
 
 -- | Event effects
 data EventLogState pjs =
@@ -103,10 +95,3 @@ addProcessBus writer reader =
                   reader
                   ()
         ]
-
-
-toUUID :: Source -> UUID
-toUUID ContractEventSource = UUID.fromWords 0 0 0 2
-toUUID WalletEventSource   = UUID.fromWords 0 0 0 2
-toUUID UserEventSource     = UUID.fromWords 0 0 0 3
-toUUID NodeEventSource     = UUID.fromWords 0 0 0 4

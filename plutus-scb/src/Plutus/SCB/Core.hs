@@ -6,6 +6,7 @@
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -40,15 +41,17 @@ import           Cardano.Node.API                           (NodeFollowerAPI, su
 import qualified Cardano.Node.API                           as NodeClient
 import           Cardano.Node.Types                         (FollowerID)
 import           Control.Error.Util                         (note)
-import           Control.Lens                               (assign, modifying, use, _1, _2)
+import           Control.Lens                               (_1, _2)
 import           Control.Monad                              (void)
 import           Control.Monad.Freer                        (Eff, Member, Members)
 import           Control.Monad.Freer.Error
 import           Control.Monad.Freer.Extra.Log
+import           Control.Monad.Freer.Extra.State            (assign, modifying, use)
+import           Control.Monad.Freer.State                  (State, execState)
 import           Control.Monad.IO.Unlift                    (MonadUnliftIO)
 import           Control.Monad.Logger                       (LoggingT, MonadLogger, logDebugN, logInfoN)
+import qualified Control.Monad.Logger                       as MonadLogger
 import           Control.Monad.Reader                       (MonadReader, ReaderT, ask)
-import           Control.Monad.State                        (MonadState, StateT, execStateT)
 import           Control.Monad.Trans                        (lift)
 import           Data.Aeson                                 (FromJSON, ToJSON, withObject, (.:))
 import           Data.Aeson                                 (withObject, (.:))
@@ -74,7 +77,7 @@ import           Eventful                                   (Aggregate, EventSto
                                                              serializedEventStoreWriter,
                                                              serializedGlobalEventStoreReader,
                                                              serializedVersionedEventStoreReader, streamProjectionState,
-                                                             synchronousEventBusWrapper, uuidNextRandom)
+                                                             synchronousEventBusWrapper)
 import           Eventful.Store.Sql                         (JSONString, SqlEvent, SqlEventStoreConfig,
                                                              defaultSqlEventStoreConfig, jsonStringSerializer,
                                                              sqlEventStoreReader, sqlGlobalEventStoreReader)
@@ -104,6 +107,14 @@ import           Plutus.SCB.Utils                           (liftError, render, 
 import qualified Wallet.API                                 as WAPI
 import           Wallet.Emulator.MultiAgent                 (EmulatedWalletEffects)
 
+import           Cardano.Node.Follower                      (NodeFollowerEffect, getBlocks, newFollower)
+import           Plutus.SCB.Effects.Contract                (ContractCommand (..), ContractEffect, invokeContract)
+import           Plutus.SCB.Effects.EventLog                (Connection (..), EventLogEffect, addProcessBus,
+                                                             refreshProjection, runCommand, runGlobalQuery)
+import qualified Plutus.SCB.Effects.EventLog                as EventLog
+import           Plutus.SCB.Effects.UUID                    (UUIDEffect, uuidNextRandom)
+import           Wallet.API                                 (WalletEffect)
+
 type ContractEffects =
         '[ EventLogEffect ChainEvent
          , Log
@@ -126,9 +137,6 @@ installContract filePath = do
             UserEventSource
             (Contract {contractPath = filePath})
     logInfo "Installed."
-
-installedContracts :: Member (EventLogEffect ChainEvent) effs => Eff effs (Set Contract)
-installedContracts = runGlobalQuery installedContractsProjection
 
 lookupContract ::
     ( Member (EventLogEffect ChainEvent) effs
@@ -189,6 +197,8 @@ updateContract ::
        , Member (Error SCBError) effs
        , Member (EventLogEffect ChainEvent) effs
        , Member ContractEffect effs
+       , Member NodeFollowerEffect effs
+    --    , Member
        )
     --        MonadLogger m
     --    , MonadEventStore ChainEvent m
@@ -210,12 +220,11 @@ updateContract uuid endpointName endpointPayload = do
         "Updating Contract: " <>
         Text.pack (activeContractPath (activeContract oldContractState)) <>
         "/" <> endpointName
-    fID <- subscribe
-    void $
-        execStateT
-            (invokeContractUpdate fID $
-             EventPayload endpointName endpointPayload)
-            (oldContractState, [])
+    fID <- newFollower
+    void
+        $ execState @T  (oldContractState, [])
+        $ invokeContractUpdate fID (EventPayload endpointName endpointPayload)
+
     -- response <-
     --     invokeContractUpdate oldContractState endpointName endpointPayload
     -- let newContractState =
@@ -225,7 +234,7 @@ updateContract uuid endpointName endpointPayload = do
     -- void $ runCommand saveContractState ContractEventSource newContractState
     --
     logInfo "Handling Resulting Blockchain Events"
-    handleBlockchainEvents response
+    -- handleBlockchainEvents response
     logInfo "Done"
 
 parseSingleHook ::
@@ -239,22 +248,20 @@ parseSingleHook parser response =
         Left err     -> throwError $ ContractCommandError 0 $ Text.pack err
         Right result -> pure result
 
+-- , MonadState (ActiveContractState, [ContractHook]) m
+
 handleContractHook ::
-       ( MonadError SCBError m
-       , MonadLogger m
-       , MonadEventStore ChainEvent m
-       , WalletAPI m
-       , WalletDiagnostics m
-       , NodeAPI m
-       , MonadContract m
-       , MonadState (ActiveContractState, [ContractHook]) m
-       , ChainIndexAPI m
-       , NodeFollowerAPI m
-       , SigningProcessAPI m
+       ( Members EmulatedWalletEffects effs
+       , Member (Error SCBError) effs
+       , Member (EventLogEffect ChainEvent) effs
+       , Member Log effs
+       , Member (State T) effs
+       , Member NodeFollowerEffect effs
+       , Member ContractEffect effs
        )
     => FollowerID
     -> ContractHook
-    -> m ()
+    -> Eff effs ()
 handleContractHook _ (TxHook unbalancedTxs)  = handleTxHook unbalancedTxs
 handleContractHook i (UtxoAtHook addresses)  = handleUtxoAtHook i addresses
 handleContractHook i (OwnPubKeyHook request) = handleOwnPubKeyHook i request
@@ -266,15 +273,15 @@ handleTxHook ::
        , Member (EventLogEffect ChainEvent) effs
        )
     => UnbalancedTx
-    -> m ()
+    -> Eff effs ()
 handleTxHook unbalancedTx = do
-    logInfoN "Handling 'tx' hook."
-    logInfoN $ "Balancing unbalanced TX: " <> tshow unbalancedTx
-    balancedTx <- (mapError WalletError . Wallet.balanceWallet) unbalancedTx
+    logInfo "Handling 'tx' hook."
+    logInfo $ "Balancing unbalanced TX: " <> tshow unbalancedTx
+    balancedTx <- Wallet.balanceWallet unbalancedTx
     signedTx <- WAPI.signWithOwnPublicKey balancedTx
-    logInfoN $ "Storing signed TX: " <> tshow signedTx
+    logInfo $ "Storing signed TX: " <> tshow signedTx
     void $ runCommand saveBalancedTx WalletEventSource balancedTx
-    logInfoN $ "Submitting signed TX: " <> tshow signedTx
+    logInfo $ "Submitting signed TX: " <> tshow signedTx
     balanceResult <- submitTx signedTx
     void $ runCommand saveBalancedTxResult NodeEventSource balanceResult
 
@@ -282,39 +289,50 @@ handleTxHook unbalancedTx = do
 handleUtxoAtHook ::
        ( Member Log effs
        , Member (Error SCBError) effs
+       , Member (EventLogEffect ChainEvent) effs
+       , Member (State T) effs
+       , Members EmulatedWalletEffects effs
+       , Member NodeFollowerEffect effs
+       , Member ContractEffect effs
        )
     => FollowerID
     -> Ledger.Address
-    -> m ()
+    -> Eff effs ()
 handleUtxoAtHook i address = do
-    logDebugN $ "Fetching utxo-at: " <> tshow address
+    logDebug $ "Fetching utxo-at: " <> tshow address
     utxoIndex <- runGlobalQuery utxoIndexProjection
     let utxoAtAddress = utxoAt utxoIndex address
-    logDebugN $ "Fetched utxo-at: " <> tshow utxoAtAddress
+    logDebug $ "Fetched utxo-at: " <> tshow utxoAtAddress
     invokeContractUpdate i $ EventPayload "utxo-at" (JSON.toJSON utxoAtAddress)
 
 handleOwnPubKeyHook ::
        ( Member (Error SCBError) effs
        , Member Log effs
+       , Member WalletEffect effs
+       , Member (EventLogEffect ChainEvent) effs
+       , Member (State T) effs
+       , Members EmulatedWalletEffects effs
+       , Member NodeFollowerEffect effs
+       , Member ContractEffect effs
        )
     => FollowerID
     -> OwnPubKeyRequest
-    -> m ()
+    -> Eff effs ()
 handleOwnPubKeyHook _ NotWaitingForPubKey = pure ()
 handleOwnPubKeyHook i WaitingForPubKey = do
-    logInfoN "Handling 'own-pubkey' hook."
+    logInfo "Handling 'own-pubkey' hook."
     key :: WAPI.PubKey <- WAPI.ownPubKey
     invokeContractUpdate i $ EventPayload "own-pubkey" (JSON.toJSON key)
 
 -- | A wrapper around the NodeAPI function that returns some more
 -- useful evidence of the work done.
-submitTx :: (Monad m, NodeAPI m) => Ledger.Tx -> m Ledger.Tx
+submitTx :: (Member WalletEffect effs) => Ledger.Tx -> Eff effs Ledger.Tx
 submitTx tx = do
     WAPI.submitTxn tx
     pure tx
 
 parseHooks ::
-       MonadError SCBError m => PartiallyDecodedResponse -> m [ContractHook]
+       Member (Error SCBError) effs => PartiallyDecodedResponse -> Eff effs [ContractHook]
 parseHooks = parseSingleHook hookParser
 
 hookParser :: JSON.Value -> Parser [ContractHook]
@@ -350,53 +368,49 @@ lookupActiveContractState uuid = do
         Nothing -> throwError (ActiveContractStateNotFound uuid)
         Just s  -> return s
 
+type T = (ActiveContractState, [ContractHook]) -- FIXME
+
 invokeContractUpdate ::
-       ( MonadError SCBError m
-       , MonadContract m
-       , MonadState (ActiveContractState, [ContractHook]) m
-       , MonadEventStore ChainEvent m
-       , MonadLogger m
-       , WalletAPI m
-       , ChainIndexAPI m
-       , WalletDiagnostics m
-       , NodeAPI m
-       , NodeFollowerAPI m
-       , SigningProcessAPI m
+       ( Member Log effs
+       , Member (EventLogEffect ChainEvent) effs
+       , Member (Error SCBError) effs
+       , Member (State T) effs
+       , Members EmulatedWalletEffects effs
+       , Member NodeFollowerEffect effs
+       , Member ContractEffect effs
        )
     => FollowerID
     -> Payload
-    -> m ()
+    -> Eff effs ()
 invokeContractUpdate i payload = do
-    oldContractState <- use _1
+    oldContractState <- use @T _1
     -- Invoke the contract. Get the repsonse.
     response <- invokeContractUpdate_ oldContractState payload
     let newContractState =
             oldContractState {partiallyDecodedResponse = response}
-    logDebugN . render $ "Updated: " <+> pretty newContractState
+    logDebug . render $ "Updated: " <+> pretty newContractState
     -- Store the new state
-    logInfoN "Storing Updated Contract State"
+    logInfo "Storing Updated Contract State"
     void $ runCommand saveContractState ContractEventSource newContractState
     -- Append the new hooks.
     newHooks <- parseHooks response
-    assign _1 newContractState
+    assign @T _1 newContractState
     pushHooks newHooks
     processAllHooks i
 
+-- , MonadState (ActiveContractState, [ContractHook]) m
+
 processAllHooks ::
-       ( MonadError SCBError m
-       , MonadState (ActiveContractState, [ContractHook]) m
-       , MonadEventStore ChainEvent m
-       , MonadLogger m
-       , MonadContract m
-       , WalletAPI m
-       , ChainIndexAPI m
-       , WalletDiagnostics m
-       , NodeAPI m
-       , NodeFollowerAPI m
-       , SigningProcessAPI m
+       ( Members EmulatedWalletEffects effs
+       , Member (Error SCBError) effs
+       , Member (EventLogEffect ChainEvent) effs
+       , Member (State T) effs
+       , Member Log effs
+       , Member NodeFollowerEffect effs
+       , Member ContractEffect effs
        )
     => FollowerID
-    -> m ()
+    -> Eff effs ()
 processAllHooks i =
     popHook i >>= \case
         Nothing -> pure ()
@@ -406,39 +420,42 @@ processAllHooks i =
             processAllHooks i
 
 sync ::
-       (MonadLogger m, MonadEventStore ChainEvent m, NodeFollowerAPI m)
+       ( Member NodeFollowerEffect effs
+       , Member (EventLogEffect ChainEvent) effs
+       , Member Log effs
+       )
     => FollowerID
-    -> m ()
+    -> Eff effs ()
 sync i = do
-    blocks <- NodeClient.blocks i
+    blocks <- getBlocks i
     traverse_ (runCommand saveBlock NodeEventSource) blocks
     count <- runGlobalQuery blockCount
-    logDebugN $ "Block count is now: " <> tshow count
+    logDebug $ "Block count is now: " <> tshow count
 
 -- | Old hooks go to the back of the queue.
 pushHooks ::
-       (MonadState (ActiveContractState, [ContractHook]) m)
+       (Member (State T) effs)
     => [ContractHook]
-    -> m ()
-pushHooks newHooks = modifying _2 (\oldHooks -> oldHooks <> newHooks)
+    -> Eff effs ()
+pushHooks newHooks = modifying @T _2 (\oldHooks -> oldHooks <> newHooks)
 
 popHook ::
-       ( MonadEventStore ChainEvent m
-       , MonadState (ActiveContractState, [ContractHook]) m
-       , MonadLogger m
-       , NodeFollowerAPI m
+       ( Member (State T) effs
+       , Member Log effs
+       , Member (EventLogEffect ChainEvent) effs
+       , Member NodeFollowerEffect effs
        )
     => FollowerID
-    -> m (Maybe ContractHook)
+    -> Eff effs (Maybe ContractHook)
 popHook i = do
-    oldHooks <- use _2
-    logDebugN $ "Current Hooks: " <> tshow oldHooks
+    oldHooks <- use @T _2
+    logDebug $ "Current Hooks: " <> tshow oldHooks
     case oldHooks of
         [] -> do
             sync i
             pure Nothing
         (hook:newHooks) -> do
-            assign _2 newHooks
+            assign @T _2 newHooks
             pure $ Just hook
 
 data Payload
@@ -453,19 +470,18 @@ encodePayload (EventPayload endpointName endpointValue) =
     , JSON.object [("tag", JSON.String endpointName), ("value", endpointValue)])
 
 invokeContractUpdate_ ::
-       (MonadContract m, MonadError SCBError m)
+       (Member ContractEffect effs)
     => ActiveContractState
     -> Payload
-    -> m PartiallyDecodedResponse
+    -> Eff effs PartiallyDecodedResponse
 invokeContractUpdate_ ActiveContractState { activeContract = ActiveContract {activeContractPath}
                                           , partiallyDecodedResponse = PartiallyDecodedResponse {newState}
                                           } payload =
-    liftError $
     invokeContract $
     UpdateContract activeContractPath $
     JSON.object [("oldState", newState), encodePayload payload]
 
-installedContracts :: MonadEventStore ChainEvent m => m (Set Contract)
+installedContracts :: Member (EventLogEffect ChainEvent) effs => Eff effs (Set Contract)
 installedContracts = runGlobalQuery installedContractsProjection
 
 installedContractsProjection ::
@@ -533,9 +549,9 @@ dbConnect ::
     , MonadLogger m
     )
     => DbConfig
-    -> m Connection
+    -> m EventLog.Connection
 dbConnect DbConfig {dbConfigFile, dbConfigPoolSize} = do
     let connectionInfo = mkSqliteConnectionInfo dbConfigFile
     MonadLogger.logDebugN "Connecting to DB"
     connectionPool <- createSqlitePoolFromInfo connectionInfo dbConfigPoolSize
-    pure $ Connection (defaultSqlEventStoreConfig, connectionPool)
+    pure $ EventLog.Connection (defaultSqlEventStoreConfig, connectionPool)
