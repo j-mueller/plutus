@@ -14,25 +14,31 @@
 module Plutus.SCB.TestApp
     ( runScenario
     , sync
-    , TestApp
+    , TestAppEffects
     , getFollowerID
     , valueAt
     ) where
 
+import           Cardano.Node.Follower                         (NodeFollowerEffect)
 import qualified Cardano.Node.Follower                         as NodeFollower
 import           Cardano.Node.Mock                             (NodeServerEffects)
 import qualified Cardano.Node.Mock                             as NodeServer
-import           Cardano.Node.Types                            (FollowerID)
+import           Cardano.Node.RandomTx                         (GenRandomTx)
+import           Cardano.Node.Types                            (AppState, FollowerID, NodeFollowerState)
 import qualified Cardano.Node.Types                            as NodeServer
-import           Cardano.Wallet.Mock                           (followerID)
+import           Cardano.Wallet.Mock                           (MockWalletState, followerID)
 import qualified Cardano.Wallet.Mock                           as WalletServer
 import           Control.Concurrent.MVar                       (MVar, newMVar)
-import           Control.Lens                                  (assign, makeLenses, use, view, zoom)
+import           Control.Lens                                  (makeLenses, view, zoom)
 import           Control.Monad                                 (void)
-import           Control.Monad.Except                          (ExceptT, MonadError, runExceptT, throwError)
 import           Control.Monad.Freer                           (Eff, interpret, interpretM, runM)
+import           Control.Monad.Freer.Error                     (Error, handleError, throwError)
+import           Control.Monad.Freer.Extra.Log                 (Log, logDebug, logInfo)
+import           Control.Monad.Freer.Extra.State               (assign, use)
 import           Control.Monad.Freer.Extras                    (errorToMonadError, handleZoomedError, handleZoomedState,
                                                                 stateToMonadState)
+import           Control.Monad.Freer.State                     (State, runState)
+import           Control.Monad.Freer.Writer                    (Writer)
 import           Control.Monad.IO.Class                        (MonadIO, liftIO)
 import           Control.Monad.Logger                          (LoggingT, MonadLogger, logDebugN, logInfoN,
                                                                 runStderrLoggingT)
@@ -56,6 +62,9 @@ import           Ledger.AddressMap                             (UtxoMap)
 import qualified Ledger.AddressMap                             as AM
 import           Plutus.SCB.Command                            ()
 import           Plutus.SCB.Core
+import           Plutus.SCB.Effects.Contract                   (ContractEffect)
+import           Plutus.SCB.Effects.EventLog                   (EventLogEffect)
+import           Plutus.SCB.Effects.UUID                       (UUIDEffect)
 import           Plutus.SCB.Events                             (ChainEvent)
 import           Plutus.SCB.Query                              (pureProjection)
 import           Plutus.SCB.Types                              (SCBError (ContractCommandError, ContractNotFound, OtherError),
@@ -63,16 +72,22 @@ import           Plutus.SCB.Types                              (SCBError (Contra
 import           Plutus.SCB.Utils                              (abbreviate, tshow)
 import           Test.QuickCheck.Instances.UUID                ()
 
-import           Wallet.API                                    (addSignatures, ownOutputs, ownPubKey, startWatching,
-                                                                submitTxn, updatePaymentWithChange, watchedAddresses)
-import           Wallet.Emulator.SigningProcess                (SigningProcess)
+import           Wallet.API                                    (WalletAPIError, addSignatures, ownOutputs, ownPubKey,
+                                                                startWatching, submitTxn, updatePaymentWithChange,
+                                                                watchedAddresses)
+import           Wallet.Effects                                (ChainIndexEffect, NodeClientEffect,
+                                                                SigningProcessEffect, WalletEffect)
+import           Wallet.Emulator.Chain                         (ChainEffect, ChainState)
+import           Wallet.Emulator.ChainIndex                    (ChainIndexControlEffect)
+import           Wallet.Emulator.NodeClient                    (NodeControlEffect)
+import           Wallet.Emulator.SigningProcess                (SigningProcess, SigningProcessControlEffect)
 import qualified Wallet.Emulator.SigningProcess                as SP
 import           Wallet.Emulator.Wallet                        (Wallet (..))
 
 data TestState =
     TestState
         { _eventStore     :: EventMap ChainEvent
-        , _walletState    :: WalletServer.State
+        , _walletState    :: WalletServer.MockWalletState
         , _nodeState      :: MVar NodeServer.AppState
         , _signingProcess :: SigningProcess
         }
@@ -91,33 +106,56 @@ initialTestState =
         let _signingProcess = SP.defaultSigningProcess (Wallet 1)
         pure TestState {_eventStore, _nodeState, _walletState, _signingProcess}
 
+type TestAppEffects =
+        '[ GenRandomTx
+        , NodeFollowerEffect
+        , ChainEffect
+        , WalletEffect
+        , UUIDEffect
+        , ContractEffect
+        , NodeClientEffect
+        , ChainIndexEffect
+        , SigningProcessEffect
+        , NodeControlEffect
+        , ChainIndexControlEffect
+        , SigningProcessControlEffect
+        , State NodeFollowerState
+        , State ChainState
+        , Writer [ChainEvent]
+        , State AppState
+        , State MockWalletState
+        , State TestState
+        , Log
+        , EventLogEffect ChainEvent
+        , Error WalletAPIError
+        , Error SCBError
+        , IO
+        ]
+
 valueAt :: Address -> Eff TestAppEffects Ledger.Value
-valueAt address = WalletServer.valueAt address
+valueAt = WalletServer.valueAt
 
-type TestAppEffects = '[IO]
-
-runScenarioEff :: Eff TestAppEffects a -> IO ()
-runScenarioEff action = do
+runScenario :: Eff TestAppEffects a -> IO ()
+runScenario action = do
     testState <- initialTestState
-    result <-runTestApp $ do
+    result <- runTestApp $ do
                 sync
                 void action
                 events :: [ChainEvent] <-
                     fmap streamEventEvent <$> runGlobalQuery pureProjection
-                logDebugN "Final Event Stream"
-                logDebugN "--"
-                traverse_ (logDebugN . abbreviate 120 . tshow) events
-                logDebugN "--"
+                logDebug "Final Event Stream"
+                logDebug "--"
+                traverse_ (logDebug . abbreviate 120 . tshow) events
+                logDebug "--"
     case result of
         Left err -> error $ show err
         Right _  -> pure ()
 
-runTestApp :: Eff TestAppEffects () -> IO ()
+runTestApp :: Eff TestAppEffects () -> IO (Either SCBError ())
 runTestApp = undefined
 
 sync :: Eff TestAppEffects ()
-sync =
-    use walletState >>= execStateT WalletServer.syncState >>= assign walletState
+sync = WalletServer.syncState
 
 getFollowerID :: Eff TestAppEffects FollowerID
 getFollowerID = do
@@ -125,12 +163,6 @@ getFollowerID = do
     case mID of
         Just fID -> pure fID
         Nothing  -> throwError $ OtherError "TestApp not initialised correctly!"
-
-runChainEffects :: Eff (NodeServerEffects IO) a -> Eff TestAppEffects a
-runChainEffects action =
-    TestApp . zoom nodeState . StateT $ \stateMVar -> do
-        result <- NodeServer.processChainEffects stateMVar action
-        pure (result, stateMVar)
 
 fromString :: Either String a -> Either SCBError a
 fromString = first (ContractCommandError 0 . Text.pack)
