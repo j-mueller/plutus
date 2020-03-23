@@ -14,10 +14,11 @@ module Control.Monad.Freer.Extra.Log(
     , runStderrLog
     ) where
 
-import           Control.Monad.Freer  (Eff, LastMember, Member, type (~>))
-import qualified Control.Monad.Freer  as Eff
-import           Control.Monad.Logger (LogLevel (..), logWithoutLoc, runStderrLoggingT)
-import           Data.Text            (Text)
+import           Control.Monad.Freer    (Eff, LastMember, Member, type (~>))
+import qualified Control.Monad.Freer    as Eff
+import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Control.Monad.Logger   (LogLevel (..), logWithoutLoc, runStderrLoggingT)
+import           Data.Text              (Text)
 
 -- $log
 -- A @freer-simple@ wrapper around @Control.Monad.Logger@
@@ -33,8 +34,8 @@ logDebug = Eff.send . Log LevelDebug
 logWarn :: Member Log effs => Text -> Eff effs ()
 logWarn = Eff.send . Log LevelWarn
 
-runStderrLog :: (LastMember IO effs) => Eff (Log ': effs) ~> Eff effs
+runStderrLog :: (LastMember m effs, MonadIO m) => Eff (Log ': effs) ~> Eff effs
 runStderrLog =
     Eff.interpretM
         (\case
-             Log level txt -> runStderrLoggingT $ logWithoutLoc "" level txt)
+             Log level txt -> liftIO $ runStderrLoggingT $ logWithoutLoc "" level txt)

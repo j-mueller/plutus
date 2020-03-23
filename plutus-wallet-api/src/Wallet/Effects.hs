@@ -20,7 +20,7 @@ makeEffect ''WalletEffect
 data NodeClientEffect r where
     PublishTx :: Tx -> NodeClientEffect ()
     GetClientSlot :: NodeClientEffect Slot
-    GetClientIndex :: NodeClientEffect AddressMap
+    GetClientIndex :: NodeClientEffect AddressMap -- FIXME is this right? why not ChainIndexEffect.WatchAddresses?
 makeEffect ''NodeClientEffect
 
 data SigningProcessEffect r where
