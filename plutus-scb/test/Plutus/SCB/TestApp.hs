@@ -113,18 +113,18 @@ type TestAppEffects =
         , WalletEffect
         , UUIDEffect
         , ContractEffect
-        , NodeClientEffect
         , ChainIndexEffect
-        , SigningProcessEffect
-        , NodeControlEffect
         , ChainIndexControlEffect
+        , NodeClientEffect
+        , NodeControlEffect
+        , SigningProcessEffect
         , SigningProcessControlEffect
         , State NodeFollowerState
         , State ChainState
-        , Writer [ChainEvent]
         , State AppState
         , State MockWalletState
         , State TestState
+        , Writer [ChainEvent]
         , Log
         , EventLogEffect ChainEvent
         , Error WalletAPIError
