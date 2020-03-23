@@ -66,11 +66,11 @@ fromWalletAPIError err@(PrivateKeyNotFound _) =
 fromWalletAPIError (OtherError text) =
     err500 {errBody = BSL.fromStrict $ encodeUtf8 text}
 
-valueAt :: (MonadLogger m, MonadState State m) => Address -> m Value
+valueAt :: Address -> Eff effs Value
 valueAt address = do
-    logInfoN "valueAt"
+    logInfo "valueAt"
     value <- use (watchedAddresses . to AddressMap.values . ix address)
-    logInfoN $ "valueAt " <> tshow address <> ": " <> tshow value
+    logInfo $ "valueAt " <> tshow address <> ": " <> tshow value
     pure value
 
 selectCoin ::

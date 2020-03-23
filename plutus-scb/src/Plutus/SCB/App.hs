@@ -32,15 +32,14 @@ import           Eventful.Store.Sql            (jsonStringSerializer, sqlEventSt
 import           Eventful.Store.Sqlite         (initializeSqliteEventStore, sqliteEventStoreWriter)
 import           Network.HTTP.Client           (defaultManagerSettings, newManager)
 import           Plutus.SCB.Core               (Connection (Connection), ContractCommand (InitContract, UpdateContract),
-                                                MonadContract, MonadEventStore, addProcessBus, dbConnect,
-                                                invokeContract, refreshProjection, runCommand, toUUID)
+                                                addProcessBus, dbConnect, invokeContract, refreshProjection, runCommand,
+                                                toUUID)
 import           Plutus.SCB.Types              (Config (Config), SCBError (ContractCommandError, NodeClientError, SigningProcessError, WalletClientError),
                                                 dbConfig, nodeServerConfig, signingProcessConfig, walletServerConfig)
 import           Servant.Client                (ClientEnv, ClientM, ServantError, mkClientEnv, runClientM)
 import           System.Exit                   (ExitCode (ExitFailure, ExitSuccess))
 import           System.Process                (readProcessWithExitCode)
-import           Wallet.API                    (ChainIndexAPI, NodeAPI, SigningProcessAPI, WalletAPI, WalletDiagnostics,
-                                                addSignatures, logMsg, ownOutputs, ownPubKey, slot, startWatching,
+import           Wallet.API                    (addSignatures, ownOutputs, ownPubKey, startWatching,
                                                 submitTxn, updatePaymentWithChange, watchedAddresses)
 
 ------------------------------------------------------------
