@@ -19,7 +19,6 @@ module Plutus.SCB.TestApp
     , valueAt
     ) where
 
-import           Cardano.Node.API                              (NodeFollowerAPI (..))
 import qualified Cardano.Node.Follower                         as NodeFollower
 import           Cardano.Node.Mock                             (NodeServerEffects)
 import qualified Cardano.Node.Mock                             as NodeServer

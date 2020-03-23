@@ -7,7 +7,6 @@
 
 module Plutus.SCB.App where
 
-import           Cardano.Node.API              (NodeFollowerAPI (..))
 import qualified Cardano.Node.Client           as NodeClient
 import qualified Cardano.Node.Server           as NodeServer
 import qualified Cardano.SigningProcess.Client as SigningProcessClient

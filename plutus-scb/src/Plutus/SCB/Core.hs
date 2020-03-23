@@ -37,7 +37,6 @@ module Plutus.SCB.Core
     , ContractEffects
     ) where
 
-import           Cardano.Node.API                           (NodeFollowerAPI, subscribe)
 import qualified Cardano.Node.API                           as NodeClient
 import           Cardano.Node.Types                         (FollowerID)
 import           Control.Error.Util                         (note)
