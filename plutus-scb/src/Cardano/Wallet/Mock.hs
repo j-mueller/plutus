@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE GADTs             #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE MonoLocalBinds    #-}
 {-# LANGUAGE NamedFieldPuns    #-}
@@ -12,12 +14,13 @@ module Cardano.Wallet.Mock where
 import           Cardano.Node.Follower           (NodeFollowerEffect, getBlocks, newFollower)
 import           Cardano.Node.Types              (FollowerID)
 import           Cardano.Wallet.Types            (WalletId)
-import           Control.Lens                    (ix, makeLenses, to)
-import           Control.Monad.Freer             (Eff, LastMember, Member, runM, sendM)
+import           Control.Lens                    (at, ix, makeLenses, non, to, view, (^.))
+import           Control.Monad.Freer
 import           Control.Monad.Freer.Error       (Error, runError, throwError)
 import           Control.Monad.Freer.Extra.Log   (Log, logDebug, logInfo)
 import           Control.Monad.Freer.Extra.State (assign, modifying, use)
-import           Control.Monad.Freer.State       (State)
+import           Control.Monad.Freer.State       (State, gets)
+import           Control.Monad.Freer.Writer      (Writer, tell)
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Data.Bifunctor                  (Bifunctor (..))
 import qualified Data.ByteString.Lazy            as BSL
@@ -25,7 +28,8 @@ import qualified Data.ByteString.Lazy.Char8      as BSL8
 import qualified Data.Map                        as Map
 import           Data.Text.Encoding              (encodeUtf8)
 import           Language.Plutus.Contract.Trace  (allWallets)
-import           Ledger                          (Address, PubKey, TxOut (..), TxOutRef, TxOutTx (..), Value)
+import           Ledger                          (Address, PubKey, TxOut (..), TxOutRef, TxOutTx (..), Value,
+                                                  pubKeyAddress)
 import           Ledger.AddressMap               (AddressMap, UtxoMap, addAddress)
 import qualified Ledger.AddressMap               as AddressMap
 import           Plutus.SCB.Arbitrary            ()
@@ -33,7 +37,9 @@ import           Plutus.SCB.Utils                (tshow)
 import           Servant                         (NoContent (NoContent), ServantErr, err401, err404, err500, errBody)
 import           Test.QuickCheck                 (arbitrary, generate)
 import           Wallet.API                      (WalletAPIError (InsufficientFunds, OtherError, PrivateKeyNotFound))
-import           Wallet.Emulator.Wallet          (Wallet (Wallet))
+import           Wallet.Effects                  (NodeClientEffect, WalletEffect (..))
+import qualified Wallet.Effects                  as W
+import           Wallet.Emulator.Wallet          (Payment (..), PaymentArgs (..), Wallet (Wallet))
 import qualified Wallet.Emulator.Wallet          as EM
 
 data MockWalletState =
@@ -44,6 +50,33 @@ data MockWalletState =
     deriving (Show, Eq)
 
 makeLenses 'MockWalletState
+
+handleWallet :: -- FIXME: Move to Wallet.Emulator.Wallet
+    ( Member (State MockWalletState) effs
+    , Member NodeClientEffect effs
+    , Member (Error WalletAPIError) effs
+    , Member (Writer [EM.WalletEvent]) effs
+    )
+    => Eff (WalletEffect ': effs) ~> Eff effs
+handleWallet = interpret $ \case
+    SubmitTxn tx -> W.publishTx tx
+    OwnPubKey -> return (EM.walletPubKey activeWallet)
+    UpdatePaymentWithChange vl (oldIns, changeOut) -> do
+        utxo <- gets (view watchedAddresses)
+        let pubK = EM.walletPubKey activeWallet
+            args   = PaymentArgs
+                        { availableFunds = utxo ^. AddressMap.fundsAt (pubKeyAddress pubK)
+                        , ownPubKey = pubK
+                        , requestedValue = vl
+                        }
+            pmt    = Payment{paymentInputs = oldIns, paymentChangeOutput = changeOut}
+        Payment{paymentInputs, paymentChangeOutput} <- EM.handleUpdatePaymentWithChange args pmt
+        pure (paymentInputs, paymentChangeOutput)
+    WalletSlot -> W.getClientSlot
+    WalletLogMsg m -> tell [EM.WalletMsg m]
+    OwnOutputs ->
+        let address = pubKeyAddress (EM.walletPubKey activeWallet) in
+        view (at address . non mempty) <$> gets (view watchedAddresses)
 
 -- TODO Should this call syncstate itself?
 initialState :: MockWalletState

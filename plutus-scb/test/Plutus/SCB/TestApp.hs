@@ -85,14 +85,15 @@ import qualified Wallet.Emulator.Chain
 import           Wallet.Emulator.ChainIndex                    (ChainIndexControlEffect, ChainIndexState,
                                                                 handleChainIndex, handleChainIndexControl)
 import qualified Wallet.Emulator.ChainIndex
-import           Wallet.Emulator.MultiAgent                    (EmulatorEvent, chainEvent, chainIndexEvent, walletClientEvent, walletEvent)
+import           Wallet.Emulator.MultiAgent                    (EmulatorEvent, chainEvent, chainIndexEvent,
+                                                                walletClientEvent, walletEvent)
 import           Wallet.Emulator.NodeClient                    (NodeClientState, NodeControlEffect, handleNodeClient,
                                                                 handleNodeControl)
 import qualified Wallet.Emulator.NodeClient
 import           Wallet.Emulator.SigningProcess                (SigningProcess, SigningProcessControlEffect,
                                                                 handleSigningProcess, handleSigningProcessControl)
 import qualified Wallet.Emulator.SigningProcess                as SP
-import           Wallet.Emulator.Wallet                        (Wallet (..), WalletState, handleWallet)
+import           Wallet.Emulator.Wallet                        (Wallet (..), WalletState)
 import qualified Wallet.Emulator.Wallet
 
 data TestState =
@@ -106,25 +107,28 @@ data TestState =
         , _nodeClientState   :: NodeClientState
         , _chainEventLog     :: [ChainEvent]
         , _emulatorEventLog  :: [EmulatorEvent]
-        , _walletState2      :: WalletState
         , _chainIndex        :: ChainIndexState
         }
 
 makeLenses 'TestState
 
 defaultWallet :: Wallet
-defaultWallet = Wallet 1 -- FIXME more than one wallet
+defaultWallet = WalletServer.activeWallet
 
 initialTestState :: TestState
 initialTestState =
-    let _eventStore = emptyEventMap
-        -- ^ Set up the event log.
-        -- Set up the node.
-        _nodeState = NodeServer.initialAppState
-        -- Set up the wallet.
-        _walletState = WalletServer.initialState
-        _signingProcess = SP.defaultSigningProcess (Wallet 1)
-    in TestState {_eventStore, _nodeState, _walletState, _signingProcess}
+    TestState
+        { _eventStore = emptyEventMap
+        , _nodeState = NodeServer.initialAppState
+        , _walletState = WalletServer.initialState
+        , _signingProcess = SP.defaultSigningProcess WalletServer.activeWallet
+        , _nodeFollowerState = NodeServer.initialFollowerState
+        , _chainState = Wallet.Emulator.Chain.emptyChainState
+        , _nodeClientState = Wallet.Emulator.NodeClient.emptyNodeClientState
+        , _chainEventLog = []
+        , _emulatorEventLog = []
+        , _chainIndex = mempty
+        }
 
 type TestAppEffects =
         '[ GenRandomTx
@@ -147,7 +151,6 @@ type TestAppEffects =
         , State SigningProcess
         , State NodeClientState
         , State ChainIndexState
-        , State WalletState
         , State (EventMap ChainEvent)
         , Log
         , Writer [Wallet.Emulator.Wallet.WalletEvent]
@@ -161,32 +164,6 @@ type TestAppEffects =
         , State TestState
         , IO
         ]
-
-
--- '[ GenRandomTx
---  , NodeFollowerEffect
---  , WalletEffect
---  , UUIDEffect
---  , ContractEffect
---  , ChainIndexEffect
---  , ChainIndexControlEffect
---  , NodeClientEffect
---  , NodeControlEffect
---  , SigningProcessEffect
---  , SigningProcessControlEffect
---  , EventLogEffect event0
---  , ChainEffect
---  , State NodeFollowerState, State ChainState, State AppState,
---                          State MockWalletState, State SigningProcess, State NodeClientState,
---                          State ChainIndexState, State WalletState,
---                          State (EventMap ChainEvent), Log,
---                          Writer [Wallet.Emulator.Wallet.WalletEvent],
---                          Writer [Wallet.Emulator.NodeClient.NodeClientEvent],
---                          Writer [Wallet.Emulator.ChainIndex.ChainIndexEvent],
---                          Writer [Wallet.Emulator.Chain.ChainEvent], Writer [EmulatorEvent],
---                          Writer [ChainEvent], Error WalletAPIError, Error SCBError,
---                          State TestState, IO]
-
 
 valueAt :: Address -> Eff TestAppEffects Ledger.Value
 valueAt = WalletServer.valueAt
@@ -227,7 +204,7 @@ handleContractTest = interpret $ \case
         throwError $ ContractNotFound contractPath
 
 runTestApp :: Eff TestAppEffects () -> IO (Either SCBError (), TestState)
-runTestApp = 
+runTestApp =
     runM
     . runState initialTestState
     . runError
@@ -240,7 +217,6 @@ runTestApp =
     . interpret (handleZoomedWriter (below (walletEvent defaultWallet)))
     . runStderrLog
     . interpret (handleZoomedState eventStore)
-    . interpret (handleZoomedState walletState2)
     . interpret (handleZoomedState chainIndex)
     . interpret (handleZoomedState nodeClientState)
     . interpret (handleZoomedState signingProcess)
@@ -258,7 +234,7 @@ runTestApp =
     . handleChainIndex
     . handleContractTest
     . handleUUIDEffect
-    . handleWallet
+    . WalletServer.handleWallet
     . handleNodeFollower
     . runGenRandomTx
 

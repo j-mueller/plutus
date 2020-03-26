@@ -5,6 +5,7 @@
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE Rank2Types            #-}
 {-# LANGUAGE TemplateHaskell       #-}
@@ -15,13 +16,10 @@
 module Wallet.Emulator.Wallet where
 
 import           Control.Lens
-import qualified Control.Monad.Except       as E
 import           Control.Monad.Freer
 import           Control.Monad.Freer.Error
 import           Control.Monad.Freer.State
 import           Control.Monad.Freer.Writer
-import           Control.Monad.Trans.Class  (lift)
-import           Control.Monad.Trans.State  (StateT)
 import           Control.Newtype.Generics   (Newtype)
 import           Data.Aeson                 (FromJSON, ToJSON, ToJSONKey)
 import           Data.Bifunctor
@@ -43,8 +41,8 @@ import qualified Ledger.Value               as Value
 import           Prelude                    as P
 import           Servant.API                (FromHttpApiData (..), ToHttpApiData (..))
 import qualified Wallet.API                 as WAPI
-import Wallet.Effects (NodeClientEffect, WalletEffect(..))
-import qualified Wallet.Effects as W
+import           Wallet.Effects             (NodeClientEffect, WalletEffect (..))
+import qualified Wallet.Effects             as W
 
 -- | A wallet in the emulator model.
 newtype Wallet = Wallet { getWallet :: Integer }
@@ -105,6 +103,65 @@ emptyWalletState w = WalletState pk where
 
 type WalletEffs = '[NodeClientEffect, State WalletState, Error WAPI.WalletAPIError, Writer [WalletEvent]]
 
+data PaymentArgs =
+    PaymentArgs
+        { availableFunds :: Map.Map TxOutRef TxOutTx
+        -- ^ Funds that may be spent in order to balance the payment
+        , ownPubKey      :: PubKey
+        -- ^ Where to send the change (if any)
+        , requestedValue :: Value
+        -- ^ The value that must be covered by the payment's inputs
+        }
+
+-- | A payment consisting of a set of inputs to be spent, and
+--   an optional change output. The size of the payment is the
+--   difference between the total value of the inputs and the
+--   value of the output.
+data Payment =
+    Payment
+        { paymentInputs       :: Set.Set TxIn
+        , paymentChangeOutput :: Maybe TxOut
+        }
+
+handleUpdatePaymentWithChange ::
+    ( Member (Error WAPI.WalletAPIError) effs
+    )
+    => PaymentArgs
+    -> Payment
+    -> Eff effs Payment
+handleUpdatePaymentWithChange
+    PaymentArgs{availableFunds, ownPubKey, requestedValue}
+    Payment{paymentInputs=oldIns, paymentChangeOutput=changeOut} = do
+    -- utxo <- W.getClientIndex
+    -- ws <- get
+    let
+        -- addr = ownAddress ws
+        -- These inputs have been already used, we won't touch them
+        usedFnds = Set.map txInRef oldIns
+        -- Optional, left over change. Replace a `Nothing` with a Value of 0.
+        oldChange = maybe (Ada.lovelaceValueOf 0) txOutValue changeOut
+        -- Available funds.
+        fnds   = Map.withoutKeys availableFunds usedFnds
+        -- pubK   = toPublicKey (ws ^. ownPrivateKey)
+    if requestedValue `Value.leq` oldChange
+    then
+        -- If the requested value is covered by the change we only need to update
+        -- the remaining change.
+        pure Payment
+                { paymentInputs = oldIns
+                , paymentChangeOutput = mkChangeOutput ownPubKey (oldChange PlutusTx.- requestedValue)
+                }
+    else do
+        -- If the requested value is not covered by the change, then we need to
+        -- select new inputs, after deducting the oldChange from the value.
+        (spend, change) <- selectCoin (second (txOutValue . txOutTxOut) <$> Map.toList fnds)
+                                    (requestedValue PlutusTx.- oldChange)
+        let ins = Set.fromList (pubKeyTxIn . fst <$> spend)
+        pure Payment
+                { paymentInputs = Set.union oldIns ins
+                , paymentChangeOutput = mkChangeOutput ownPubKey change
+                }
+
 handleWallet
     :: (Members WalletEffs effs)
     => Eff (WalletEffect ': effs) ~> Eff effs
@@ -114,27 +171,15 @@ handleWallet = interpret $ \case
     UpdatePaymentWithChange vl (oldIns, changeOut) -> do
         utxo <- W.getClientIndex
         ws <- get
-        let
-            addr = ownAddress ws
-            -- These inputs have been already used, we won't touch them
-            usedFnds = Set.map txInRef oldIns
-            -- Optional, left over change. Replace a `Nothing` with a Value of 0.
-            oldChange = maybe (Ada.lovelaceValueOf 0) txOutValue changeOut
-            -- Available funds.
-            fnds   = Map.withoutKeys (utxo ^. AM.fundsAt addr) usedFnds
-            pubK   = toPublicKey (ws ^. ownPrivateKey)
-        if vl `Value.leq` oldChange
-        then
-          -- If the requested value is covered by the change we only need to update
-          -- the remaining change.
-          pure (oldIns, mkChangeOutput pubK $ oldChange PlutusTx.- vl)
-        else do
-          -- If the requested value is not covered by the change, then we need to
-          -- select new inputs, after deducting the oldChange from the value.
-          (spend, change) <- selectCoin (second (txOutValue . txOutTxOut) <$> Map.toList fnds)
-                                        (vl PlutusTx.- oldChange)
-          let ins = Set.fromList (pubKeyTxIn . fst <$> spend)
-          pure (Set.union oldIns ins, mkChangeOutput pubK change)
+        let pubK   = toPublicKey (ws ^. ownPrivateKey)
+            args   = PaymentArgs
+                        { availableFunds = utxo ^. AM.fundsAt (ownAddress ws)
+                        , ownPubKey = pubK
+                        , requestedValue = vl
+                        }
+            pmt    = Payment{paymentInputs = oldIns, paymentChangeOutput = changeOut}
+        Payment{paymentInputs, paymentChangeOutput} <- handleUpdatePaymentWithChange args pmt
+        pure (paymentInputs, paymentChangeOutput)
     WalletSlot -> W.getClientSlot
     WalletLogMsg m -> tell [WalletMsg m]
     OwnOutputs -> do
