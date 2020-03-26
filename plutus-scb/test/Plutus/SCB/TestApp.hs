@@ -172,6 +172,7 @@ runScenario :: Eff TestAppEffects a -> IO ()
 runScenario action = do
     let testState = initialTestState
     result <- runTestApp $ do
+                Wallet.Emulator.Chain.processBlock
                 sync
                 void action
                 events :: [ChainEvent] <-

@@ -34,6 +34,7 @@ import           Wallet.API                                    (ChainIndexEffect
 import           Wallet.Emulator.ChainIndex                    (ChainIndexControlEffect)
 import           Wallet.Emulator.NodeClient                    (NodeControlEffect)
 import           Wallet.Emulator.SigningProcess                (SigningProcessControlEffect)
+import qualified Wallet.Emulator.Chain         as Chain
 
 tests :: TestTree
 tests = testGroup "SCB.Core" [installContractTests, executionTests]
