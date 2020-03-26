@@ -1,13 +1,17 @@
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeOperators              #-}
 
 -- | A test version of the 'App' stack which runs all operations in memory.
 -- No networking, no filesystem.
@@ -19,30 +23,29 @@ module Plutus.SCB.TestApp
     , valueAt
     ) where
 
-import           Cardano.Node.Follower                         (NodeFollowerEffect)
+import           Cardano.Node.Follower                         (NodeFollowerEffect, handleNodeFollower)
 import qualified Cardano.Node.Follower                         as NodeFollower
 import           Cardano.Node.Mock                             (NodeServerEffects)
 import qualified Cardano.Node.Mock                             as NodeServer
-import           Cardano.Node.RandomTx                         (GenRandomTx)
+import           Cardano.Node.RandomTx                         (GenRandomTx, runGenRandomTx)
 import           Cardano.Node.Types                            (AppState, FollowerID, NodeFollowerState)
 import qualified Cardano.Node.Types                            as NodeServer
 import           Cardano.Wallet.Mock                           (MockWalletState, followerID)
 import qualified Cardano.Wallet.Mock                           as WalletServer
 import           Control.Concurrent.MVar                       (MVar, newMVar)
-import           Control.Lens                                  (makeLenses, view, zoom)
+import           Control.Lens                                  (below, makeLenses, view, zoom)
 import           Control.Monad                                 (void)
-import           Control.Monad.Freer                           (Eff, interpret, interpretM, runM)
-import           Control.Monad.Freer.Error                     (Error, handleError, throwError)
-import           Control.Monad.Freer.Extra.Log                 (Log, logDebug, logInfo)
+import           Control.Monad.Freer
+import           Control.Monad.Freer.Error                     (Error, handleError, runError, throwError)
+import           Control.Monad.Freer.Extra.Log                 (Log, logDebug, logInfo, runStderrLog)
 import           Control.Monad.Freer.Extra.State               (assign, use)
 import           Control.Monad.Freer.Extras                    (errorToMonadError, handleZoomedError, handleZoomedState,
-                                                                stateToMonadState)
+                                                                handleZoomedWriter, stateToMonadState, writeIntoState)
 import           Control.Monad.Freer.State                     (State, runState)
-import           Control.Monad.Freer.Writer                    (Writer)
+import           Control.Monad.Freer.Writer                    (Writer, runWriter)
 import           Control.Monad.IO.Class                        (MonadIO, liftIO)
 import           Control.Monad.Logger                          (LoggingT, MonadLogger, logDebugN, logInfoN,
                                                                 runStderrLoggingT)
-import           Control.Monad.State                           (MonadState, StateT (StateT), execStateT, runStateT)
 import           Data.Aeson                                    as JSON
 import           Data.Aeson.Types                              as JSON
 import           Data.Bifunctor                                (first)
@@ -62,9 +65,9 @@ import           Ledger.AddressMap                             (UtxoMap)
 import qualified Ledger.AddressMap                             as AM
 import           Plutus.SCB.Command                            ()
 import           Plutus.SCB.Core
-import           Plutus.SCB.Effects.Contract                   (ContractEffect)
-import           Plutus.SCB.Effects.EventLog                   (EventLogEffect)
-import           Plutus.SCB.Effects.UUID                       (UUIDEffect)
+import           Plutus.SCB.Effects.Contract                   (ContractEffect (..))
+import           Plutus.SCB.Effects.EventLog                   (EventLogEffect, handleEventLog, handleEventLogState)
+import           Plutus.SCB.Effects.UUID                       (UUIDEffect, handleUUIDEffect)
 import           Plutus.SCB.Events                             (ChainEvent)
 import           Plutus.SCB.Query                              (pureProjection)
 import           Plutus.SCB.Types                              (SCBError (ContractCommandError, ContractNotFound, OtherError),
@@ -77,39 +80,55 @@ import           Wallet.API                                    (WalletAPIError, 
                                                                 watchedAddresses)
 import           Wallet.Effects                                (ChainIndexEffect, NodeClientEffect,
                                                                 SigningProcessEffect, WalletEffect)
-import           Wallet.Emulator.Chain                         (ChainEffect, ChainState)
-import           Wallet.Emulator.ChainIndex                    (ChainIndexControlEffect)
-import           Wallet.Emulator.NodeClient                    (NodeControlEffect)
-import           Wallet.Emulator.SigningProcess                (SigningProcess, SigningProcessControlEffect)
+import           Wallet.Emulator.Chain                         (ChainEffect, ChainState, handleChain)
+import qualified Wallet.Emulator.Chain
+import           Wallet.Emulator.ChainIndex                    (ChainIndexControlEffect, ChainIndexState,
+                                                                handleChainIndex, handleChainIndexControl)
+import qualified Wallet.Emulator.ChainIndex
+import           Wallet.Emulator.MultiAgent                    (EmulatorEvent, chainEvent, chainIndexEvent, walletClientEvent, walletEvent)
+import           Wallet.Emulator.NodeClient                    (NodeClientState, NodeControlEffect, handleNodeClient,
+                                                                handleNodeControl)
+import qualified Wallet.Emulator.NodeClient
+import           Wallet.Emulator.SigningProcess                (SigningProcess, SigningProcessControlEffect,
+                                                                handleSigningProcess, handleSigningProcessControl)
 import qualified Wallet.Emulator.SigningProcess                as SP
-import           Wallet.Emulator.Wallet                        (Wallet (..))
+import           Wallet.Emulator.Wallet                        (Wallet (..), WalletState, handleWallet)
+import qualified Wallet.Emulator.Wallet
 
 data TestState =
     TestState
-        { _eventStore     :: EventMap ChainEvent
-        , _walletState    :: WalletServer.MockWalletState
-        , _nodeState      :: MVar NodeServer.AppState
-        , _signingProcess :: SigningProcess
+        { _eventStore        :: EventMap ChainEvent
+        , _walletState       :: WalletServer.MockWalletState
+        , _nodeState         :: NodeServer.AppState
+        , _signingProcess    :: SigningProcess
+        , _nodeFollowerState :: NodeFollowerState
+        , _chainState        :: ChainState
+        , _nodeClientState   :: NodeClientState
+        , _chainEventLog     :: [ChainEvent]
+        , _emulatorEventLog  :: [EmulatorEvent]
+        , _walletState2      :: WalletState
+        , _chainIndex        :: ChainIndexState
         }
 
 makeLenses 'TestState
 
-initialTestState :: MonadIO m => m TestState
+defaultWallet :: Wallet
+defaultWallet = Wallet 1 -- FIXME more than one wallet
+
+initialTestState :: TestState
 initialTestState =
-    liftIO $ do
-        let _eventStore = emptyEventMap
+    let _eventStore = emptyEventMap
         -- ^ Set up the event log.
         -- Set up the node.
-        _nodeState <- liftIO $ newMVar NodeServer.initialAppState
+        _nodeState = NodeServer.initialAppState
         -- Set up the wallet.
-        let _walletState = WalletServer.initialState
-        let _signingProcess = SP.defaultSigningProcess (Wallet 1)
-        pure TestState {_eventStore, _nodeState, _walletState, _signingProcess}
+        _walletState = WalletServer.initialState
+        _signingProcess = SP.defaultSigningProcess (Wallet 1)
+    in TestState {_eventStore, _nodeState, _walletState, _signingProcess}
 
 type TestAppEffects =
         '[ GenRandomTx
         , NodeFollowerEffect
-        , ChainEffect
         , WalletEffect
         , UUIDEffect
         , ContractEffect
@@ -119,25 +138,62 @@ type TestAppEffects =
         , NodeControlEffect
         , SigningProcessEffect
         , SigningProcessControlEffect
+        , ChainEffect
+        , EventLogEffect ChainEvent
         , State NodeFollowerState
         , State ChainState
         , State AppState
         , State MockWalletState
-        , State TestState
-        , Writer [ChainEvent]
+        , State SigningProcess
+        , State NodeClientState
+        , State ChainIndexState
+        , State WalletState
+        , State (EventMap ChainEvent)
         , Log
-        , EventLogEffect ChainEvent
+        , Writer [Wallet.Emulator.Wallet.WalletEvent]
+        , Writer [Wallet.Emulator.NodeClient.NodeClientEvent]
+        , Writer [Wallet.Emulator.ChainIndex.ChainIndexEvent]
+        , Writer [Wallet.Emulator.Chain.ChainEvent]
+        , Writer [EmulatorEvent]
+        , Writer [ChainEvent]
         , Error WalletAPIError
         , Error SCBError
+        , State TestState
         , IO
         ]
+
+
+-- '[ GenRandomTx
+--  , NodeFollowerEffect
+--  , WalletEffect
+--  , UUIDEffect
+--  , ContractEffect
+--  , ChainIndexEffect
+--  , ChainIndexControlEffect
+--  , NodeClientEffect
+--  , NodeControlEffect
+--  , SigningProcessEffect
+--  , SigningProcessControlEffect
+--  , EventLogEffect event0
+--  , ChainEffect
+--  , State NodeFollowerState, State ChainState, State AppState,
+--                          State MockWalletState, State SigningProcess, State NodeClientState,
+--                          State ChainIndexState, State WalletState,
+--                          State (EventMap ChainEvent), Log,
+--                          Writer [Wallet.Emulator.Wallet.WalletEvent],
+--                          Writer [Wallet.Emulator.NodeClient.NodeClientEvent],
+--                          Writer [Wallet.Emulator.ChainIndex.ChainIndexEvent],
+--                          Writer [Wallet.Emulator.Chain.ChainEvent], Writer [EmulatorEvent],
+--                          Writer [ChainEvent], Error WalletAPIError, Error SCBError,
+--                          State TestState, IO]
+
 
 valueAt :: Address -> Eff TestAppEffects Ledger.Value
 valueAt = WalletServer.valueAt
 
 runScenario :: Eff TestAppEffects a -> IO ()
 runScenario action = do
-    testState <- initialTestState
+    let testState = initialTestState
     result <- runTestApp $ do
                 sync
                 void action
@@ -148,11 +204,63 @@ runScenario action = do
                 traverse_ (logDebug . abbreviate 120 . tshow) events
                 logDebug "--"
     case result of
-        Left err -> error $ show err
-        Right _  -> pure ()
+        (Left err, _) -> error $ show err
+        (Right _, _)  -> pure ()
 
-runTestApp :: Eff TestAppEffects () -> IO (Either SCBError ())
-runTestApp = undefined
+handleContractTest ::
+    (Member (Error SCBError) effs)
+    => Eff (ContractEffect ': effs)
+    ~> Eff effs
+handleContractTest = interpret $ \case
+    InvokeContract (InitContract "game") ->
+        either throwError pure $ do
+            value <- fromResumable $ initialResponse Contracts.Game.game
+            fromString $ JSON.eitherDecode (JSON.encode value)
+    InvokeContract (UpdateContract "game" payload) ->
+        either throwError pure $ do
+            request <- fromString $ JSON.parseEither JSON.parseJSON payload
+            value <- fromResumable $ runUpdate Contracts.Game.game request
+            fromString $ JSON.eitherDecode (JSON.encode value)
+    InvokeContract (InitContract contractPath) ->
+        throwError $ ContractNotFound contractPath
+    InvokeContract (UpdateContract contractPath _) ->
+        throwError $ ContractNotFound contractPath
+
+runTestApp :: Eff TestAppEffects () -> IO (Either SCBError (), TestState)
+runTestApp = 
+    runM
+    . runState initialTestState
+    . runError
+    . interpret (handleZoomedError _WalletError)
+    . interpret (writeIntoState chainEventLog)
+    . interpret (writeIntoState emulatorEventLog)
+    . interpret (handleZoomedWriter (below chainEvent))
+    . interpret (handleZoomedWriter (below (chainIndexEvent defaultWallet)))
+    . interpret (handleZoomedWriter (below (walletClientEvent defaultWallet)))
+    . interpret (handleZoomedWriter (below (walletEvent defaultWallet)))
+    . runStderrLog
+    . interpret (handleZoomedState eventStore)
+    . interpret (handleZoomedState walletState2)
+    . interpret (handleZoomedState chainIndex)
+    . interpret (handleZoomedState nodeClientState)
+    . interpret (handleZoomedState signingProcess)
+    . interpret (handleZoomedState walletState)
+    . interpret (handleZoomedState nodeState)
+    . interpret (handleZoomedState chainState)
+    . interpret (handleZoomedState nodeFollowerState)
+    . handleEventLogState
+    . handleChain
+    . handleSigningProcessControl
+    . handleSigningProcess
+    . handleNodeControl
+    . handleNodeClient
+    . handleChainIndexControl
+    . handleChainIndex
+    . handleContractTest
+    . handleUUIDEffect
+    . handleWallet
+    . handleNodeFollower
+    . runGenRandomTx
 
 sync :: Eff TestAppEffects ()
 sync = WalletServer.syncState

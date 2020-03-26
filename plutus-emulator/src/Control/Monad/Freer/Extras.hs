@@ -185,6 +185,16 @@ stateToMonadState = \case
     Get -> MTL.get
     Put v -> MTL.put v
 
+monadStateToState
+    :: (Member (State s) effs)
+    => MTL.State s a
+    -> Eff effs a
+monadStateToState a = do
+    s1 <- get
+    let (r, s2) = MTL.runState a s1
+    put s2
+    return r
+
 -- | Handle an 'Error' effect in terms of a monadic effect which has a 'MTL.MonadError' instance.
 errorToMonadError
     :: (MTL.MonadError e m)

@@ -1,12 +1,16 @@
+{-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs            #-}
+{-# LANGUAGE LambdaCase       #-}
 {-# LANGUAGE TemplateHaskell  #-}
+{-# LANGUAGE TypeOperators    #-}
 module Plutus.SCB.Effects.Contract(
     ContractCommand(..),
     ContractEffect(..),
     invokeContract
     ) where
 
+import           Control.Monad.Freer
 import           Control.Monad.Freer.TH (makeEffect)
 import qualified Data.Aeson             as JSON
 
@@ -20,5 +24,3 @@ data ContractCommand
 data ContractEffect r where
     InvokeContract :: ContractCommand -> ContractEffect PartiallyDecodedResponse
 makeEffect ''ContractEffect
-
--- handleContractEffect :: Either SCBError

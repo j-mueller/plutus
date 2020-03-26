@@ -9,19 +9,22 @@ module Plutus.SCB.Effects.EventLog where
 
 import           Control.Lens
 import           Control.Monad.Freer
+import           Control.Monad.Freer.Extras (monadStateToState)
 import           Control.Monad.Freer.Reader
+import           Control.Monad.Freer.State  (State)
 import           Control.Monad.Freer.TH     (makeEffect)
 import qualified Control.Monad.IO.Unlift    as Unlift
 import qualified Control.Monad.Logger       as MonadLogger
 import           Data.Aeson                 (FromJSON, ToJSON)
 import           Database.Persist.Sqlite    hiding (Connection)
 import           Eventful
+import qualified Eventful.Store.Memory      as M
 import           Eventful.Store.Sql
 import           Eventful.Store.Sqlite      (sqliteEventStoreWriter)
 
 import           Plutus.SCB.Events          (ChainEvent (..))
 import           Plutus.SCB.Query           (nullProjection)
-import           Plutus.SCB.Types           (Source(..), toUUID)
+import           Plutus.SCB.Types           (Source (..), toUUID)
 
 newtype Connection =
     Connection (SqlEventStoreConfig SqlEvent JSONString, ConnectionPool)
@@ -38,6 +41,23 @@ data EventLogEffect event r where
                      -> EventLogEffect event (GlobalStreamProjection state event)
     RunCommand :: Aggregate state event command -> Source -> command -> EventLogEffect event [event]
 makeEffect ''EventLogEffect
+
+handleEventLogState ::
+    forall effs event.
+    ( Member (State (M.EventMap event)) effs)
+    => Eff (EventLogEffect event ': effs) ~> Eff effs
+handleEventLogState = interpret $ \case
+    RefreshProjection projection ->
+        monadStateToState $
+        getLatestStreamProjection M.stateGlobalEventStoreReader projection
+    RunCommand aggregate source command ->
+        monadStateToState $
+        commandStoredAggregate
+            M.stateEventStoreWriter
+            M.stateEventStoreReader
+            aggregate
+            (toUUID source)
+            command
 
 handleEventLog ::
     forall effs event m.
