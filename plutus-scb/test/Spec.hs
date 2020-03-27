@@ -12,5 +12,5 @@ main =
     testGroup
         "all tests"
         [ Plutus.SCB.CoreSpec.tests
-        , Plutus.SCB.RelationSpec.tests
+        -- , Plutus.SCB.RelationSpec.tests
         ]

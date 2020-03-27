@@ -102,8 +102,6 @@ data TestState =
         , _walletState       :: WalletServer.MockWalletState
         , _nodeState         :: NodeServer.AppState
         , _signingProcess    :: SigningProcess
-        , _nodeFollowerState :: NodeFollowerState
-        , _chainState        :: ChainState
         , _nodeClientState   :: NodeClientState
         , _chainEventLog     :: [ChainEvent]
         , _emulatorEventLog  :: [EmulatorEvent]
@@ -122,8 +120,6 @@ initialTestState =
         , _nodeState = NodeServer.initialAppState
         , _walletState = WalletServer.initialState
         , _signingProcess = SP.defaultSigningProcess WalletServer.activeWallet
-        , _nodeFollowerState = NodeServer.initialFollowerState
-        , _chainState = Wallet.Emulator.Chain.emptyChainState
         , _nodeClientState = Wallet.Emulator.NodeClient.emptyNodeClientState
         , _chainEventLog = []
         , _emulatorEventLog = []
@@ -171,19 +167,35 @@ valueAt = WalletServer.valueAt
 runScenario :: Eff TestAppEffects a -> IO ()
 runScenario action = do
     let testState = initialTestState
-    result <- runTestApp $ do
+    (result, finalState) <- runTestApp initialTestState $ do
                 Wallet.Emulator.Chain.processBlock
                 sync
                 void action
+    case result of
+        Left err -> do
+            runTestApp finalState $ do
                 events :: [ChainEvent] <-
                     fmap streamEventEvent <$> runGlobalQuery pureProjection
                 logDebug "Final Event Stream"
                 logDebug "--"
                 traverse_ (logDebug . abbreviate 120 . tshow) events
                 logDebug "--"
-    case result of
-        (Left err, _) -> error $ show err
-        (Right _, _)  -> pure ()
+                logDebug "Final chain events"
+                logDebug "--"
+                chainEvents <- use (nodeState . NodeServer.eventHistory)
+                traverse_ (logDebug . abbreviate 120 . tshow) chainEvents
+                logDebug "--"
+                logDebug "Final emulator events"
+                logDebug "--"
+                chainEvents <- use emulatorEventLog
+                traverse_ (logDebug . abbreviate 120 . tshow) chainEvents
+                logDebug "--"
+                logDebug "Final chain index state"
+                logDebug "--"
+                use chainIndex >>= logDebug . abbreviate 120 . tshow
+                logDebug "--"
+            error $ show err
+        Right _  -> pure ()
 
 handleContractTest ::
     (Member (Error SCBError) effs)
@@ -204,15 +216,15 @@ handleContractTest = interpret $ \case
     InvokeContract (UpdateContract contractPath _) ->
         throwError $ ContractNotFound contractPath
 
-runTestApp :: Eff TestAppEffects () -> IO (Either SCBError (), TestState)
-runTestApp =
+runTestApp :: TestState -> Eff TestAppEffects () -> IO (Either SCBError (), TestState)
+runTestApp state =
     runM
-    . runState initialTestState
+    . runState state
     . runError
     . interpret (handleZoomedError _WalletError)
     . interpret (writeIntoState chainEventLog)
     . interpret (writeIntoState emulatorEventLog)
-    . interpret (handleZoomedWriter (below chainEvent))
+    . interpret (writeIntoState (nodeState . NodeServer.eventHistory))
     . interpret (handleZoomedWriter (below (chainIndexEvent defaultWallet)))
     . interpret (handleZoomedWriter (below (walletClientEvent defaultWallet)))
     . interpret (handleZoomedWriter (below (walletEvent defaultWallet)))
@@ -223,8 +235,8 @@ runTestApp =
     . interpret (handleZoomedState signingProcess)
     . interpret (handleZoomedState walletState)
     . interpret (handleZoomedState nodeState)
-    . interpret (handleZoomedState chainState)
-    . interpret (handleZoomedState nodeFollowerState)
+    . interpret (handleZoomedState (nodeState . NodeServer.chainState))
+    . interpret (handleZoomedState (nodeState . NodeServer.followerState))
     . handleEventLogState
     . handleChain
     . handleSigningProcessControl

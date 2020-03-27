@@ -53,7 +53,6 @@ import qualified Control.Monad.Logger                       as MonadLogger
 import           Control.Monad.Reader                       (MonadReader, ReaderT, ask)
 import           Control.Monad.Trans                        (lift)
 import           Data.Aeson                                 (FromJSON, ToJSON, withObject, (.:))
-import           Data.Aeson                                 (withObject, (.:))
 import qualified Data.Aeson                                 as JSON
 import           Data.Aeson.Types                           (Parser)
 import qualified Data.Aeson.Types                           as JSON
@@ -84,7 +83,8 @@ import           Eventful.Store.Sqlite                      (sqliteEventStoreWri
 import           Language.Plutus.Contract.Effects.OwnPubKey (OwnPubKeyRequest (NotWaitingForPubKey, WaitingForPubKey))
 import qualified Language.Plutus.Contract.Wallet            as Wallet
 import qualified Ledger
-import           Ledger.Constraints                         (UnbalancedTx)
+import qualified Ledger.AddressMap                          as AM
+import           Ledger.Constraints.OffChain                (UnbalancedTx (unBalancedTxTx))
 import           Plutus.SCB.Command                         (installCommand, saveBalancedTx, saveBalancedTxResult,
                                                              saveBlock, saveContractState)
 import           Plutus.SCB.Events                          (ChainEvent (NodeEvent, UserEvent), NodeEvent (SubmittedTx),
@@ -112,7 +112,8 @@ import           Plutus.SCB.Effects.EventLog                (Connection (..), Ev
                                                              refreshProjection, runCommand, runGlobalQuery)
 import qualified Plutus.SCB.Effects.EventLog                as EventLog
 import           Plutus.SCB.Effects.UUID                    (UUIDEffect, uuidNextRandom)
-import           Wallet.API                                 (WalletEffect)
+import           Wallet.API                                 (WalletEffect, startWatching)
+import qualified Wallet.Effects                             as WalletEffects
 
 type ContractEffects =
         '[ EventLogEffect ChainEvent
@@ -154,12 +155,6 @@ lookupContract filePath = do
         Nothing -> throwError (ContractNotFound filePath)
 
 activateContract ::
-    --    ( MonadIO m
-    --    , MonadLogger m
-    --    , MonadEventStore ChainEvent m
-    --    , MonadContract m
-    --    , MonadError SCBError m
-    --    )
     ( Member Log effs
     , Member (EventLogEffect ChainEvent) effs
     , Member (Error SCBError) effs
@@ -197,17 +192,7 @@ updateContract ::
        , Member (EventLogEffect ChainEvent) effs
        , Member ContractEffect effs
        , Member NodeFollowerEffect effs
-    --    , Member
        )
-    --        MonadLogger m
-    --    , MonadEventStore ChainEvent m
-    --    , MonadContract m
-    --    , MonadError SCBError m
-    --    , WalletAPI m
-    --    , NodeAPI m
-    --    , WalletDiagnostics m
-    --    , ChainIndexAPI m
-    --    )
     => UUID
     -> Text
     -> JSON.Value
@@ -223,15 +208,6 @@ updateContract uuid endpointName endpointPayload = do
     void
         $ execState @T  (oldContractState, [])
         $ invokeContractUpdate fID (EventPayload endpointName endpointPayload)
-
-    -- response <-
-    --     invokeContractUpdate oldContractState endpointName endpointPayload
-    -- let newContractState =
-    --         oldContractState {partiallyDecodedResponse = response}
-    -- logInfo . render $ "Updated:" <+> pretty newContractState
-    -- logInfo "Storing Updated Contract State"
-    -- void $ runCommand saveContractState ContractEventSource newContractState
-    --
     logInfo "Handling Resulting Blockchain Events"
     -- handleBlockchainEvents response
     logInfo "Done"
@@ -247,8 +223,6 @@ parseSingleHook parser response =
         Left err     -> throwError $ ContractCommandError 0 $ Text.pack err
         Right result -> pure result
 
--- , MonadState (ActiveContractState, [ContractHook]) m
-
 handleContractHook ::
        ( Members EmulatedWalletEffects effs
        , Member (Error SCBError) effs
@@ -262,7 +236,8 @@ handleContractHook ::
     -> ContractHook
     -> Eff effs ()
 handleContractHook _ (TxHook unbalancedTxs)  = handleTxHook unbalancedTxs
-handleContractHook i (UtxoAtHook addresses)  = handleUtxoAtHook i addresses
+handleContractHook i (UtxoAtHook address)  =
+    WalletEffects.startWatching address >> handleUtxoAtHook i address
 handleContractHook i (OwnPubKeyHook request) = handleOwnPubKeyHook i request
 
 handleTxHook ::
@@ -275,6 +250,8 @@ handleTxHook ::
     -> Eff effs ()
 handleTxHook unbalancedTx = do
     logInfo "Handling 'tx' hook."
+    logInfo "Start watching contract addresses."
+    AM.addressesTouched <$> WalletEffects.watchedAddresses <*> pure (unBalancedTxTx unbalancedTx) >>= traverse_ WalletEffects.startWatching
     logInfo $ "Balancing unbalanced TX: " <> tshow unbalancedTx
     balancedTx <- Wallet.balanceWallet unbalancedTx
     signedTx <- WAPI.signWithOwnPublicKey balancedTx
@@ -283,7 +260,6 @@ handleTxHook unbalancedTx = do
     logInfo $ "Submitting signed TX: " <> tshow signedTx
     balanceResult <- submitTx signedTx
     void $ runCommand saveBalancedTxResult NodeEventSource balanceResult
-
 
 handleUtxoAtHook ::
        ( Member Log effs

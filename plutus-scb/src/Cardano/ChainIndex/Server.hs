@@ -100,7 +100,13 @@ updateThread updateInterval mv nodeClientEnv = do
         liftIO $ threadDelay $ fromIntegral $ toMicroseconds updateInterval
 
 type ChainIndexEffects m
-     = '[ ChainIndexControlEffect, ChainIndexEffect, State ChainIndexState, Writer [ChainIndexEvent], Log, m]
+     = '[ ChainIndexControlEffect
+        , ChainIndexEffect
+        , State ChainIndexState
+        , Writer [ChainIndexEvent]
+        , Log
+        , m
+        ]
 
 processIndexEffects ::
     MonadIO m
