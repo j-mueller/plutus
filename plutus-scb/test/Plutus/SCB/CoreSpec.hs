@@ -37,7 +37,7 @@ import           Wallet.Emulator.SigningProcess                (SigningProcessCo
 import qualified Wallet.Emulator.Chain         as Chain
 
 tests :: TestTree
-tests = testGroup "SCB.Core" [executionTests] -- [installContractTests, executionTests]
+tests = testGroup "SCB.Core" [installContractTests, executionTests]
 
 installContractTests :: TestTree
 installContractTests =

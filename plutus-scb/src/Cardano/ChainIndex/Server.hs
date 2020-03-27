@@ -8,39 +8,44 @@ module Cardano.ChainIndex.Server(
     -- $chainIndex
     main
     , ChainIndexConfig(..)
+    , syncState
     ) where
-import           Control.Concurrent            (forkIO, threadDelay)
-import           Control.Concurrent.MVar       (MVar, newMVar, putMVar, takeMVar)
-import           Control.Monad                 (forever, void)
-import           Control.Monad.Freer           hiding (run)
+import           Control.Concurrent              (forkIO, threadDelay)
+import           Control.Concurrent.MVar         (MVar, newMVar, putMVar, takeMVar)
+import           Control.Monad                   (forever, void)
+import           Control.Monad.Freer             hiding (run)
 import           Control.Monad.Freer.Extra.Log
+import           Control.Monad.Freer.Extra.State (assign, use)
 import           Control.Monad.Freer.State
-import qualified Control.Monad.Freer.State     as Eff
+import qualified Control.Monad.Freer.State       as Eff
 import           Control.Monad.Freer.Writer
-import qualified Control.Monad.Freer.Writer    as Eff
-import           Control.Monad.IO.Class        (MonadIO (..))
-import           Control.Monad.Logger          (MonadLogger, logDebugN, logInfoN, runStdoutLoggingT)
-import           Data.Foldable                 (traverse_)
-import           Data.Proxy                    (Proxy (Proxy))
-import qualified Data.Sequence                 as Seq
-import           Data.Time.Units               (Second, toMicroseconds)
-import           Network.HTTP.Client           (defaultManagerSettings, newManager)
-import           Network.Wai.Handler.Warp      (run)
-import           Servant                       ((:<|>) ((:<|>)), Application, NoContent (NoContent), hoistServer, serve)
-import           Servant.Client                (BaseUrl (baseUrlPort), ClientEnv, mkClientEnv, runClientM)
+import qualified Control.Monad.Freer.Writer      as Eff
+import           Control.Monad.IO.Class          (MonadIO (..))
+import           Control.Monad.Logger            (MonadLogger, logDebugN, logInfoN, runStdoutLoggingT)
+import           Data.Foldable                   (traverse_)
+import           Data.Proxy                      (Proxy (Proxy))
+import qualified Data.Sequence                   as Seq
+import           Data.Time.Units                 (Second, toMicroseconds)
+import           Network.HTTP.Client             (defaultManagerSettings, newManager)
+import           Network.Wai.Handler.Warp        (run)
+import           Servant                         ((:<|>) ((:<|>)), Application, NoContent (NoContent), hoistServer,
+                                                  serve)
+import           Servant.Client                  (BaseUrl (baseUrlPort), ClientEnv, mkClientEnv, runClientM)
 
-import           Ledger.Address                (Address)
-import           Ledger.AddressMap             (AddressMap)
-import           Plutus.SCB.Utils              (tshow)
+import           Ledger.Address                  (Address)
+import           Ledger.AddressMap               (AddressMap)
+import           Plutus.SCB.Utils                (tshow)
 
 import           Cardano.ChainIndex.API
 import           Cardano.ChainIndex.Types
-import qualified Cardano.Node.Client           as NodeClient
-import           Wallet.Effects                (ChainIndexEffect)
-import qualified Wallet.Effects                as WalletEffects
-import           Wallet.Emulator.ChainIndex    (ChainIndexControlEffect, ChainIndexEvent, ChainIndexState)
-import qualified Wallet.Emulator.ChainIndex    as ChainIndex
-import           Wallet.Emulator.NodeClient    (Notification (..))
+import qualified Cardano.Node.Client             as NodeClient
+import           Cardano.Node.Follower           (NodeFollowerEffect)
+import qualified Cardano.Node.Follower           as NodeFollower
+import           Wallet.Effects                  (ChainIndexEffect)
+import qualified Wallet.Effects                  as WalletEffects
+import           Wallet.Emulator.ChainIndex      (ChainIndexControlEffect, ChainIndexEvent, ChainIndexState)
+import qualified Wallet.Emulator.ChainIndex      as ChainIndex
+import           Wallet.Emulator.NodeClient      (Notification (..))
 
 -- $chainIndex
 -- The SCB chain index that keeps track of transaction data (UTXO set enriched
@@ -75,6 +80,24 @@ startWatching addr = WalletEffects.startWatching addr >> pure NoContent
 
 watchedAddresses :: (Member ChainIndexEffect effs) => Eff effs AddressMap
 watchedAddresses = WalletEffects.watchedAddresses
+
+-- | Update the chain index by asking the node for new blocks since the last 
+--   time.
+syncState ::
+    ( Member (State AppState) effs
+    , Member Log effs
+    , Member NodeFollowerEffect effs
+    , Member ChainIndexControlEffect effs
+    )
+    => Eff effs ()
+syncState = do
+    followerID <- use indexFollowerID >>=
+        maybe (logInfo "Obtaining folllower ID" >> NodeFollower.newFollower >>= \i -> assign indexFollowerID (Just i) >> return i) pure
+    logDebug $ "Updating chain index with follower ID " <> tshow followerID
+    newBlocks <- NodeFollower.getBlocks followerID
+    logInfo $ "Received " <> tshow (length newBlocks) <> " blocks"
+    let notifications = BlockValidated <$> newBlocks
+    traverse_ ChainIndex.chainIndexNotify notifications
 
 -- | Get the latest transactions from the node and update the index accordingly
 updateThread ::
@@ -114,13 +137,13 @@ processIndexEffects ::
     -> Eff (ChainIndexEffects IO) a
     -> m a
 processIndexEffects stateVar eff = do
-    AppState{_indexState, _indexEvents} <- liftIO $ takeMVar stateVar
+    AppState{_indexState, _indexEvents, _indexFollowerID} <- liftIO $ takeMVar stateVar
     ((result, newState), events) <- liftIO
                             $ runM
                             $ runStderrLog
                             $ Eff.runWriter
                             $ Eff.runState _indexState
-                            $ ChainIndex.handleChainIndex 
+                            $ ChainIndex.handleChainIndex
                             $ ChainIndex.handleChainIndexControl eff
-    liftIO $ putMVar stateVar AppState{_indexState=newState, _indexEvents=_indexEvents <> Seq.fromList events }
+    liftIO $ putMVar stateVar AppState{_indexState=newState, _indexEvents=_indexEvents <> Seq.fromList events, _indexFollowerID=_indexFollowerID  }
     pure result

@@ -33,7 +33,7 @@ import qualified Cardano.Node.Types                            as NodeServer
 import           Cardano.Wallet.Mock                           (MockWalletState, followerID)
 import qualified Cardano.Wallet.Mock                           as WalletServer
 import           Control.Concurrent.MVar                       (MVar, newMVar)
-import           Control.Lens                                  (below, makeLenses, view, zoom)
+import           Control.Lens                                  (below, iso, makeLenses, view, zoom)
 import           Control.Monad                                 (void)
 import           Control.Monad.Freer
 import           Control.Monad.Freer.Error                     (Error, handleError, runError, throwError)
@@ -49,7 +49,8 @@ import           Control.Monad.Logger                          (LoggingT, MonadL
 import           Data.Aeson                                    as JSON
 import           Data.Aeson.Types                              as JSON
 import           Data.Bifunctor                                (first)
-import           Data.Foldable                                 (traverse_)
+import           Data.Foldable                                 (toList, traverse_)
+import qualified Data.Sequence                                 as Seq
 import           Data.Text                                     (Text)
 import qualified Data.Text                                     as Text
 import           Eventful                                      (commandStoredAggregate, getLatestStreamProjection,
@@ -75,6 +76,8 @@ import           Plutus.SCB.Types                              (SCBError (Contra
 import           Plutus.SCB.Utils                              (abbreviate, tshow)
 import           Test.QuickCheck.Instances.UUID                ()
 
+import qualified Cardano.ChainIndex.Server                     as ChainIndex
+import qualified Cardano.ChainIndex.Types                      as ChainIndex
 import           Wallet.API                                    (WalletAPIError, addSignatures, ownOutputs, ownPubKey,
                                                                 startWatching, submitTxn, updatePaymentWithChange,
                                                                 watchedAddresses)
@@ -84,7 +87,7 @@ import           Wallet.Emulator.Chain                         (ChainEffect, Cha
 import qualified Wallet.Emulator.Chain
 import           Wallet.Emulator.ChainIndex                    (ChainIndexControlEffect, ChainIndexState,
                                                                 handleChainIndex, handleChainIndexControl)
-import qualified Wallet.Emulator.ChainIndex
+import qualified Wallet.Emulator.ChainIndex                    as ChainIndex
 import           Wallet.Emulator.MultiAgent                    (EmulatorEvent, chainEvent, chainIndexEvent,
                                                                 walletClientEvent, walletEvent)
 import           Wallet.Emulator.NodeClient                    (NodeClientState, NodeControlEffect, handleNodeClient,
@@ -98,14 +101,14 @@ import qualified Wallet.Emulator.Wallet
 
 data TestState =
     TestState
-        { _eventStore        :: EventMap ChainEvent
-        , _walletState       :: WalletServer.MockWalletState
-        , _nodeState         :: NodeServer.AppState
-        , _signingProcess    :: SigningProcess
-        , _nodeClientState   :: NodeClientState
-        , _chainEventLog     :: [ChainEvent]
-        , _emulatorEventLog  :: [EmulatorEvent]
-        , _chainIndex        :: ChainIndexState
+        { _eventStore       :: EventMap ChainEvent
+        , _walletState      :: WalletServer.MockWalletState
+        , _nodeState        :: NodeServer.AppState
+        , _signingProcess   :: SigningProcess
+        , _nodeClientState  :: NodeClientState
+        , _chainEventLog    :: [ChainEvent]
+        , _emulatorEventLog :: [EmulatorEvent]
+        , _chainIndex       :: ChainIndex.AppState
         }
 
 makeLenses 'TestState
@@ -123,7 +126,7 @@ initialTestState =
         , _nodeClientState = Wallet.Emulator.NodeClient.emptyNodeClientState
         , _chainEventLog = []
         , _emulatorEventLog = []
-        , _chainIndex = mempty
+        , _chainIndex = ChainIndex.initialAppState
         }
 
 type TestAppEffects =
@@ -146,12 +149,13 @@ type TestAppEffects =
         , State MockWalletState
         , State SigningProcess
         , State NodeClientState
+        , State ChainIndex.AppState
         , State ChainIndexState
         , State (EventMap ChainEvent)
         , Log
         , Writer [Wallet.Emulator.Wallet.WalletEvent]
         , Writer [Wallet.Emulator.NodeClient.NodeClientEvent]
-        , Writer [Wallet.Emulator.ChainIndex.ChainIndexEvent]
+        , Writer [ChainIndex.ChainIndexEvent]
         , Writer [Wallet.Emulator.Chain.ChainEvent]
         , Writer [EmulatorEvent]
         , Writer [ChainEvent]
@@ -190,9 +194,10 @@ runScenario action = do
                 chainEvents <- use emulatorEventLog
                 traverse_ (logDebug . abbreviate 120 . tshow) chainEvents
                 logDebug "--"
-                logDebug "Final chain index state"
+                logDebug "Final chain index events"
                 logDebug "--"
-                use chainIndex >>= logDebug . abbreviate 120 . tshow
+                chainIndexEvents <- use (chainIndex . ChainIndex.indexEvents)
+                traverse_ (logDebug . abbreviate 120 . tshow) chainIndexEvents
                 logDebug "--"
             error $ show err
         Right _  -> pure ()
@@ -225,11 +230,12 @@ runTestApp state =
     . interpret (writeIntoState chainEventLog)
     . interpret (writeIntoState emulatorEventLog)
     . interpret (writeIntoState (nodeState . NodeServer.eventHistory))
-    . interpret (handleZoomedWriter (below (chainIndexEvent defaultWallet)))
+    . interpret (writeIntoState (chainIndex . ChainIndex.indexEvents . iso toList Seq.fromList))
     . interpret (handleZoomedWriter (below (walletClientEvent defaultWallet)))
     . interpret (handleZoomedWriter (below (walletEvent defaultWallet)))
     . runStderrLog
     . interpret (handleZoomedState eventStore)
+    . interpret (handleZoomedState (chainIndex . ChainIndex.indexState))
     . interpret (handleZoomedState chainIndex)
     . interpret (handleZoomedState nodeClientState)
     . interpret (handleZoomedState signingProcess)
@@ -252,7 +258,9 @@ runTestApp state =
     . runGenRandomTx
 
 sync :: Eff TestAppEffects ()
-sync = WalletServer.syncState
+sync = do
+    WalletServer.syncState
+    ChainIndex.syncState
 
 getFollowerID :: Eff TestAppEffects FollowerID
 getFollowerID = do
