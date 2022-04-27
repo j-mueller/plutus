@@ -92,8 +92,8 @@ instance Ord Rational where
 instance P.AdditiveSemigroup Rational where
   {-# INLINABLE (+) #-}
   Rational n d + Rational n' d' =
-    let newNum = (n P.* d') P.+ (n' P.* d)
-        newDen = d P.* d'
+    let !newNum = (n P.* d') P.+ (n' P.* d)
+        !newDen = d P.* d'
         gcd' = euclid newNum newDen
      in Rational (newNum `Builtins.quotientInteger` gcd')
                  (newDen `Builtins.quotientInteger` gcd')
@@ -105,8 +105,8 @@ instance P.AdditiveMonoid Rational where
 instance P.AdditiveGroup Rational where
   {-# INLINABLE (-) #-}
   Rational n d - Rational n' d' =
-    let newNum = (n P.* d') P.- (n' P.* d)
-        newDen = d P.* d'
+    let !newNum = (n P.* d') P.- (n' P.* d)
+        !newDen = d P.* d'
         gcd' = euclid newNum newDen
      in Rational (newNum `Builtins.quotientInteger` gcd')
                  (newDen `Builtins.quotientInteger` gcd')
@@ -114,8 +114,8 @@ instance P.AdditiveGroup Rational where
 instance P.MultiplicativeSemigroup Rational where
   {-# INLINABLE (*) #-}
   Rational n d * Rational n' d' =
-    let newNum = n P.* n'
-        newDen = d P.* d'
+    let !newNum = n P.* n'
+        !newDen = d P.* d'
         gcd' = euclid newNum newDen
      in Rational (newNum `Builtins.quotientInteger` gcd')
                  (newDen `Builtins.quotientInteger` gcd')
