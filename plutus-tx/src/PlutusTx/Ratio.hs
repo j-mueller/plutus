@@ -127,7 +127,7 @@ instance P.MultiplicativeMonoid Rational where
 
 instance P.Module Integer Rational where
   {-# INLINABLE scale #-}
-  scale i (Rational n d) = let newNum = i P.* n
+  scale i (Rational n d) = let !newNum = i P.* n
                                !gcd' = euclid newNum d in
     Rational (newNum `Builtins.quotientInteger` gcd')
              (d `Builtins.quotientInteger` gcd')
@@ -305,9 +305,9 @@ truncate (Rational n d) = n `Builtins.quotientInteger` d
 {-# INLINABLE round #-}
 round :: Rational -> Integer
 round x =
-  let (n, r) = properFraction x
-      m = if r P.< P.zero then n P.- P.one else n P.+ P.one
-      flag = abs r P.- half
+  let (!n, !r) = properFraction x
+      !m = if r P.< P.zero then n P.- P.one else n P.+ P.one
+      !flag = abs r P.- half
    in if
           | flag P.< P.zero -> n
           | flag P.== P.zero -> if Builtins.modInteger n 2 P.== P.zero
