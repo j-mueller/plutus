@@ -95,7 +95,7 @@ instance P.AdditiveSemigroup Rational where
   Rational n d + Rational n' d' =
     let !newNum = (n P.* d') P.+ (n' P.* d)
         !newDen = d P.* d'
-        gcd' = euclid newNum newDen
+        !gcd' = euclid newNum newDen
      in Rational (newNum `Builtins.quotientInteger` gcd')
                  (newDen `Builtins.quotientInteger` gcd')
 
@@ -108,7 +108,7 @@ instance P.AdditiveGroup Rational where
   Rational n d - Rational n' d' =
     let !newNum = (n P.* d') P.- (n' P.* d)
         !newDen = d P.* d'
-        gcd' = euclid newNum newDen
+        !gcd' = euclid newNum newDen
      in Rational (newNum `Builtins.quotientInteger` gcd')
                  (newDen `Builtins.quotientInteger` gcd')
 
@@ -117,7 +117,7 @@ instance P.MultiplicativeSemigroup Rational where
   Rational n d * Rational n' d' =
     let !newNum = n P.* n'
         !newDen = d P.* d'
-        gcd' = euclid newNum newDen
+        !gcd' = euclid newNum newDen
      in Rational (newNum `Builtins.quotientInteger` gcd')
                  (newDen `Builtins.quotientInteger` gcd')
 
@@ -128,7 +128,7 @@ instance P.MultiplicativeMonoid Rational where
 instance P.Module Integer Rational where
   {-# INLINABLE scale #-}
   scale i (Rational n d) = let newNum = i P.* n
-                               gcd' = euclid newNum d in
+                               !gcd' = euclid newNum d in
     Rational (newNum `Builtins.quotientInteger` gcd')
              (d `Builtins.quotientInteger` gcd')
 
@@ -185,7 +185,7 @@ unsafeRatio n d
   | d P.== P.zero = Builtins.error ()
   | d P.< P.zero = unsafeRatio (P.negate n) (P.negate d)
   | P.True =
-    let gcd' = euclid n d
+    let !gcd' = euclid n d
      in Rational (n `Builtins.quotientInteger` gcd')
                  (d `Builtins.quotientInteger` gcd')
 
@@ -197,7 +197,7 @@ ratio n d
   | d P.== P.zero = P.Nothing
   | d P.< P.zero = P.Just (unsafeRatio (P.negate n) (P.negate d))
   | P.True =
-    let gcd' = euclid n d
+    let !gcd' = euclid n d
      in P.Just P..
         Rational (n `Builtins.quotientInteger` gcd') P.$
         d `Builtins.quotientInteger` gcd'
@@ -334,7 +334,7 @@ reduce :: Integer -> Integer -> Rational
 reduce x y
     | y P.== 0 = P.traceError P.ratioHasZeroDenominatorError
     | P.True     =
-        let d = gcd x y in
+        let !d = gcd x y in
           Rational (x `Builtins.quotientInteger` d)
                    (y `Builtins.quotientInteger` d)
 
