@@ -15,7 +15,7 @@ jobs:
       - uses: haskell/actions/hlint-setup@v2
         with:
           version: '3.4'
-      - uses: haskell/actions/hlint-run@v1
+      - uses: haskell/actions/hlint-run@v2
         with:
           hlint-bin: "hlint --hint=./.github/.hlint.yaml"
           fail-on: status
